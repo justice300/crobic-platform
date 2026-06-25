@@ -1,0 +1,5247 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  ArrowRight,
+  Award,
+  BookOpen,
+  Briefcase,
+  Camera,
+  CheckCircle,
+  Clock,
+  CreditCard,
+  GraduationCap,
+  Library,
+  MapPin,
+  Megaphone,
+  MessageCircle,
+  Menu,
+  Phone,
+  Radio,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Trash2,
+  Users,
+  Video,
+  Send,
+  X
+} from "lucide-react";
+import { api, clearToken, getToken, setToken } from "./api";
+import "./styles.css";
+
+const LOGO = "/crobic-images/cra-logo.png";
+
+const CROBIC_IMAGES = {
+  graduation: "/crobic-images/graduation-stage.jpg",
+  handshake: "/crobic-images/convocation-handshake.jpg",
+  classroom: "/crobic-images/classroom.jpg",
+  logo: "/crobic-images/cra-logo.png"
+};
+
+const SLIDE_DURATION = 6500;
+
+const DEFAULT_SLIDES = [
+  {
+    eyebrow: "Flagship Program",
+    title: "Certificate in Biblical Studies",
+    description:
+      "Build a solid foundation in Scripture and ministry over 12 intensive months of classroom instruction, practical assignments, and spiritual formation.",
+    imageUrl: "https://media.base44.com/images/public/user_69b1494dcdfc0c8eaff727d9/83e981ce1_481473921_1244570630360710_3874837180479012159_n.jpg",
+    ctaText: "Apply Now",
+    ctaPage: "admissions"
+  },
+  {
+    eyebrow: "Advanced Program",
+    title: "Diploma in Theology",
+    description:
+      "Deepen your theological understanding and ministry competence through a comprehensive 24-month curriculum designed for active ministers and church workers.",
+    imageUrl: CROBIC_IMAGES.classroom,
+    ctaText: "Apply Now",
+    ctaPage: "admissions"
+  },
+  {
+    eyebrow: "Degree Program",
+    title: "B.A and B.Th in Theology",
+    description:
+      "Pursue academic excellence and spiritual depth with our degree programs, rigorous study, research and hands-on ministry training.",
+    imageUrl: "https://media.base44.com/images/public/user_69b1494dcdfc0c8eaff727d9/8593979bf_120191079_3625958297424923_5496208248079105325_n.jpg",
+    ctaText: "Apply Now",
+    ctaPage: "admissions"
+  },
+  {
+    eyebrow: "Executive Stream",
+    title: "Executive Classes",
+    description:
+      "Designed for working-class pastors and professionals. Weekend and evening sessions that fit your schedule without compromising depth and quality.",
+    imageUrl: CROBIC_IMAGES.graduation,
+    ctaText: "Apply Now",
+    ctaPage: "admissions"
+  }
+];
+
+const DEFAULT_GALLERY = [
+  { title: "Graduation Ceremony", imageUrl: CROBIC_IMAGES.graduation, category: "Graduation" },
+  { title: "Certificate Presentation", imageUrl: CROBIC_IMAGES.handshake, category: "Convocation" },
+  { title: "Classroom Training", imageUrl: CROBIC_IMAGES.classroom, category: "Training" }
+];
+
+function getSetting(settings, key, fallback = "") {
+  const value = settings?.[key];
+  return value === undefined || value === null || value === "" ? fallback : value;
+}
+
+function settingLines(settings, key, fallback = []) {
+  const value = getSetting(settings, key, "");
+  if (!value) return fallback;
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function settingPipeList(settings, key, fallback = []) {
+  return settingLines(settings, key, fallback.map((item) => Array.isArray(item) ? item.join("|") : String(item))).map((line) => {
+    const [title = "", sub = "", extra = ""] = line.split("|").map((item) => item.trim());
+    return { title, sub, desc: sub, value: sub, extra };
+  });
+}
+
+function settingPoints(settings, key, fallback = []) {
+  const value = getSetting(settings, key, "");
+  return value ? value.split("|").map((item) => item.trim()).filter(Boolean) : fallback;
+}
+
+const CROBIC_TOAST_EVENT = "crobic-toast";
+const CROBIC_CONFIRM_EVENT = "crobic-confirm";
+
+function showToast(message, type = "info", title = "") {
+  if (!message) return;
+  window.dispatchEvent(new CustomEvent(CROBIC_TOAST_EVENT, { detail: { message, type, title } }));
+}
+
+function showConfirm({
+  title = "Please confirm",
+  message = "Are you sure you want to continue?",
+  confirmText = "Continue",
+  cancelText = "Cancel",
+  danger = false
+} = {}) {
+  return new Promise((resolve) => {
+    window.dispatchEvent(new CustomEvent(CROBIC_CONFIRM_EVENT, {
+      detail: { title, message, confirmText, cancelText, danger, resolve }
+    }));
+  });
+}
+
+function NotificationCenter() {
+  const [toasts, setToasts] = useState([]);
+  const [confirmState, setConfirmState] = useState(null);
+
+  useEffect(() => {
+    function handleToast(event) {
+      const toast = {
+        id: `${Date.now()}-${Math.random()}`,
+        type: event.detail?.type || "info",
+        title: event.detail?.title || "",
+        message: event.detail?.message || ""
+      };
+
+      setToasts((current) => [...current, toast].slice(-4));
+      window.setTimeout(() => {
+        setToasts((current) => current.filter((item) => item.id !== toast.id));
+      }, toast.type === "error" ? 6500 : 4500);
+    }
+
+    function handleConfirm(event) {
+      setConfirmState(event.detail || null);
+    }
+
+    window.addEventListener(CROBIC_TOAST_EVENT, handleToast);
+    window.addEventListener(CROBIC_CONFIRM_EVENT, handleConfirm);
+
+    return () => {
+      window.removeEventListener(CROBIC_TOAST_EVENT, handleToast);
+      window.removeEventListener(CROBIC_CONFIRM_EVENT, handleConfirm);
+    };
+  }, []);
+
+  function resolveConfirm(answer) {
+    if (confirmState?.resolve) confirmState.resolve(answer);
+    setConfirmState(null);
+  }
+
+  return (
+    <>
+      <div className="crobic-toast-stack" aria-live="polite" aria-atomic="true">
+        {toasts.map((toast) => (
+          <div className={`crobic-toast crobic-toast-${toast.type}`} key={toast.id}>
+            <button type="button" onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))} aria-label="Dismiss notification">×</button>
+            <strong>{toast.title || (toast.type === "success" ? "Success" : toast.type === "error" ? "Action needed" : "Notice")}</strong>
+            <p>{toast.message}</p>
+          </div>
+        ))}
+      </div>
+
+      {confirmState && (
+        <div className="crobic-confirm-backdrop" role="dialog" aria-modal="true">
+          <div className="crobic-confirm-card">
+            <span>{confirmState.danger ? "Confirm action" : "Confirmation"}</span>
+            <h3>{confirmState.title}</h3>
+            <p>{confirmState.message}</p>
+            <div>
+              <button type="button" className="ghost-btn admin-cancel-btn" onClick={() => resolveConfirm(false)}>{confirmState.cancelText || "Cancel"}</button>
+              <button type="button" className={confirmState.danger ? "danger-action-btn" : "gold-btn"} onClick={() => resolveConfirm(true)}>{confirmState.confirmText || "Continue"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
+function App() {
+  const initialPage = window.location.pathname.replace("/", "") || "home";
+  const [page, setPage] = useState(initialPage === "admission" ? "admissions" : initialPage);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState("login");
+  const [user, setUser] = useState(null);
+  const [data, setData] = useState({
+    slides: [],
+    books: [],
+    courses: [],
+    announcements: [],
+    liveSession: null,
+    settings: {},
+    testimonials: [],
+    faqs: [],
+    gallery: []
+  });
+  const [loading, setLoading] = useState(true);
+
+  async function loadPublicData() {
+    const bootstrap = await api(`/public/bootstrap?_=${Date.now()}`);
+    setData((current) => ({ ...current, ...bootstrap, settings: bootstrap.settings || {} }));
+  }
+
+  async function loadMe() {
+    if (!getToken()) return;
+    try {
+      const result = await api("/auth/me");
+      setUser(result.user);
+    } catch {
+      clearToken();
+      setUser(null);
+    }
+  }
+
+  useEffect(() => {
+    Promise.all([loadPublicData(), loadMe()]).finally(() => setLoading(false));
+  }, []);
+
+  function goTo(nextPage) {
+    const normalized = nextPage === "admission" ? "admissions" : nextPage;
+    setPage(normalized);
+    setMobileOpen(false);
+    window.history.pushState({}, "", normalized === "home" ? "/" : `/${normalized === "admissions" ? "admission" : normalized}`);
+    window.scrollTo(0, 0);
+  }
+
+  function openAuth(mode = "login") {
+    setAuthMode(mode);
+    setAuthOpen(true);
+  }
+
+  function logout() {
+    clearToken();
+    setUser(null);
+    goTo("home");
+  }
+
+  if (loading) return <div className="loading-screen"><img src={LOGO} alt="CROBIC" /> Loading CROBIC...</div>;
+
+  return (
+    <>
+      <Navbar
+        page={page}
+        goTo={goTo}
+        user={user}
+        logout={logout}
+        openAuth={openAuth}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+      />
+
+      {page === "home" && <Home data={data} goTo={goTo} openAuth={openAuth} />}
+      {page === "about" && <About goTo={goTo} settings={data.settings} />}
+      {page === "programs" && <Programs courses={data.courses} openAuth={openAuth} user={user} goTo={goTo} settings={data.settings} />}
+      {page === "library" && <BookLibrary books={data.books} settings={data.settings} />}
+      {page === "admissions" && <Admissions courses={data.courses} settings={data.settings} user={user} openAuth={openAuth} goTo={goTo} />}
+      {page === "gallery" && <Gallery gallery={data.gallery} settings={data.settings} />}
+      {page === "contact" && <Contact settings={data.settings} />}
+      {page === "payment-callback" && <PaymentCallback user={user} goTo={goTo} />}
+      {page === "certificate-verification" && <CertificateVerification />}
+
+      {page === "student" && (
+        user ? <StudentPortal user={user} setUser={setUser} goTo={goTo} /> : <AccessGate title="Student Portal" openAuth={() => openAuth("login")} />
+      )}
+
+      {page === "admin" && (
+        user?.role === "ADMIN" ? (
+          <AdminDashboard reloadPublic={loadPublicData} />
+        ) : (
+          <AccessGate title="Admin Dashboard" openAuth={() => openAuth("login")} />
+        )
+      )}
+
+      {!['student', 'admin'].includes(page) && <Footer goTo={goTo} settings={data.settings} />}
+      <NotificationCenter />
+
+      {authOpen && (
+        <AuthModal
+          mode={authMode}
+          setMode={setAuthMode}
+          close={() => setAuthOpen(false)}
+          setUser={setUser}
+          goTo={goTo}
+        />
+      )}
+    </>
+  );
+}
+
+function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen }) {
+  const links = [
+    ["home", "Home"],
+    ["about", "About"],
+    ["programs", "Programs"],
+    ["admissions", "Admission"],
+    ["library", "Books"],
+    ["gallery", "Gallery"],
+    ["contact", "Contact"]
+  ];
+
+  return (
+    <header className="navbar">
+      <div className="nav-inner">
+        <button className="brand" onClick={() => goTo("home")}> 
+          <span className="logo-glow"><img src={LOGO} alt="CROBIC Logo" /></span>
+          <span>
+            <strong>CROBIC</strong>
+            <small>Champions Royal Bible College</small>
+          </span>
+        </button>
+
+        <nav className="desktop-nav">
+          {links.map(([key, label]) => (
+            <button key={key} onClick={() => goTo(key)} className={page === key ? "active" : ""}>
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="nav-actions">
+          {user ? (
+            <>
+              <button className="ghost-btn" onClick={() => goTo(user.role === "ADMIN" ? "admin" : "student")}>Portal</button>
+              <button className="dark-btn" onClick={logout}>Logout</button>
+            </>
+          ) : (
+            <>
+              <button className="ghost-btn" onClick={() => openAuth("login")}>Login</button>
+              <button className="gold-btn" onClick={() => openAuth("register")}>Enroll Now</button>
+            </>
+          )}
+
+          <button className="menu-btn" onClick={() => setMobileOpen(!mobileOpen)}>{mobileOpen ? <X /> : <Menu />}</button>
+        </div>
+      </div>
+
+      {mobileOpen && (
+        <div className="mobile-nav">
+          {links.map(([key, label]) => <button key={key} onClick={() => goTo(key)}>{label}</button>)}
+          <button onClick={() => goTo("student")}>Student Portal</button>
+          <button onClick={() => goTo("admin")}>Admin Dashboard</button>
+        </div>
+      )}
+    </header>
+  );
+}
+
+function Home({ data, goTo, openAuth }) {
+  const s = data.settings || {};
+  // CMS SYNC FIX:
+  // Each admin slide controls its matching homepage slot by slideOrder.
+  // If a slot is missing, only that slot uses the default fallback.
+  // This keeps the public homepage synced with Admin Dashboard → Slides even when fewer than 4 slides exist.
+  const adminSlides = [...(data.slides || [])]
+    .filter((item) => item?.title || item?.description || item?.imageUrl || item?.eyebrow)
+    .sort((a, b) => Number(a.slideOrder || 999) - Number(b.slideOrder || 999));
+  const usedAdminIds = new Set();
+  const slides = DEFAULT_SLIDES.map((fallback, index) => {
+    const slotOrder = index + 1;
+    const byOrder = adminSlides.find((item) => Number(item.slideOrder || 0) === slotOrder && !usedAdminIds.has(item.id));
+    const byIndex = adminSlides.find((item) => !usedAdminIds.has(item.id));
+    const adminSlide = byOrder || byIndex || null;
+    if (adminSlide?.id) usedAdminIds.add(adminSlide.id);
+    return {
+      ...fallback,
+      ...adminSlide,
+      eyebrow: adminSlide?.eyebrow || fallback.eyebrow,
+      title: adminSlide?.title || fallback.title,
+      description: adminSlide?.description || fallback.description,
+      imageUrl: adminSlide?.imageUrl || fallback.imageUrl,
+      ctaText: adminSlide?.ctaText || fallback.ctaText,
+      ctaPage: adminSlide?.ctaPage || fallback.ctaPage,
+      slideOrder: slotOrder
+    };
+  });
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setActive((prev) => (prev + 1) % slides.length);
+    }, SLIDE_DURATION);
+
+    return () => clearTimeout(timer);
+  }, [active, slides.length]);
+
+  const slide = slides[active] || DEFAULT_SLIDES[0];
+  const heroImage = slide.imageUrl || DEFAULT_SLIDES[active % DEFAULT_SLIDES.length].imageUrl;
+
+  return (
+    <main>
+      <section className="hero hero-luxury">
+        <div key={active} className="hero-bg hero-bg-animated" style={{ backgroundImage: `url(${heroImage})` }} />
+        <div className="hero-overlay" />
+        <div className="hero-line hero-line-left" />
+        <div className="hero-line hero-line-right" />
+        <div className="corner corner-top" />
+        <div className="corner corner-bottom" />
+        <div className="hero-content">
+          <p className="eyebrow framed">{slide.eyebrow || "Champions Royal Bible College"}</p>
+          <h1>{slide.title}</h1>
+          <p>{slide.description}</p>
+          <div className="hero-actions">
+            <button className="gold-btn big" onClick={() => goTo(slide.ctaPage || "admissions")}>{slide.ctaText || "Apply Now"}<ArrowRight size={14} /></button>
+            <button className="white-btn big" onClick={() => goTo("programs")}>Explore Programs</button>
+          </div>
+        </div>
+        <div className="hero-progress">
+          {slides.map((item, index) => (
+            <button
+              key={`${item.title}-${index}`}
+              className={active === index ? "active-slide" : ""}
+              onClick={() => setActive(index)}
+              style={{ "--slide-duration": `${SLIDE_DURATION}ms` }}
+            >
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <small>{item.eyebrow || "Program"}</small>
+              <i className={active === index ? "progress-active" : ""} />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="info-cards container">
+        <Feature icon={<BookOpen />} title={getSetting(s, "home_card_1_title", "Programs Available")} text={getSetting(s, "home_card_1_text", "Certificate, Diploma, Degree and executive learning options.")} />
+        <Feature icon={<GraduationCap />} title={getSetting(s, "home_card_2_title", "Learning Options")} text={getSetting(s, "home_card_2_text", "Regular classes and executive classes for working ministers.")} />
+        <Feature icon={<ShieldCheck />} title={getSetting(s, "home_card_3_title", "Structured Admission")} text={getSetting(s, "home_card_3_text", "Portal access begins after registration, payment confirmation and admission approval.")} />
+      </section>
+
+      <section className="stats stats-flat">
+        <div><strong>{getSetting(s, "home_stat_1_value", "1000+")}</strong><span>{getSetting(s, "home_stat_1_label", "Ministerial Graduates")}</span></div>
+        <div><strong>{getSetting(s, "home_stat_2_value", "15+")}</strong><span>{getSetting(s, "home_stat_2_label", "Years of Excellence")}</span></div>
+        <div><strong>{getSetting(s, "home_stat_3_value", "6")}</strong><span>{getSetting(s, "home_stat_3_label", "Ministry Tracks")}</span></div>
+        <div><strong>{getSetting(s, "home_stat_4_value", "Global")}</strong><span>{getSetting(s, "home_stat_4_label", "Reach and Impact")}</span></div>
+      </section>
+
+      <section className="split-section container about-preview">
+        <div className="image-frame">
+          <img src={getSetting(s, "home_about_image_url", CROBIC_IMAGES.handshake)} alt="Convocation ceremony at Champions Royal Bible College" />
+          <div className="image-caption"><strong>{getSetting(s, "home_about_caption_name", "Papa Joshua Iginla")}</strong><span>{getSetting(s, "home_about_caption_title", "Founder and President")}</span></div>
+        </div>
+        <div>
+          <Kicker text={getSetting(s, "home_about_kicker", "About Us")} />
+          <h2>{getSetting(s, "home_about_title", "About CROBIC")}</h2>
+          <div className="short-gold-line" />
+          <p>
+            {getSetting(s, "home_about_paragraph_1", "Champions Royal Bible College is the biblical training arm of Champions Royal Assembly, raising ministers and kingdom leaders through biblical doctrine, spiritual formation and practical ministry preparation.")}
+          </p>
+          <p>
+            {getSetting(s, "home_about_paragraph_2", "CROBIC combines theological learning, live classes, recorded lessons, book resources and a protected student portal for a clean academic experience.")}
+          </p>
+          <button className="text-link" onClick={() => goTo("about")}><span /> Read More <ArrowRight size={14} /></button>
+        </div>
+      </section>
+
+      <section className="program-section">
+        <div className="container">
+          <SectionIntro eyebrow={getSetting(s, "home_programs_eyebrow", "Academics")} title={getSetting(s, "home_programs_title", "Our Programs")} text={getSetting(s, "home_programs_text", "Certificate, Diploma and Degree routes for ministers and Bible students.")} />
+          <div className="course-grid program-cards">
+            {(data.courses.length ? data.courses.slice(0, 3) : fallbackCourses()).map((course) => <CourseCard key={course.id || course.title} course={course} openAuth={openAuth} />)}
+          </div>
+        </div>
+      </section>
+
+      <section className="learning-paths container">
+        <SectionIntro eyebrow={getSetting(s, "home_paths_eyebrow", "Learning Paths")} title={getSetting(s, "home_paths_title", "Choose Your Learning Path")} text={getSetting(s, "home_paths_text", "Flexible options to fit your calling and schedule.")} />
+        <div className="path-grid">
+          <PathCard icon={<Users />} title={getSetting(s, "home_regular_class_title", "Regular Classes")} text={getSetting(s, "home_regular_class_text", "Full-time immersive biblical training for students seeking complete ministerial preparation.")} points={settingPoints(s, "home_regular_class_points", ["New ministers and full-time students", "Deep theological foundation", "Complete ministry preparation"])} />
+          <PathCard icon={<Briefcase />} title={getSetting(s, "home_executive_class_title", "Executive Classes")} text={getSetting(s, "home_executive_class_text", "Part-time training designed for pastors and leaders who cannot attend regular weekday classes.")} points={settingPoints(s, "home_executive_class_points", ["Active pastors and evangelists", "Working-class ministers", "Flexible learning schedule"])} />
+        </div>
+      </section>
+
+      <section className="graduate-quote">
+        <div className="graduate-bg" style={{ backgroundImage: `url(${getSetting(s, "home_graduate_image_url", CROBIC_IMAGES.graduation)})` }} />
+        <div className="quote-card">
+          <Kicker text={getSetting(s, "home_graduate_kicker", "Our Graduates")} center />
+          <h2>{getSetting(s, "home_graduate_title", "Graduates We Have Raised")}</h2>
+          <div className="gold-divider"><span /></div>
+          <blockquote>{getSetting(s, "home_graduate_quote", "“CROBIC continues to raise champions for God’s kingdom through biblical training, discipline and spiritual formation.”")}</blockquote>
+          <p className="quote-author">{getSetting(s, "home_graduate_author", "Prophet Joshua Iginla")}</p>
+          <div className="graduate-number"><strong>{getSetting(s, "home_graduate_number", "1000+")}</strong><span>{getSetting(s, "home_graduate_number_label", "Ministerial Graduates")}</span></div>
+        </div>
+      </section>
+
+      <section className="preview-section container">
+        <SectionIntro eyebrow={getSetting(s, "home_books_eyebrow", "Book Library")} title={getSetting(s, "home_books_title", "Books available to the public")} text={getSetting(s, "home_books_text", "Visitors can buy books directly through the official Stellar purchase links.")} />
+        <div className="book-grid">
+          {data.books.slice(0, 3).map((book) => <BookCard key={book.id} book={book} />)}
+        </div>
+      </section>
+
+      <section className="cta-section cta-luxury">
+        <Kicker text={getSetting(s, "home_cta_kicker", "Admission Open")} center />
+        <h2>{getSetting(s, "home_cta_title", "Ready to Become a Champion for Christ?")}</h2>
+        <p>{getSetting(s, "home_cta_text", "Admission is open for pastors, evangelists, prophets, Bible teachers, associate ministers, leaders, academics and professionals.")}</p>
+        <div>
+          <button className="gold-btn big" onClick={() => openAuth("register")}>{getSetting(s, "home_cta_primary_button", "Apply Now")}</button>
+          <button className="white-btn big" onClick={() => goTo("programs")}>{getSetting(s, "home_cta_secondary_button", "View Programs")}</button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function fallbackCourses() {
+  return [
+    { id: "fallback-1", title: "Certificate in Biblical Studies", level: "Certificate", duration: "12 Months", fee: 0, description: "Foundational biblical training for new ministers and church workers.", imageUrl: CROBIC_IMAGES.classroom },
+    { id: "fallback-2", title: "Diploma in Theology", level: "Diploma", duration: "24 Months", fee: 0, description: "Comprehensive theological training for pastors, evangelists and Bible teachers.", imageUrl: CROBIC_IMAGES.graduation },
+    { id: "fallback-3", title: "Degree in Theology", level: "Degree", duration: "3-4 Years", fee: 0, description: "Advanced theological education for senior pastors and ministry leaders.", imageUrl: CROBIC_IMAGES.handshake }
+  ];
+}
+
+function About({ goTo, settings = {} }) {
+  return (
+    <main>
+      <PageHero eyebrow={getSetting(settings, "about_hero_eyebrow", "About Us")} title={getSetting(settings, "about_hero_title", "About Champions Royal Bible College")} text={getSetting(settings, "about_hero_text", "The biblical training platform of Champions Royal Assembly, built for ministers, pastors and kingdom leaders.")} image={getSetting(settings, "about_hero_image_url", CROBIC_IMAGES.handshake)} />
+      <section className="split-section container page-split">
+        <div className="image-frame"><img src={getSetting(settings, "about_section_image_url", CROBIC_IMAGES.classroom)} alt="CROBIC classroom" /></div>
+        <div>
+          <Kicker text={getSetting(settings, "about_section_kicker", "Who We Are")} />
+          <h2>{getSetting(settings, "about_section_title", "Raising a Generation of Champions")}</h2>
+          <div className="short-gold-line" />
+          <p>{getSetting(settings, "about_section_paragraph_1", "CROBIC is structured to train students in biblical doctrine, spiritual growth, leadership, practical ministry and kingdom service.")}</p>
+          <p>{getSetting(settings, "about_section_paragraph_2", "The platform combines a public website, admission process, payment flow, protected student portal, live classes, recorded lessons and a book library.")}</p>
+          <button className="gold-btn" onClick={() => goTo("admissions")}>Start Admission</button>
+        </div>
+      </section>
+      <section className="mission-grid container">
+        <div className="content-card"><h3>{getSetting(settings, "about_mission_title", "Mission")}</h3><p>{getSetting(settings, "about_mission_text", "To provide sound biblical teaching, ministry training and spiritual development through a structured, accessible and world-class learning platform.")}</p></div>
+        <div className="content-card"><h3>{getSetting(settings, "about_vision_title", "Vision")}</h3><p>{getSetting(settings, "about_vision_text", "To raise equipped leaders who understand scripture, walk in wisdom and serve effectively in ministry and society.")}</p></div>
+      </section>
+    </main>
+  );
+}
+
+function Programs({ courses, openAuth, user, goTo, settings = {} }) {
+  const list = courses.length ? courses : fallbackCourses();
+  return (
+    <main>
+      <PageHero eyebrow={getSetting(settings, "programs_hero_eyebrow", "Academics")} title={getSetting(settings, "programs_hero_title", "CROBIC Programs")} text={getSetting(settings, "programs_hero_text", "Certificate, Diploma and Degree routes for students preparing for ministry and leadership.")} image={getSetting(settings, "programs_hero_image_url", CROBIC_IMAGES.classroom)} />
+      <section className="page container">
+        <div className="course-grid program-cards">
+          {list.map((course) => <CourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={user} goTo={goTo} />)}
+        </div>
+      </section>
+      <section className="learning-paths container compact-paths">
+        <SectionIntro eyebrow={getSetting(settings, "programs_classes_eyebrow", "Class Options")} title={getSetting(settings, "programs_classes_title", "Regular and Executive Classes")} text={getSetting(settings, "programs_classes_text", "CROBIC is designed to serve both full-time learners and working ministers.")} />
+        <div className="path-grid">
+          <PathCard icon={<Users />} title={getSetting(settings, "programs_regular_title", "Regular Classes")} text={getSetting(settings, "programs_regular_text", "For students who want a fuller classroom learning experience.")} points={settingPoints(settings, "programs_regular_points", ["Daytime learning", "Structured training", "Ministry preparation"])} />
+          <PathCard icon={<Briefcase />} title={getSetting(settings, "programs_executive_title", "Executive Classes")} text={getSetting(settings, "programs_executive_text", "For pastors, ministers and professionals with active schedules.")} points={settingPoints(settings, "programs_executive_points", ["Flexible timing", "Working ministers", "Practical theological growth"])} />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function BookLibrary({ books, settings = {} }) {
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("All");
+  const categories = useMemo(() => ["All", ...new Set(books.map((book) => book.category).filter(Boolean))], [books]);
+  const filteredBooks = books.filter((book) => {
+    const matchSearch = `${book.title} ${book.author}`.toLowerCase().includes(search.toLowerCase());
+    const matchCategory = category === "All" || book.category === category;
+    return matchSearch && matchCategory;
+  });
+
+  return (
+    <main>
+      <PageHero eyebrow={getSetting(settings, "books_hero_eyebrow", "Book Library")} title={getSetting(settings, "books_hero_title", "Books by Joshua Iginla")} text={getSetting(settings, "books_hero_text", "Open to the general public. Each book uses its official Stellar purchase link.")} image={getSetting(settings, "books_hero_image_url", CROBIC_IMAGES.graduation)} />
+      <section className="page container">
+        <div className="library-tools">
+          <div className="search-box"><Search size={18} /><input placeholder="Search books..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+          <div className="filter-buttons">
+            {categories.map((item) => <button key={item} className={category === item ? "filter active-filter" : "filter"} onClick={() => setCategory(item)}>{item}</button>)}
+          </div>
+        </div>
+        <div className="book-grid">{filteredBooks.map((book) => <BookCard key={book.id} book={book} />)}</div>
+      </section>
+    </main>
+  );
+}
+
+function Admissions({ courses, settings, user, openAuth, goTo }) {
+  const eligibility = settingPipeList(settings, "admission_roles", [
+    ["Pastors", "G.O. and resident pastors"],
+    ["Evangelists", "Field and outreach ministers"],
+    ["Prophets", "Prophetic ministry leaders"],
+    ["Bible Teachers", "Sunday school and Bible study"],
+    ["Associate Ministers", "Ministry workers and leaders"],
+    ["Church Workers", "Deacons, workers and volunteers"]
+  ]);
+
+  const basicRequirements = settingLines(settings, "admission_basic_requirements", [
+    "Believer of good standing with a local church",
+    "Conscious call of God for Christian service",
+    "Pastor or ministry recommendation where applicable",
+    "Secondary school completion or equivalent foundation",
+    "Ability to study and communicate in English",
+    "Willingness to complete all classes, assignments and ministry training"
+  ]);
+
+  const additionalRequirements = settingLines(settings, "admission_additional_requirements", [
+    "Ministry involvement or church service experience",
+    "Short statement of conversion and call to ministry",
+    "Interview or review by the admissions team when required",
+    "Payment confirmation before student portal activation",
+    "Admin approval before access to courses, live classes and student WhatsApp group",
+    "Agreement to CROBIC academic and spiritual discipline standards"
+  ]);
+
+  const applicationSteps = settingPipeList(settings, "admission_application_steps", [
+    ["Create Account", "Begin your student application with your basic information."],
+    ["Choose Programme", "Select Certificate, Diploma, Degree or Executive learning stream."],
+    ["Complete Payment", "Pay through Paystack or submit bank transfer details for review."],
+    ["Payment Review", "The admissions team confirms payment and application details."],
+    ["Admin Approval", "Approved students receive active portal access."],
+    ["Begin Studies", "Access courses, lessons, live classes and student announcements."]
+  ]).map((item, index) => ({ step: String(index + 1).padStart(2, "0"), title: item.title, desc: item.sub }));
+
+  const calendar = settingPipeList(settings, "admission_calendar", [
+    ["Application Opens", "January 2026"],
+    ["Screening and Review", "March 2026"],
+    ["Classes Begin", "April 2026"],
+    ["First Term Ends", "July 2026"]
+  ]).map((item) => ({ label: item.title, value: item.sub }));
+
+  const visibleCourses = courses.length ? courses : fallbackCourses();
+
+  return (
+    <main className="admission-page">
+      <PageHero
+        eyebrow={getSetting(settings, "admission_hero_eyebrow", "Admission and Enrollment")}
+        title={getSetting(settings, "admission_hero_title", "Admission is Now Open")}
+        text={getSetting(settings, "admission_hero_text", "Apply for CROBIC programmes, complete registration payment, and receive portal access after payment confirmation and admin approval.")}
+        image={getSetting(settings, "admission_hero_image_url", CROBIC_IMAGES.classroom)}
+      />
+
+      <section className="admission-section container">
+        <SectionIntro eyebrow={getSetting(settings, "admission_eligibility_eyebrow", "Eligibility")} title={getSetting(settings, "admission_eligibility_title", "Who Should Apply")} text={getSetting(settings, "admission_eligibility_text", "CROBIC is open to ministers, Bible students, church workers and kingdom leaders seeking structured theological training.")} />
+        <div className="admission-role-grid">
+          {eligibility.map((item) => (
+            <div className="admission-role-card card-hover" key={item.title}>
+              <h3>{item.title}</h3>
+              <p>{item.sub}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="admission-band">
+        <div className="container">
+          <SectionIntro eyebrow={getSetting(settings, "admission_requirements_eyebrow", "Prerequisites")} title={getSetting(settings, "admission_requirements_title", "Admission Requirements")} text={getSetting(settings, "admission_requirements_text", "Applicants should be ready for biblical learning, ministry discipline and structured academic participation.")} />
+          <div className="requirement-grid">
+            <RequirementBox title="Basic Requirements" items={basicRequirements} />
+            <RequirementBox title="Additional Requirements" items={additionalRequirements} />
+          </div>
+        </div>
+      </section>
+
+      <section className="admission-section container" id="apply">
+        <SectionIntro eyebrow={getSetting(settings, "admission_apply_eyebrow", "Apply Online")} title={getSetting(settings, "admission_apply_title", "Enroll Online Now")} text={getSetting(settings, "admission_apply_text", "Start your application, choose your programme and complete your registration payment.")} />
+        <div className="admission-apply-card">
+          <div className="apply-copy">
+            <Kicker text="Application Access" />
+            <h2>{user?.role === "STUDENT" ? getSetting(settings, "admission_student_payment_title", "Complete Your Payment") : getSetting(settings, "admission_start_title", "Create Your Student Account")}</h2>
+            <p>
+              {getSetting(settings, "admission_start_text", "Students do not get automatic access after registration. Portal access opens only after payment confirmation and admin approval.")}
+            </p>
+            <ul>
+              <li><CheckCircle size={16} /> Register with correct details</li>
+              <li><CheckCircle size={16} /> Select your programme</li>
+              <li><CheckCircle size={16} /> Pay through Paystack or bank transfer</li>
+              <li><CheckCircle size={16} /> Wait for admin approval</li>
+            </ul>
+          </div>
+
+          <div className="apply-action-panel">
+            {user?.role === "STUDENT" ? (
+              <PaymentPanel courses={courses} settings={settings} />
+            ) : (
+              <div className="start-application-box">
+                <h3>{getSetting(settings, "admission_start_box_title", "Start Application")}</h3>
+                <p>{getSetting(settings, "admission_start_box_text", "Create your student account first. After registration, you will be directed to complete payment.")}</p>
+                <button className="gold-btn full" onClick={() => openAuth("register")}>Start Application</button>
+                <button className="dark-btn full" onClick={() => openAuth("login")}>Already Registered? Login</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="admission-band">
+        <div className="container">
+          <SectionIntro eyebrow={getSetting(settings, "admission_process_eyebrow", "How It Works")} title={getSetting(settings, "admission_process_title", "Application Process")} text={getSetting(settings, "admission_process_text", "A clear admission path from registration to active student portal access.")} />
+          <div className="application-process-grid">
+            {applicationSteps.map((item) => (
+              <div className="process-card card-hover" key={item.step}>
+                <span>{item.step}</span>
+                <h3>{item.title}</h3>
+                <p>{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="admission-section container">
+        <SectionIntro eyebrow={getSetting(settings, "admission_fees_eyebrow", "Fees")} title={getSetting(settings, "admission_fees_title", "Programme Fees")} text={getSetting(settings, "admission_fees_text", "Fees are shown based on active programmes created by admin.")} />
+        <div className="fee-grid">
+          {visibleCourses.slice(0, 4).map((course) => (
+            <div className="fee-card" key={course.id || course.title}>
+              <span>{course.level || "Programme"}</span>
+              <h3>{course.title}</h3>
+              <p>{course.duration || `${course.lessons?.length || course.lessons || 0} lessons`}</p>
+              <strong>₦{Number(course.fee || 0).toLocaleString()}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="admission-band">
+        <div className="container">
+          <SectionIntro eyebrow={getSetting(settings, "admission_calendar_eyebrow", "Calendar")} title={getSetting(settings, "admission_calendar_title", "Academic Calendar 2026")} text={getSetting(settings, "admission_calendar_text", "Key admission and academic dates for the incoming session.")} />
+          <div className="calendar-grid">
+            {calendar.map((item) => (
+              <div className="calendar-card" key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="admission-section container">
+        <SectionIntro eyebrow={getSetting(settings, "admission_contact_eyebrow", "Get in Touch")} title={getSetting(settings, "admission_contact_title", "Contact Admissions Office")} text={getSetting(settings, "admission_contact_text", "For help with application, payment confirmation or programme selection.")} />
+        <div className="contact-grid admission-contact-grid">
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone")}</h3><p>{getSetting(settings, "contact_phone", "+234 814 943 9447")}</p></div>
+          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "admission_contact_location_title", "Location")}</h3><p>{getSetting(settings, "admission_contact_location", "Champions Royal Assembly, Kubwa, Abuja")}</p></div>
+          <div className="content-card contact-card"><Clock /><h3>{getSetting(settings, "admission_contact_hours_title", "Office Hours")}</h3><p>{getSetting(settings, "office_hours", "Monday to Saturday, 9 AM to 5 PM")}</p></div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function RequirementBox({ title, items }) {
+  return (
+    <div className="requirement-box">
+      <h3>{title}</h3>
+      <div className="short-gold-line" />
+      <ul>
+        {items.map((item) => (
+          <li key={item}><CheckCircle size={15} /> {item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Gallery({ gallery = [], settings = {} }) {
+  const items = gallery.length ? gallery : DEFAULT_GALLERY;
+  return (
+    <main>
+      <PageHero eyebrow={getSetting(settings, "gallery_hero_eyebrow", "Gallery")} title={getSetting(settings, "gallery_hero_title", "CROBIC Gallery")} text={getSetting(settings, "gallery_hero_text", "A visual glimpse into CROBIC training, classroom moments and graduation ceremonies.")} image={getSetting(settings, "gallery_hero_image_url", CROBIC_IMAGES.graduation)} />
+      <section className="page container">
+        <div className="gallery-grid">
+          {items.map((item, index) => (
+            <figure key={item.id || index} className="gallery-card">
+              <img src={item.imageUrl || item.image || CROBIC_IMAGES.graduation} alt={item.title} />
+              <figcaption>{item.title}{item.category ? <small>{item.category}</small> : null}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function Contact({ settings = {} }) {
+  return (
+    <main>
+      <PageHero eyebrow={getSetting(settings, "contact_hero_eyebrow", "Contact")} title={getSetting(settings, "contact_hero_title", "Get in Touch with CROBIC")} text={getSetting(settings, "contact_hero_text", "Contact the college for admissions, book enquiries, student support and general information.")} image={getSetting(settings, "contact_hero_image_url", CROBIC_IMAGES.classroom)} />
+      <section className="page container">
+        <div className="contact-grid">
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone")}</h3><p>{getSetting(settings, "contact_phone", "+234 814 943 9447")}</p></div>
+          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{getSetting(settings, "contact_address", "Kubwa, Abuja, FCT, Nigeria")}</p></div>
+          <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CROBIC information.")}</p></div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+
+function getEmbeddableVideoUrl(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return null;
+
+  const iframeMatch = raw.match(/src=["']([^"']+)["']/i);
+  if (iframeMatch?.[1]) return { type: "iframe", src: iframeMatch[1] };
+
+  if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(raw)) return { type: "video", src: raw };
+
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace("www.", "");
+
+    if (host.includes("youtube.com")) {
+      const videoId = url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop();
+      if (url.pathname.includes("/embed/")) return { type: "iframe", src: raw };
+      if (url.pathname.includes("/live/")) return { type: "iframe", src: `https://www.youtube.com/embed/${videoId}` };
+      if (videoId) return { type: "iframe", src: `https://www.youtube.com/embed/${videoId}` };
+    }
+
+    if (host.includes("youtu.be")) {
+      const videoId = url.pathname.split("/").filter(Boolean)[0];
+      if (videoId) return { type: "iframe", src: `https://www.youtube.com/embed/${videoId}` };
+    }
+
+    if (host.includes("vimeo.com")) {
+      const videoId = url.pathname.split("/").filter(Boolean).pop();
+      if (videoId && !host.includes("player.vimeo.com")) return { type: "iframe", src: `https://player.vimeo.com/video/${videoId}` };
+      return { type: "iframe", src: raw };
+    }
+
+    if (host.includes("loom.com")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      const videoId = parts.pop();
+      if (videoId && !url.pathname.includes("/embed/")) return { type: "iframe", src: `https://www.loom.com/embed/${videoId}` };
+      return { type: "iframe", src: raw };
+    }
+
+    return { type: "iframe", src: raw };
+  } catch {
+    return { type: "iframe", src: raw };
+  }
+}
+
+function PortalVideoPlayer({ url, title }) {
+  const video = getEmbeddableVideoUrl(url);
+  if (!video) return <div className="portal-video-missing">No video link added yet.</div>;
+
+  if (video.type === "video") {
+    return <video className="portal-video" controls src={video.src} title={title || "CROBIC video"} />;
+  }
+
+  return (
+    <iframe
+      className="portal-video"
+      title={title || "CROBIC video"}
+      src={video.src}
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowFullScreen
+    />
+  );
+}
+
+function LiveClassroom({ initialLiveSession }) {
+  const [classroom, setClassroom] = useState(initialLiveSession ? { liveSession: initialLiveSession, chatMessages: [], questions: [], attendanceCount: 0, attendance: null } : null);
+  const [chatMessage, setChatMessage] = useState("");
+  const [question, setQuestion] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function loadClassroom() {
+    const result = await api("/student/live/classroom");
+    setClassroom(result);
+  }
+
+  useEffect(() => {
+    loadClassroom().catch(() => null);
+    const interval = setInterval(() => loadClassroom().catch(() => null), 7000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function markAttendance() {
+    try {
+      const result = await api("/student/live/attendance", { method: "POST", body: {} });
+      setMessage(result.message || "Attendance marked");
+      await loadClassroom();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  async function sendChat(e) {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+    try {
+      await api("/student/live/chat", { method: "POST", body: { message: chatMessage } });
+      setChatMessage("");
+      await loadClassroom();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  async function submitQuestion(e) {
+    e.preventDefault();
+    if (!question.trim()) return;
+    try {
+      await api("/student/live/questions", { method: "POST", body: { question } });
+      setQuestion("");
+      setMessage("Question submitted to the lecturer");
+      await loadClassroom();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  const liveSession = classroom?.liveSession;
+
+  if (!liveSession) {
+    return (
+      <div className="quiet-banner live-classroom-empty">
+        <strong>No live class currently active.</strong>
+        <p>When admin starts a live class, students will watch it here inside the portal.</p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="live-classroom">
+      <div className="live-classroom-header">
+        <div>
+          <span className="live-pill"><i /> Live Now</span>
+          <h2>{liveSession.title}</h2>
+          {liveSession.description && <p>{liveSession.description}</p>}
+        </div>
+        <div className="attendance-card-small">
+          <strong>{classroom?.attendanceCount || 0}</strong>
+          <span>Present</span>
+          <button className="gold-btn" type="button" onClick={markAttendance}>Mark Attendance</button>
+        </div>
+      </div>
+
+      <div className="classroom-grid">
+        <div>
+          <div className="portal-video-shell">
+            <PortalVideoPlayer url={liveSession.liveUrl} title={liveSession.title} />
+          </div>
+          <p className="portal-video-note">This class plays inside the CROBIC student portal. Use chat for discussion and questions for lecturer attention.</p>
+          {message && <p className="success-message">{message}</p>}
+        </div>
+
+        <div className="classroom-side-panel">
+          <div className="classroom-box">
+            <div className="classroom-box-title"><h3>Class Chat</h3><span>{classroom?.chatMessages?.length || 0}</span></div>
+            <div className="chat-thread">
+              {(classroom?.chatMessages || []).map((chat) => (
+                <div className="chat-bubble" key={chat.id}>
+                  <strong>{chat.user?.name || "Student"}</strong>
+                  <p>{chat.message}</p>
+                </div>
+              ))}
+              {!(classroom?.chatMessages || []).length && <p className="empty-small">No chat messages yet.</p>}
+            </div>
+            <form className="chat-form" onSubmit={sendChat}>
+              <input placeholder="Type class message..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} />
+              <button className="gold-btn" type="submit">Send</button>
+            </form>
+          </div>
+
+          <div className="classroom-box">
+            <div className="classroom-box-title"><h3>Questions</h3><span>{classroom?.questions?.length || 0}</span></div>
+            <form className="question-form" onSubmit={submitQuestion}>
+              <textarea placeholder="Ask the lecturer a question..." value={question} onChange={(e) => setQuestion(e.target.value)} />
+              <button className="dark-btn full" type="submit">Submit Question</button>
+            </form>
+            <div className="question-list">
+              {(classroom?.questions || []).slice(0, 6).map((item) => (
+                <div className="question-item" key={item.id}>
+                  <strong>{item.user?.name || "Student"}</strong>
+                  <p>{item.question}</p>
+                  {item.answer && <div className="answer-box"><b>Lecturer Answer:</b> {item.answer}</div>}
+                  <small>{item.status || "OPEN"}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function getLessonProgress(lesson) {
+  return Array.isArray(lesson.progress) ? lesson.progress[0] : null;
+}
+
+function buildCourseModules(course) {
+  const modules = [...(course.modules || [])]
+    .sort((a, b) => Number(a.moduleOrder || 0) - Number(b.moduleOrder || 0))
+    .map((module) => ({
+      ...module,
+      lessons: [...(module.lessons || [])].sort((a, b) => Number(a.lessonOrder || 0) - Number(b.lessonOrder || 0))
+    }));
+
+  const seen = new Set(modules.flatMap((module) => module.lessons.map((lesson) => lesson.id)));
+  const legacyLessons = [...(course.lessons || [])]
+    .filter((lesson) => !seen.has(lesson.id))
+    .sort((a, b) => Number(a.lessonOrder || 0) - Number(b.lessonOrder || 0));
+
+  if (legacyLessons.length) {
+    modules.push({ id: "general", title: "General Lessons", description: "Lessons not assigned to a module yet.", moduleOrder: 9999, lessons: legacyLessons });
+  }
+
+  return modules;
+}
+
+function flattenCourseLessonsForStudent(course) {
+  return buildCourseModules(course).flatMap((module) => module.lessons.map((lesson) => ({ ...lesson, moduleTitle: module.title })));
+}
+
+function isLessonCompleted(lesson) {
+  return Boolean(getLessonProgress(lesson)?.completed);
+}
+
+function isStudentLessonUnlocked(course, lessonId) {
+  const lessons = flattenCourseLessonsForStudent(course);
+  for (const lesson of lessons) {
+    if (lesson.id === lessonId) return true;
+    if (lesson.required !== false && !isLessonCompleted(lesson)) return false;
+  }
+  return false;
+}
+
+function getAssignmentSubmission(assignment) {
+  return Array.isArray(assignment.submissions) ? assignment.submissions[0] : null;
+}
+
+function isAssignmentPassed(assignment) {
+  if (assignment.required === false) return true;
+  const submission = getAssignmentSubmission(assignment);
+  if (!submission) return false;
+  if (["PASSED", "APPROVED"].includes(submission.status)) return true;
+  if (submission.score === null || submission.score === undefined) return false;
+  return Number(submission.score) >= Number(assignment.passScore || 50);
+}
+
+function getQuizBestAttempt(quiz) {
+  const attempts = Array.isArray(quiz.attempts) ? quiz.attempts : [];
+  if (!attempts.length) return null;
+  return [...attempts].sort((a, b) => Number(b.score || 0) - Number(a.score || 0))[0];
+}
+
+function isQuizPassed(quiz) {
+  if (quiz.required === false) return true;
+  return (quiz.attempts || []).some((attempt) => attempt.passed);
+}
+
+function getCourseProgressSummary(course) {
+  const lessons = flattenCourseLessonsForStudent(course);
+  const requiredLessons = lessons.filter((lesson) => lesson.required !== false);
+  const completedRequired = requiredLessons.filter(isLessonCompleted).length;
+  const totalRequired = requiredLessons.length;
+  const assignments = (course.assignments || []).filter((item) => item.published !== false);
+  const quizzes = (course.quizzes || []).filter((item) => item.published !== false);
+  const requiredAssignments = assignments.filter((item) => item.required !== false);
+  const requiredQuizzes = quizzes.filter((item) => item.required !== false);
+  const completedAssignments = requiredAssignments.filter(isAssignmentPassed).length;
+  const completedQuizzes = requiredQuizzes.filter(isQuizPassed).length;
+  const completedRequirements = completedRequired + completedAssignments + completedQuizzes;
+  const totalRequirements = totalRequired + requiredAssignments.length + requiredQuizzes.length;
+  const percent = totalRequirements ? Math.round((completedRequirements / totalRequirements) * 100) : 0;
+  return {
+    lessons,
+    requiredLessons,
+    completedRequired,
+    totalRequired,
+    assignments,
+    quizzes,
+    requiredAssignments,
+    requiredQuizzes,
+    completedAssignments,
+    completedQuizzes,
+    completedRequirements,
+    totalRequirements,
+    percent
+  };
+}
+
+
+function formatPortalStatus(value) {
+  return String(value || "NOT AVAILABLE").replaceAll("_", " ");
+}
+
+function getPortalDecisionCopy(accountStatus, enrollment, fallbackError = "") {
+  const admissionStatus = enrollment?.admissionStatus;
+  const paymentStatusValue = enrollment?.paymentStatus;
+
+  if (accountStatus === "REJECTED" || admissionStatus === "REJECTED") {
+    return {
+      tone: "rejected",
+      category: "ADMISSION_REJECTED",
+      title: "Admission Rejected",
+      message: "Your admission application was not approved. You can submit an appeal for CROBIC admin to review your application again.",
+      buttonText: "Review Application",
+      buttonPage: "admissions"
+    };
+  }
+
+  if (accountStatus === "SUSPENDED" || admissionStatus === "SUSPENDED") {
+    return {
+      tone: "suspended",
+      category: "ACCOUNT_SUSPENDED",
+      title: "Account Suspended",
+      message: "Your student account has been suspended by admin. Submit an appeal or chat with support for review.",
+      buttonText: "Check Admission",
+      buttonPage: "admissions"
+    };
+  }
+
+  if (accountStatus === "GRADUATED" || admissionStatus === "GRADUATED") {
+    return {
+      tone: "graduated",
+      category: "GRADUATED_ACCESS",
+      title: "Programme Completed",
+      message: "Your student record has been marked as graduated. You can still contact support for certificates, records or alumni access.",
+      buttonText: "View Admissions",
+      buttonPage: "admissions"
+    };
+  }
+
+  if (!enrollment || accountStatus === "PENDING_PAYMENT" || paymentStatusValue === "PENDING_PAYMENT" || admissionStatus === "AWAITING_PAYMENT") {
+    return {
+      tone: "pending",
+      category: "PAYMENT_REQUIRED",
+      title: "Payment Required",
+      message: "Your student account has been created, but payment has not been completed or submitted for review.",
+      buttonText: "Complete Payment",
+      buttonPage: "admissions"
+    };
+  }
+
+  if (accountStatus === "MANUAL_PAYMENT_PENDING" || paymentStatusValue === "MANUAL_PAYMENT_PENDING") {
+    return {
+      tone: "review",
+      category: "PAYMENT_REVIEW",
+      title: "Payment Under Review",
+      message: "Your bank transfer receipt has been submitted. CROBIC admin will verify your payment and approve portal access after confirmation.",
+      buttonText: "Check Admission",
+      buttonPage: "admissions"
+    };
+  }
+
+  if (accountStatus === "PAYMENT_CONFIRMED" || paymentStatusValue === "PAYMENT_CONFIRMED" || admissionStatus === "AWAITING_ADMIN_APPROVAL") {
+    return {
+      tone: "review",
+      category: "ADMISSION_REVIEW",
+      title: "Admission Approval Pending",
+      message: "Your payment has been confirmed. Portal access will open after admin completes admission approval.",
+      buttonText: "Check Admission",
+      buttonPage: "admissions"
+    };
+  }
+
+  return {
+    tone: "pending",
+    category: "GENERAL_SUPPORT",
+    title: "Portal Access Pending",
+    message: fallbackError || "Your registration is being reviewed. You will receive access once your payment and admission are approved.",
+    buttonText: "Complete Payment / Check Admission",
+    buttonPage: "admissions"
+  };
+}
+
+function PortalDecisionGate({ error, paymentStatus, fallbackUser, goTo }) {
+  const enrollments = paymentStatus?.enrollments || [];
+  const enrollment = enrollments[0] || null;
+  const accountStatus = paymentStatus?.user?.status || fallbackUser?.status || "PENDING_PAYMENT";
+  const copy = getPortalDecisionCopy(accountStatus, enrollment, error);
+
+  return (
+    <main className={`page container gate student-decision-gate gate-${copy.tone}`}>
+      <div className="student-gate-icon"><ShieldCheck size={52} /></div>
+      <h1>{copy.title}</h1>
+      <p>{copy.message}</p>
+
+      <div className="student-status-grid">
+        <div className="status-detail-card">
+          <span>Account Status</span>
+          <strong className={`status-chip status-chip-${copy.tone}`}>{formatPortalStatus(accountStatus)}</strong>
+        </div>
+        {enrollment && (
+          <>
+            <div className="status-detail-card"><span>Admission Status</span><strong>{formatPortalStatus(enrollment.admissionStatus)}</strong></div>
+            <div className="status-detail-card"><span>Payment Status</span><strong>{formatPortalStatus(enrollment.paymentStatus)}</strong></div>
+            <div className="status-detail-card"><span>Programme</span><strong>{enrollment.course?.title || "Selected programme"}</strong></div>
+          </>
+        )}
+      </div>
+
+      <div className="student-gate-actions">
+        <button className="gold-btn big" onClick={() => goTo(copy.buttonPage)}>{copy.buttonText}</button>
+        <button className="ghost-btn dark-text big" type="button" onClick={() => window.location.reload()}>Check Access Again</button>
+      </div>
+
+      <StudentSupportCenter
+        defaultCategory={copy.category}
+        defaultSubject={copy.title}
+        defaultEnrollmentId={enrollment?.id || ""}
+        gateMode
+      />
+    </main>
+  );
+}
+
+function StudentSupportCenter({ defaultCategory = "GENERAL_SUPPORT", defaultSubject = "Support Request", defaultEnrollmentId = "", gateMode = false }) {
+  const [cases, setCases] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [form, setForm] = useState({
+    category: defaultCategory,
+    subject: defaultSubject,
+    message: "",
+    enrollmentId: defaultEnrollmentId
+  });
+  const [reply, setReply] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function loadCases() {
+    const result = await api("/student/support/cases");
+    setCases(result);
+    if (!activeId && result[0]?.id) setActiveId(result[0].id);
+  }
+
+  useEffect(() => {
+    loadCases().catch(() => null);
+    const timer = setInterval(() => loadCases().catch(() => null), 7000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const activeCase = cases.find((item) => item.id === activeId) || cases[0] || null;
+
+  async function createCase(e) {
+    e.preventDefault();
+    if (!form.message.trim()) {
+      showToast("Please type your appeal/support message.", "error");
+      return;
+    }
+    try {
+      setLoading(true);
+      const created = await api("/student/support/cases", { method: "POST", body: form });
+      showToast("Your appeal/support case has been submitted.", "success");
+      setForm((current) => ({ ...current, message: "" }));
+      await loadCases();
+      setActiveId(created.id);
+    } catch (error) {
+      showToast(error.message || "Could not submit support case", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendReply(e) {
+    e.preventDefault();
+    if (!activeCase || !reply.trim()) return;
+    try {
+      await api(`/student/support/cases/${activeCase.id}/messages`, { method: "POST", body: { message: reply } });
+      setReply("");
+      await loadCases();
+      showToast("Message sent to support.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not send message", "error");
+    }
+  }
+
+  return (
+    <section className={gateMode ? "support-center support-center-gate" : "support-center"}>
+      <div className="support-head">
+        <div>
+          <span><MessageCircle size={15} /> Appeals & Support</span>
+          <h2>{gateMode ? "Appeal or Chat with CROBIC Support" : "Support & Appeals"}</h2>
+          <p>Messages are saved in your portal history. Admin replies will appear here automatically.</p>
+        </div>
+        <button className="ghost-btn dark-text" type="button" onClick={loadCases}>Refresh</button>
+      </div>
+
+      <div className="support-grid">
+        <form className="support-new-case" onSubmit={createCase}>
+          <h3>Start New Case</h3>
+          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+            <option value="ADMISSION_REJECTED">Admission Rejected</option>
+            <option value="ACCOUNT_SUSPENDED">Account Suspended</option>
+            <option value="PAYMENT_REVIEW">Payment Issue</option>
+            <option value="ADMISSION_REVIEW">Admission Review</option>
+            <option value="GENERAL_SUPPORT">General Support</option>
+          </select>
+          <input placeholder="Subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
+          <textarea placeholder="Explain what happened and what you want admin to review..." value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+          <button className="gold-btn full" type="submit" disabled={loading}>{loading ? "Submitting..." : "Submit Appeal / Support"}</button>
+        </form>
+
+        <div className="support-thread-card">
+          <div className="support-case-tabs">
+            {cases.map((item) => (
+              <button type="button" key={item.id} className={activeCase?.id === item.id ? "active-support-case" : ""} onClick={() => setActiveId(item.id)}>
+                <strong>{item.subject}</strong>
+                <small>{formatPortalStatus(item.status)} · {formatPortalStatus(item.category)}</small>
+              </button>
+            ))}
+            {!cases.length && <p className="empty-small">No support case yet. Submit a message to start one.</p>}
+          </div>
+
+          {activeCase && (
+            <>
+              <div className="support-thread-header">
+                <div><strong>{activeCase.subject}</strong><small>{formatPortalStatus(activeCase.category)} · {formatPortalStatus(activeCase.status)}</small></div>
+              </div>
+              <div className="support-message-list">
+                {(activeCase.messages || []).map((message) => (
+                  <div className={message.sender?.role === "ADMIN" ? "support-message admin-message" : "support-message student-message"} key={message.id}>
+                    <strong>{message.sender?.role === "ADMIN" ? "CROBIC Support" : message.sender?.name || "Student"}</strong>
+                    <p>{message.message}</p>
+                    <small>{new Date(message.createdAt).toLocaleString()}</small>
+                  </div>
+                ))}
+              </div>
+              <form className="support-reply-form" onSubmit={sendReply}>
+                <input placeholder="Type reply..." value={reply} onChange={(e) => setReply(e.target.value)} />
+                <button className="dark-btn" type="submit"><Send size={14} /> Send</button>
+              </form>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StudentPortal({ user, setUser, goTo }) {
+  const [dashboard, setDashboard] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState(null);
+  const [error, setError] = useState("");
+  const [activeEnrollmentId, setActiveEnrollmentId] = useState(null);
+  const [studentTab, setStudentTab] = useState("dashboard");
+  const [publicBooks, setPublicBooks] = useState([]);
+
+  async function loadDashboard() {
+    const result = await api("/student/dashboard");
+    setDashboard(result);
+  }
+
+  async function loadPublicBooks() {
+    const result = await api(`/public/bootstrap?_=${Date.now()}`);
+    setPublicBooks(result.books || []);
+  }
+
+  useEffect(() => {
+    loadDashboard()
+      .catch(async (err) => {
+        setError(err.message);
+        const status = await api("/student/payment-status").catch(() => null);
+        setPaymentStatus(status);
+      });
+    loadPublicBooks().catch(() => null);
+  }, []);
+
+  if (error) {
+    return <PortalDecisionGate error={error} paymentStatus={paymentStatus} fallbackUser={user} goTo={goTo} />;
+  }
+
+  if (!dashboard) return <div className="loading-screen">Loading student portal...</div>;
+
+  const activeEnrollment = dashboard.enrollments.find((item) => item.id === activeEnrollmentId);
+  const totalLessons = dashboard.enrollments.reduce((a, e) => a + getCourseProgressSummary(e.course).lessons.length, 0);
+  const completedCourses = dashboard.enrollments.filter((enrollment) => getCourseProgressSummary(enrollment.course).percent >= 100).length;
+
+  function switchStudentTab(nextTab) {
+    setStudentTab(nextTab);
+    setActiveEnrollmentId(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openCourse(enrollmentId) {
+    setStudentTab("my courses");
+    setActiveEnrollmentId(enrollmentId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  return (
+    <main className="portal-page student-portal-page">
+      <PortalSidebar
+        title="Student Portal"
+        items={["Dashboard", "My Profile", "My Courses", "Live Classes", "Attendance", "Book Library", "My Results", "Certificates", "Support & Appeals"]}
+        tab={studentTab}
+        setTab={switchStudentTab}
+      />
+      <div className="portal-main">
+        <div className="portal-header student-portal-topbar">
+          <div><p className="eyebrow dark">Welcome back</p><h1>{user.name}</h1></div>
+          <a className="gold-btn" href={dashboard.settings.student_whatsapp_group_link} target="_blank" rel="noreferrer">Student WhatsApp Group</a>
+        </div>
+
+        {activeEnrollment ? (
+          <LearningCourseView
+            enrollment={activeEnrollment}
+            back={() => { setActiveEnrollmentId(null); setStudentTab("my courses"); }}
+            reloadDashboard={loadDashboard}
+          />
+        ) : (
+          <>
+            {studentTab === "dashboard" && (
+              <section className="student-tab-panel">
+                <div className="student-tab-heading">
+                  <span>Student Overview</span>
+                  <h2>Dashboard</h2>
+                  <p>Track your approved programmes, lessons, live classes and recent announcements.</p>
+                </div>
+
+                <div className="dashboard-grid">
+                  <DashboardCard icon={<BookOpen />} label="Approved Courses" value={dashboard.enrollments.length} />
+                  <DashboardCard icon={<Video />} label="Lessons" value={totalLessons} />
+                  <DashboardCard icon={<Award />} label="Completed Courses" value={completedCourses} />
+                </div>
+
+                <div className="student-dashboard-split">
+                  <div className="student-dashboard-panel">
+                    <div className="section-mini-head"><span>Continue</span><h3>My Courses</h3></div>
+                    <div className="student-mini-course-list">
+                      {dashboard.enrollments.map((enrollment) => {
+                        const summary = getCourseProgressSummary(enrollment.course);
+                        return (
+                          <button type="button" key={enrollment.id} onClick={() => openCourse(enrollment.id)}>
+                            <strong>{enrollment.course.title}</strong>
+                            <small>{summary.percent}% complete · {summary.completedRequirements || summary.completedRequired}/{summary.totalRequirements || summary.totalRequired} required items</small>
+                            <i><b style={{ width: `${summary.percent}%` }} /></i>
+                          </button>
+                        );
+                      })}
+                      {!dashboard.enrollments.length && <p className="empty-small">No approved course yet.</p>}
+                    </div>
+                  </div>
+
+                  <div className="student-dashboard-panel">
+                    <div className="section-mini-head"><span>Updates</span><h3>Announcements</h3></div>
+                    <div className="announcement-list compact-announcements">
+                      {dashboard.announcements.slice(0, 4).map((item) => <div className="announcement" key={item.id}><Megaphone /><div><strong>{item.title}</strong><p>{item.body}</p></div></div>)}
+                      {!dashboard.announcements.length && <p className="empty-small">No announcements yet.</p>}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {studentTab === "my profile" && (
+              <section className="student-tab-panel">
+                <StudentProfilePanel user={user} setUser={setUser} reloadDashboard={loadDashboard} />
+              </section>
+            )}
+
+            {studentTab === "my courses" && (
+              <section className="student-tab-panel">
+                <div className="student-tab-heading">
+                  <span>Learning</span>
+                  <h2>My Courses</h2>
+                  <p>Open your approved programme and continue lessons in the correct order.</p>
+                </div>
+                <div className="course-grid student-course-grid">
+                  {dashboard.enrollments.map((enrollment) => (
+                    <StudentCourse key={enrollment.id} enrollment={enrollment} openCourse={() => openCourse(enrollment.id)} />
+                  ))}
+                  {!dashboard.enrollments.length && <div className="quiet-banner"><strong>No approved courses yet.</strong><p>Your courses will appear here after admission approval.</p></div>}
+                </div>
+              </section>
+            )}
+
+            {studentTab === "live classes" && (
+              <section className="student-tab-panel">
+                <div className="student-tab-heading">
+                  <span>Classroom</span>
+                  <h2>Live Classes</h2>
+                  <p>Watch live classes, mark attendance, chat and submit questions inside the portal.</p>
+                </div>
+                <LiveClassroom initialLiveSession={dashboard.liveSession} />
+              </section>
+            )}
+
+            {studentTab === "attendance" && (
+              <section className="student-tab-panel">
+                <StudentAttendancePanel />
+              </section>
+            )}
+
+            {studentTab === "book library" && (
+              <section className="student-tab-panel">
+                <div className="student-tab-heading">
+                  <span>Resources</span>
+                  <h2>Book Library</h2>
+                  <p>Buy official CROBIC/Joshua Iginla books through the approved purchase links.</p>
+                </div>
+                <div className="book-grid student-book-grid">
+                  {publicBooks.map((book) => <BookCard key={book.id} book={book} />)}
+                  {!publicBooks.length && <div className="quiet-banner"><strong>No books available yet.</strong><p>Admin can add books from the Books section.</p></div>}
+                </div>
+              </section>
+            )}
+
+            {studentTab === "my results" && (
+              <section className="student-tab-panel">
+                <StudentResultsPanel />
+              </section>
+            )}
+
+            {studentTab === "certificates" && (
+              <section className="student-tab-panel">
+                <StudentCertificatesPanel />
+              </section>
+            )}
+
+            {studentTab === "support & appeals" && (
+              <section className="student-tab-panel">
+                <StudentSupportCenter />
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
+
+
+function StudentProfilePanel({ user, setUser, reloadDashboard }) {
+  const [form, setForm] = useState({
+    name: user?.name || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+    country: user?.country || ""
+  });
+  const [saving, setSaving] = useState(false);
+
+  function updateField(name, value) {
+    setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  async function saveProfile(e) {
+    e.preventDefault();
+    const fullName = String(form.name || "").trim();
+    if (!fullName || fullName.split(/\s+/).length < 2) {
+      showToast("Please enter your full name as it should appear on official records and certificates.", "error");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const result = await api("/student/profile", { method: "PATCH", body: form });
+      setUser(result.user);
+      await reloadDashboard?.();
+      showToast("Your profile details have been updated.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not update profile", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="profile-panel">
+      <div className="student-tab-heading profile-heading-card">
+        <span>Account Details</span>
+        <h2>My Profile</h2>
+        <p>Update your correct full name and contact details. Your full name is used for official CROBIC records and certificates.</p>
+      </div>
+
+      <form className="admin-form profile-form" onSubmit={saveProfile}>
+        <label className="content-field content-field-wide">
+          <span>Full name for certificate</span>
+          <input placeholder="Enter your full name" value={form.name} onChange={(e) => updateField("name", e.target.value)} required />
+        </label>
+        <div className="profile-two-cols">
+          <label className="content-field">
+            <span>Email address</span>
+            <input type="email" placeholder="Email address" value={form.email} onChange={(e) => updateField("email", e.target.value)} required />
+          </label>
+          <label className="content-field">
+            <span>Phone number</span>
+            <input placeholder="Phone number" value={form.phone} onChange={(e) => updateField("phone", e.target.value)} />
+          </label>
+        </div>
+        <label className="content-field content-field-wide">
+          <span>Country</span>
+          <input placeholder="Country" value={form.country} onChange={(e) => updateField("country", e.target.value)} />
+        </label>
+        <div className="profile-note-box">
+          <strong>Important:</strong> Use your real full name before certificate issuance. Admin can also correct your details where necessary.
+        </div>
+        <button className="gold-btn" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Profile Details"}</button>
+      </form>
+    </div>
+  );
+}
+
+function StudentCourse({ enrollment, openCourse }) {
+  const course = enrollment.course;
+  const summary = getCourseProgressSummary(course);
+  return (
+    <div className="course-card student-course-card">
+      <img src={course.imageUrl || CROBIC_IMAGES.classroom} alt={course.title} />
+      <div>
+        <span>{course.level}</span>
+        <h3>{course.title}</h3>
+        <div className="meta-line"><Clock size={13} /> <small>{course.duration || "Learning programme"}</small></div>
+        <p>{course.description}</p>
+        <div className="learning-progress-mini">
+          <div><strong>{summary.percent}%</strong><small>{summary.completedRequirements || summary.completedRequired} of {summary.totalRequirements || summary.totalRequired} required items completed</small></div>
+          <i><b style={{ width: `${summary.percent}%` }} /></i>
+        </div>
+        <button className="gold-btn full" onClick={openCourse}>Continue Learning <ArrowRight size={14} /></button>
+      </div>
+    </div>
+  );
+}
+
+function LearningCourseView({ enrollment, back, reloadDashboard }) {
+  const [course, setCourse] = useState(enrollment.course);
+  const [activeLessonId, setActiveLessonId] = useState(null);
+  const [message, setMessage] = useState("");
+  const modules = buildCourseModules(course);
+  const summary = getCourseProgressSummary(course);
+  const firstOpenLesson = summary.lessons.find((lesson) => isStudentLessonUnlocked(course, lesson.id) && !isLessonCompleted(lesson)) || summary.lessons.find((lesson) => isStudentLessonUnlocked(course, lesson.id)) || summary.lessons[0];
+  const activeLesson = summary.lessons.find((lesson) => lesson.id === activeLessonId) || firstOpenLesson;
+
+  useEffect(() => {
+    if (!activeLessonId && firstOpenLesson?.id) setActiveLessonId(firstOpenLesson.id);
+  }, [activeLessonId, firstOpenLesson?.id]);
+
+  useEffect(() => {
+    reloadCourse().catch(() => null);
+  }, [enrollment.id]);
+
+  async function reloadCourse() {
+    const result = await api(`/student/courses/${course.id}/learning`);
+    setCourse(result.enrollment.course);
+    await reloadDashboard();
+  }
+
+  async function markProgress(lesson, percent = 100, completed = true) {
+    if (!lesson) return;
+    try {
+      const result = await api(`/student/lessons/${lesson.id}/progress`, { method: "POST", body: { progressPercent: percent, completed } });
+      setMessage(completed ? "Lesson completed. The next lesson is now unlocked." : "Progress saved.");
+      await reloadCourse();
+      return result;
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  function selectLesson(lesson) {
+    if (!isStudentLessonUnlocked(course, lesson.id)) {
+      showToast("Complete the previous required lesson before opening this one.", "error");
+      return;
+    }
+    setActiveLessonId(lesson.id);
+    setMessage("");
+  }
+
+  return (
+    <section className="learning-room">
+      <button className="text-link" onClick={back}><span /> Back to My Courses</button>
+      <div className="learning-room-header">
+        <div>
+          <p className="eyebrow dark">Course Learning</p>
+          <h2>{course.title}</h2>
+          <p>{course.description}</p>
+        </div>
+        <div className="learning-progress-card">
+          <strong>{summary.percent}%</strong>
+          <span>{summary.completedRequirements || summary.completedRequired} of {summary.totalRequirements || summary.totalRequired} required items</span>
+          <i><b style={{ width: `${summary.percent}%` }} /></i>
+        </div>
+      </div>
+
+      <div className="learning-layout">
+        <div className="learning-main-panel">
+          {activeLesson ? (
+            <>
+              <div className="lesson-active-header">
+                <span>{activeLesson.moduleTitle || "Lesson"}</span>
+                <h3>{activeLesson.title}</h3>
+                <p>{activeLesson.duration || "Video lesson"} · Completion required: {activeLesson.completionPercentRequired || 90}%</p>
+              </div>
+              <TrackedLessonVideo lesson={activeLesson} onComplete={() => markProgress(activeLesson, 100, true)} />
+              <div className="lesson-actions-row">
+                {activeLesson.notesUrl && <a className="white-btn dark-text" href={activeLesson.notesUrl} target="_blank" rel="noreferrer">Open Notes</a>}
+                <button className="gold-btn" onClick={() => markProgress(activeLesson, 100, true)}>{isLessonCompleted(activeLesson) ? "Completed" : "Mark Lesson Complete"}</button>
+              </div>
+              {message && <p className="success-message">{message}</p>}
+            </>
+          ) : (
+            <div className="quiet-banner"><strong>No lessons have been added yet.</strong><p>Admin can add modules and video lessons from Course Builder.</p></div>
+          )}
+        </div>
+
+        <aside className="learning-outline">
+          <h3>Course Content</h3>
+          {modules.map((module) => {
+            const moduleRequired = module.lessons.filter((lesson) => lesson.required !== false);
+            const moduleCompleted = moduleRequired.filter(isLessonCompleted).length;
+            return (
+              <div className="module-outline" key={module.id}>
+                <div className="module-title-row">
+                  <div><strong>{module.title}</strong><small>{moduleCompleted}/{moduleRequired.length} complete</small></div>
+                </div>
+                <div className="module-lessons">
+                  {module.lessons.map((lesson) => {
+                    const unlocked = isStudentLessonUnlocked(course, lesson.id);
+                    const completed = isLessonCompleted(lesson);
+                    return (
+                      <button key={lesson.id} className={activeLesson?.id === lesson.id ? "lesson-outline-item active" : "lesson-outline-item"} onClick={() => selectLesson(lesson)}>
+                        <span>{completed ? "✓" : unlocked ? "▶" : "🔒"}</span>
+                        <div><strong>{lesson.title}</strong><small>{lesson.duration || `Lesson ${lesson.lessonOrder}`}</small></div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </aside>
+      </div>
+
+      <LearningAssessments course={course} reloadCourse={reloadCourse} />
+      <CourseDiscussionPanel courseId={course.id} />
+    </section>
+  );
+}
+
+function TrackedLessonVideo({ lesson, onComplete }) {
+  const video = getEmbeddableVideoUrl(lesson.videoUrl);
+  const [autoCompleted, setAutoCompleted] = useState(false);
+  const requiredPercent = Number(lesson.completionPercentRequired || 90);
+
+  function handleTimeUpdate(e) {
+    const node = e.currentTarget;
+    if (!node.duration || autoCompleted) return;
+    const percent = Math.round((node.currentTime / node.duration) * 100);
+    if (percent >= requiredPercent) {
+      setAutoCompleted(true);
+      onComplete();
+    }
+  }
+
+  if (!video) {
+    return (
+      <div className="student-lesson-video-shell">
+        <div className="portal-video-missing">No video link added for this lesson yet.</div>
+      </div>
+    );
+  }
+
+  if (video.type === "video") {
+    return (
+      <div className="student-lesson-video-shell">
+        <video className="portal-video" controls src={video.src} title={lesson.title} onTimeUpdate={handleTimeUpdate} />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="student-lesson-video-shell">
+        <PortalVideoPlayer url={lesson.videoUrl} title={lesson.title} />
+      </div>
+      <p className="portal-video-note">For YouTube, Vimeo and other embedded players, use the completion button after watching the lecture inside the portal.</p>
+    </>
+  );
+}
+
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function LearningAssessments({ course, reloadCourse }) {
+  const assignments = (course.assignments || []).filter((item) => item.published !== false);
+  const quizzes = (course.quizzes || []).filter((item) => item.published !== false);
+  if (!assignments.length && !quizzes.length) return null;
+
+  return (
+    <section className="learning-assessments-panel">
+      <div className="student-tab-heading compact-learning-heading">
+        <span>Course Work</span>
+        <h2>Assignments & Quizzes</h2>
+        <p>Required assignments and quizzes must be passed before certificate eligibility.</p>
+      </div>
+      <div className="assessment-grid">
+        {assignments.map((assignment) => <StudentAssignmentCard key={assignment.id} assignment={assignment} reloadCourse={reloadCourse} />)}
+        {quizzes.map((quiz) => <StudentQuizCard key={quiz.id} quiz={quiz} reloadCourse={reloadCourse} />)}
+      </div>
+    </section>
+  );
+}
+
+function StudentAssignmentCard({ assignment, reloadCourse }) {
+  const submission = getAssignmentSubmission(assignment);
+  const [answer, setAnswer] = useState(submission?.answer || "");
+  const [fileUrl, setFileUrl] = useState(submission?.fileUrl || "");
+  const [fileName, setFileName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function uploadFile(file) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("Assignment file must not be more than 10MB.", "error");
+      return;
+    }
+    try {
+      setSaving(true);
+      const dataUrl = await fileToDataUrl(file);
+      const result = await api("/uploads/assignment-file", { method: "POST", body: { fileName: file.name, contentType: file.type, dataUrl } });
+      setFileUrl(result.url);
+      setFileName(file.name);
+      showToast("Assignment file uploaded.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not upload file", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitAssignment(e) {
+    e.preventDefault();
+    if (!answer.trim() && !fileUrl) {
+      showToast("Type an answer or upload your assignment file.", "error");
+      return;
+    }
+    try {
+      setSaving(true);
+      const result = await api(`/student/assignments/${assignment.id}/submit`, { method: "POST", body: { answer, fileUrl } });
+      showToast(result.message || "Assignment submitted.", "success");
+      await reloadCourse();
+    } catch (error) {
+      showToast(error.message || "Could not submit assignment", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <article className="student-assessment-card">
+      <div className="assessment-card-head">
+        <span>{assignment.required ? "Required Assignment" : "Optional Assignment"}</span>
+        <strong>{assignment.title}</strong>
+      </div>
+      <p>{assignment.instructions}</p>
+      <div className="assessment-status-line">
+        <small>Pass mark: {assignment.passScore || 50}%</small>
+        {submission ? <small>Status: {formatPortalStatus(submission.status)}</small> : <small>Not submitted</small>}
+        {submission?.score !== null && submission?.score !== undefined && <small>Score: {submission.score}/{assignment.maxScore || 100}</small>}
+      </div>
+      {submission?.feedback && <div className="answer-box"><b>Admin Feedback:</b> {submission.feedback}</div>}
+      <form className="assessment-submit-form" onSubmit={submitAssignment}>
+        <textarea placeholder="Type your assignment answer..." value={answer} onChange={(e) => setAnswer(e.target.value)} />
+        <label className="receipt-upload-box assessment-upload-box">
+          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx" onChange={(e) => uploadFile(e.target.files?.[0])} />
+          <span>{fileUrl ? "File uploaded" : "Upload assignment file"}</span>
+          <small>{fileName || submission?.fileUrl || "JPG, PNG, WEBP, PDF, DOC or DOCX. Maximum 10MB."}</small>
+        </label>
+        {fileUrl && <a className="receipt-preview-link" href={fileUrl} target="_blank" rel="noreferrer">View uploaded file</a>}
+        <button className="gold-btn" type="submit" disabled={saving}>{saving ? "Saving..." : submission ? "Resubmit Assignment" : "Submit Assignment"}</button>
+      </form>
+    </article>
+  );
+}
+
+function StudentQuizCard({ quiz, reloadCourse }) {
+  const [answers, setAnswers] = useState({});
+  const [saving, setSaving] = useState(false);
+  const bestAttempt = getQuizBestAttempt(quiz);
+
+  function setAnswer(questionId, option) {
+    setAnswers((current) => ({ ...current, [questionId]: option }));
+  }
+
+  async function submitQuiz(e) {
+    e.preventDefault();
+    if ((quiz.questions || []).some((question) => !answers[question.id])) {
+      showToast("Please answer every quiz question before submitting.", "error");
+      return;
+    }
+    try {
+      setSaving(true);
+      const result = await api(`/student/quizzes/${quiz.id}/attempt`, { method: "POST", body: { answers } });
+      showToast(`${result.message} Score: ${result.attempt?.score || 0}%`, result.attempt?.passed ? "success" : "error");
+      setAnswers({});
+      await reloadCourse();
+    } catch (error) {
+      showToast(error.message || "Could not submit quiz", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <article className="student-assessment-card quiz-card">
+      <div className="assessment-card-head">
+        <span>{quiz.required ? "Required Quiz" : "Optional Quiz"}</span>
+        <strong>{quiz.title}</strong>
+      </div>
+      {quiz.description && <p>{quiz.description}</p>}
+      <div className="assessment-status-line">
+        <small>Pass mark: {quiz.passScore || 70}%</small>
+        {bestAttempt ? <small>Best score: {bestAttempt.score}% · {bestAttempt.passed ? "Passed" : "Not passed"}</small> : <small>No attempt yet</small>}
+      </div>
+      <form className="quiz-form" onSubmit={submitQuiz}>
+        {(quiz.questions || []).map((question, index) => (
+          <div className="quiz-question-card" key={question.id}>
+            <strong>{index + 1}. {question.question}</strong>
+            {["A", "B", "C", "D"].map((option) => (
+              <label key={option}>
+                <input type="radio" name={`quiz-${quiz.id}-q-${question.id}`} checked={answers[question.id] === option} onChange={() => setAnswer(question.id, option)} />
+                <span>{option}. {question[`option${option}`]}</span>
+              </label>
+            ))}
+          </div>
+        ))}
+        {!(quiz.questions || []).length && <p className="empty-small">Admin has not added quiz questions yet.</p>}
+        <button className="dark-btn" type="submit" disabled={saving || !(quiz.questions || []).length}>{saving ? "Submitting..." : "Submit Quiz"}</button>
+      </form>
+    </article>
+  );
+}
+
+function PaymentPanel({ courses, settings }) {
+  const [courseId, setCourseId] = useState(courses[0]?.id || "");
+  const [manualReference, setManualReference] = useState("");
+  const [paymentProofUrl, setPaymentProofUrl] = useState("");
+  const [receiptName, setReceiptName] = useState("");
+  const [receiptUploading, setReceiptUploading] = useState(false);
+  const [message, setMessage] = useState("");
+  const selectedCourse = courses.find((course) => course.id === Number(courseId));
+
+  async function payWithPaystack() {
+    try {
+      const result = await api("/payments/paystack/initialize", { method: "POST", body: { courseId } });
+      window.location.href = result.authorizationUrl;
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadReceipt(file) {
+    if (!file) return;
+    const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (!allowed.includes(file.type)) {
+      showToast("Please upload a JPG, PNG, WEBP or PDF receipt.", "error");
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      showToast("Receipt file must not be more than 6MB.", "error");
+      return;
+    }
+
+    try {
+      setReceiptUploading(true);
+      setMessage("");
+      const dataUrl = await fileToDataUrl(file);
+      const result = await api("/uploads/payment-proof", {
+        method: "POST",
+        body: { fileName: file.name, contentType: file.type, dataUrl }
+      });
+      setPaymentProofUrl(result.url);
+      setReceiptName(file.name);
+      setMessage("Receipt uploaded. You can now submit your bank transfer for review.");
+      showToast("Receipt uploaded. You can now submit your bank transfer for review.", "success");
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      setReceiptUploading(false);
+    }
+  }
+
+  async function submitManual(e) {
+    e.preventDefault();
+    if (!paymentProofUrl) {
+      showToast("Please upload your payment receipt before submitting bank transfer.", "error");
+      return;
+    }
+    try {
+      const result = await api("/payments/manual", { method: "POST", body: { courseId, manualReference, paymentProofUrl } });
+      setMessage(result.message);
+      showToast(result.message, "success");
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  return (
+    <div className="payment-box premium-payment-box">
+      <div className="payment-box-heading">
+        <span>Secure Payment</span>
+        <h3>Select Programme and Complete Payment</h3>
+        <p>Pay instantly with Paystack or submit a bank transfer receipt for admin verification.</p>
+      </div>
+
+      <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+        {courses.map((course) => <option value={course.id} key={course.id}>{course.title} — ₦{Number(course.fee).toLocaleString()}</option>)}
+      </select>
+
+      {selectedCourse && <p className="payment-fee-line"><strong>Fee:</strong> ₦{Number(selectedCourse.fee).toLocaleString()}</p>}
+
+      <button className="gold-btn full" type="button" onClick={payWithPaystack}>Pay Now with Paystack</button>
+
+      <div className="bank-box premium-bank-box">
+        <h4>Manual Bank Transfer</h4>
+        <p><strong>Bank:</strong> {settings.bank_name}</p>
+        <p><strong>Account Name:</strong> {settings.account_name}</p>
+        <p><strong>Account Number:</strong> {settings.account_number}</p>
+      </div>
+
+      <form className="admin-form manual-payment-form" onSubmit={submitManual}>
+        <input placeholder="Payment reference / depositor name" value={manualReference} onChange={(e) => setManualReference(e.target.value)} required />
+
+        <label className="receipt-upload-box">
+          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => uploadReceipt(e.target.files?.[0])} />
+          <span>{receiptUploading ? "Uploading receipt..." : paymentProofUrl ? "Receipt uploaded" : "Upload payment receipt"}</span>
+          <small>{receiptName || "JPG, PNG, WEBP or PDF. Maximum 6MB."}</small>
+        </label>
+
+        {paymentProofUrl && <a className="receipt-preview-link" href={paymentProofUrl} target="_blank" rel="noreferrer">View uploaded receipt</a>}
+
+        <button className="dark-btn" type="submit" disabled={receiptUploading}>{receiptUploading ? "Uploading..." : "I have paid by bank transfer"}</button>
+      </form>
+
+      {message && <p className="success-message">{message}</p>}
+    </div>
+  );
+}
+
+function PaymentCallback({ goTo }) {
+  const [message, setMessage] = useState("Verifying payment...");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get("reference") || params.get("trxref");
+    if (!reference) {
+      setMessage("Payment reference not found.");
+      return;
+    }
+
+    api(`/payments/paystack/verify/${reference}`)
+      .then((result) => setMessage(result.paid ? "Payment confirmed. Admin will review and activate your portal access." : "Payment was not successful."))
+      .catch((error) => setMessage(error.message));
+  }, []);
+
+  return <main className="page container gate"><CheckCircle size={56} /><h1>Payment Status</h1><p>{message}</p><button className="gold-btn big" onClick={() => goTo("student")}>Go to Student Portal</button></main>;
+}
+
+function AdminDashboard({ reloadPublic }) {
+  const [tab, setTab] = useState("overview");
+  const [overview, setOverview] = useState(null);
+
+  async function loadOverview() {
+    const result = await api("/admin/overview");
+    setOverview(result);
+  }
+
+  function switchAdminTab(nextTab) {
+    setTab(nextTab);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  useEffect(() => { loadOverview(); }, []);
+
+  return (
+    <main className="portal-page">
+      <PortalSidebar title="Admin Dashboard" items={["Overview", "Students", "Books", "Courses", "Course Builder", "Progress", "Gradebook", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Website Content", "Email Settings", "Settings"]} tab={tab} setTab={switchAdminTab} admin />
+      <div className="portal-main">
+        <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CROBIC Management</h1></div></div>
+        {tab === "overview" && <Overview overview={overview} />}
+        {tab === "students" && <StudentsAdmin />}
+        {tab === "books" && <CrudAdmin title="Books" path="books" reloadPublic={reloadPublic} fields={bookFields} />}
+        {tab === "courses" && <CrudAdmin title="Courses" path="courses" reloadPublic={reloadPublic} fields={courseFields} />}
+        {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} />}
+        {tab === "progress" && <ProgressAdmin />}
+        {tab === "gradebook" && <GradebookAdmin />}
+        {tab === "activity log" && <ActivityLogAdmin />}
+        {tab === "attendance records" && <AttendanceRecordsAdmin />}
+        {tab === "course discussions" && <CourseDiscussionsAdmin />}
+        {tab === "certificates" && <CertificatesAdmin />}
+        {tab === "assignments & quiz" && <AssessmentsAdmin />}
+        {tab === "slides" && <SlidesAdmin reloadPublic={reloadPublic} />}
+        {tab === "gallery" && <CrudAdmin title="Gallery" path="gallery" reloadPublic={reloadPublic} fields={galleryFields} />}
+        {tab === "announcements" && <CrudAdmin title="Announcements" path="announcements" reloadPublic={reloadPublic} fields={announcementFields} />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}
+        {tab === "appeals & support" && <SupportAdmin />}
+        {tab === "website content" && <WebsiteContentAdmin reloadPublic={reloadPublic} />}
+        {tab === "email settings" && <EmailSettingsAdmin />}
+        {tab === "settings" && <SettingsAdmin reloadPublic={reloadPublic} />}
+      </div>
+    </main>
+  );
+}
+
+
+
+
+const EMPTY_OBJECTIVE_QUESTION = { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correctOption: "A" };
+
+function objectiveQuestionIsComplete(question = {}) {
+  return ["question", "optionA", "optionB", "optionC", "optionD"].every((key) => String(question[key] || "").trim());
+}
+
+function getCorrectOptionText(question = {}) {
+  const key = `option${String(question.correctOption || "A").toUpperCase()}`;
+  return question[key] || "";
+}
+
+function AssessmentsAdmin() {
+  const [data, setData] = useState({ courses: [], assignments: [], quizzes: [] });
+  const [assignmentForm, setAssignmentForm] = useState({ courseId: "", moduleId: "", lessonId: "", title: "", instructions: "", dueDate: "", required: true, published: true, maxScore: 100, passScore: 50 });
+  const [quizForm, setQuizForm] = useState({ courseId: "", moduleId: "", lessonId: "", title: "", description: "", passScore: 70, required: true, published: true });
+  const [quizDraftQuestion, setQuizDraftQuestion] = useState(EMPTY_OBJECTIVE_QUESTION);
+  const [quizDraftQuestions, setQuizDraftQuestions] = useState([]);
+  const [questionForms, setQuestionForms] = useState({});
+  const [gradeForms, setGradeForms] = useState({});
+
+  async function load() {
+    const result = await api("/admin/assessments");
+    setData(result);
+    const firstCourse = result.courses?.[0]?.id || "";
+    setAssignmentForm((current) => ({ ...current, courseId: current.courseId || firstCourse }));
+    setQuizForm((current) => ({ ...current, courseId: current.courseId || firstCourse }));
+  }
+
+  useEffect(() => { load().catch((error) => showToast(error.message, "error")); }, []);
+
+  function courseOptions() {
+    return data.courses || [];
+  }
+
+  function modulesFor(courseId) {
+    const course = data.courses.find((item) => Number(item.id) === Number(courseId));
+    return course?.modules || [];
+  }
+
+  function lessonsFor(courseId, moduleId = "") {
+    const course = data.courses.find((item) => Number(item.id) === Number(courseId));
+    if (!course) return [];
+    if (moduleId) {
+      const module = (course.modules || []).find((item) => Number(item.id) === Number(moduleId));
+      return module?.lessons || [];
+    }
+    return course.lessons || [];
+  }
+
+  async function saveAssignment(e) {
+    e.preventDefault();
+    try {
+      const created = await api("/admin/assignments", { method: "POST", body: assignmentForm });
+      showToast("Assignment created.", "success");
+      setAssignmentForm((current) => ({ ...current, title: "", instructions: "", dueDate: "" }));
+      await load();
+      return created;
+    } catch (error) {
+      showToast(error.message || "Could not create assignment", "error");
+    }
+  }
+
+  async function saveQuiz(e) {
+    e.preventDefault();
+
+    const cleanDraftQuestions = quizDraftQuestions
+      .map((item, index) => ({
+        question: String(item.question || "").trim(),
+        optionA: String(item.optionA || "").trim(),
+        optionB: String(item.optionB || "").trim(),
+        optionC: String(item.optionC || "").trim(),
+        optionD: String(item.optionD || "").trim(),
+        correctOption: String(item.correctOption || "A").toUpperCase(),
+        questionOrder: index + 1
+      }))
+      .filter(objectiveQuestionIsComplete);
+
+    if (!cleanDraftQuestions.length) {
+      showToast("Please add at least one objective question with options A-D before creating the quiz.", "error");
+      return;
+    }
+
+    try {
+      const created = await api("/admin/quizzes", { method: "POST", body: quizForm });
+      for (const question of cleanDraftQuestions) {
+        await api(`/admin/quizzes/${created.id}/questions`, { method: "POST", body: question });
+      }
+      showToast(`Quiz created with ${cleanDraftQuestions.length} objective question${cleanDraftQuestions.length === 1 ? "" : "s"}.`, "success");
+      setQuizForm((current) => ({ ...current, title: "", description: "" }));
+      setQuizDraftQuestion(EMPTY_OBJECTIVE_QUESTION);
+      setQuizDraftQuestions([]);
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not create quiz", "error");
+    }
+  }
+
+  function updateQuizDraftField(field, value) {
+    setQuizDraftQuestion((current) => ({ ...current, [field]: value }));
+  }
+
+  function addQuizDraftQuestion() {
+    if (!objectiveQuestionIsComplete(quizDraftQuestion)) {
+      showToast("Enter the question and all four objective options before adding it.", "error");
+      return;
+    }
+
+    setQuizDraftQuestions((current) => [
+      ...current,
+      { ...quizDraftQuestion, correctOption: String(quizDraftQuestion.correctOption || "A").toUpperCase() }
+    ]);
+    setQuizDraftQuestion(EMPTY_OBJECTIVE_QUESTION);
+    showToast("Objective question added to this quiz draft.", "success");
+  }
+
+  function removeQuizDraftQuestion(index) {
+    setQuizDraftQuestions((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  async function deleteAssignment(id) {
+    if (!(await showConfirm({ title: "Delete assignment?", message: "Student submissions under this assignment will also be deleted.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/assignments/${id}`, { method: "DELETE" });
+    showToast("Assignment deleted.", "success");
+    await load();
+  }
+
+  async function deleteQuiz(id) {
+    if (!(await showConfirm({ title: "Delete quiz?", message: "Quiz questions and attempts will also be deleted.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/quizzes/${id}`, { method: "DELETE" });
+    showToast("Quiz deleted.", "success");
+    await load();
+  }
+
+  async function addQuestion(quizId) {
+    const form = questionForms[quizId] || { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correctOption: "A", questionOrder: 1 };
+    try {
+      await api(`/admin/quizzes/${quizId}/questions`, { method: "POST", body: form });
+      showToast("Quiz question added.", "success");
+      setQuestionForms((current) => ({ ...current, [quizId]: { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correctOption: "A", questionOrder: Number(form.questionOrder || 1) + 1 } }));
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not add question", "error");
+    }
+  }
+
+  async function deleteQuestion(id) {
+    await api(`/admin/quiz-questions/${id}`, { method: "DELETE" });
+    showToast("Question deleted.", "success");
+    await load();
+  }
+
+  async function gradeSubmission(submissionId, assignment) {
+    const form = gradeForms[submissionId] || {};
+    try {
+      const score = Number(form.score ?? 0);
+      await api(`/admin/assignment-submissions/${submissionId}/grade`, { method: "PATCH", body: { score, feedback: form.feedback || "" } });
+      showToast(score >= Number(assignment.passScore || 50) ? "Assignment passed." : "Assignment graded but did not pass.", "success");
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not grade submission", "error");
+    }
+  }
+
+  return (
+    <section className="admin-section assessments-admin">
+      <div className="content-editor-header">
+        <div><span>LMS Assessment</span><h2>Assignments & Quiz</h2><p>Create coursework, grade student submissions, add quiz questions and control certificate eligibility.</p></div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="assessment-admin-forms">
+        <form className="admin-form assessment-admin-form" onSubmit={saveAssignment}>
+          <h3>Add Assignment</h3>
+          <select value={assignmentForm.courseId} onChange={(e) => setAssignmentForm({ ...assignmentForm, courseId: e.target.value, moduleId: "", lessonId: "" })} required>
+            <option value="">Select course</option>
+            {courseOptions().map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+          </select>
+          <div className="form-row">
+            <select value={assignmentForm.moduleId} onChange={(e) => setAssignmentForm({ ...assignmentForm, moduleId: e.target.value, lessonId: "" })}>
+              <option value="">Course level / no module</option>
+              {modulesFor(assignmentForm.courseId).map((module) => <option key={module.id} value={module.id}>{module.title}</option>)}
+            </select>
+            <select value={assignmentForm.lessonId} onChange={(e) => setAssignmentForm({ ...assignmentForm, lessonId: e.target.value })}>
+              <option value="">No specific lesson</option>
+              {lessonsFor(assignmentForm.courseId, assignmentForm.moduleId).map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
+            </select>
+          </div>
+          <input placeholder="Assignment title" value={assignmentForm.title} onChange={(e) => setAssignmentForm({ ...assignmentForm, title: e.target.value })} required />
+          <textarea placeholder="Instructions for students" value={assignmentForm.instructions} onChange={(e) => setAssignmentForm({ ...assignmentForm, instructions: e.target.value })} required />
+          <div className="form-row">
+            <label className="assessment-field">
+              <span>Submission deadline</span>
+              <input type="date" value={assignmentForm.dueDate} onChange={(e) => setAssignmentForm({ ...assignmentForm, dueDate: e.target.value })} />
+            </label>
+            <label className="assessment-field">
+              <span>Assignment pass score (%)</span>
+              <input type="number" min="0" max="100" placeholder="Example: 50" value={assignmentForm.passScore} onChange={(e) => setAssignmentForm({ ...assignmentForm, passScore: e.target.value })} />
+              <small>Students must score this mark or above to pass.</small>
+            </label>
+          </div>
+          <label className="checkbox-field"><input type="checkbox" checked={assignmentForm.required} onChange={(e) => setAssignmentForm({ ...assignmentForm, required: e.target.checked })} /> Required for certificate</label>
+          <label className="checkbox-field"><input type="checkbox" checked={assignmentForm.published} onChange={(e) => setAssignmentForm({ ...assignmentForm, published: e.target.checked })} /> Published to students</label>
+          <button className="gold-btn" type="submit">Add Assignment</button>
+        </form>
+
+        <form className="admin-form assessment-admin-form" onSubmit={saveQuiz}>
+          <h3>Add Quiz</h3>
+          <select value={quizForm.courseId} onChange={(e) => setQuizForm({ ...quizForm, courseId: e.target.value, moduleId: "", lessonId: "" })} required>
+            <option value="">Select course</option>
+            {courseOptions().map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+          </select>
+          <div className="form-row">
+            <select value={quizForm.moduleId} onChange={(e) => setQuizForm({ ...quizForm, moduleId: e.target.value, lessonId: "" })}>
+              <option value="">Course level / no module</option>
+              {modulesFor(quizForm.courseId).map((module) => <option key={module.id} value={module.id}>{module.title}</option>)}
+            </select>
+            <select value={quizForm.lessonId} onChange={(e) => setQuizForm({ ...quizForm, lessonId: e.target.value })}>
+              <option value="">No specific lesson</option>
+              {lessonsFor(quizForm.courseId, quizForm.moduleId).map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
+            </select>
+          </div>
+          <input placeholder="Quiz title" value={quizForm.title} onChange={(e) => setQuizForm({ ...quizForm, title: e.target.value })} required />
+          <textarea placeholder="Quiz description" value={quizForm.description} onChange={(e) => setQuizForm({ ...quizForm, description: e.target.value })} />
+          <label className="assessment-field">
+            <span>Quiz pass mark (%)</span>
+            <input type="number" min="0" max="100" placeholder="Example: 70" value={quizForm.passScore} onChange={(e) => setQuizForm({ ...quizForm, passScore: e.target.value })} />
+            <small>Students must score this mark or above to pass this quiz.</small>
+          </label>
+
+          <div className="objective-builder">
+            <div className="objective-builder-head">
+              <span>Objective Questions</span>
+              <small>Add question options A-D and select the correct answer before creating the quiz.</small>
+            </div>
+            <textarea placeholder="Question e.g. What is faith?" value={quizDraftQuestion.question} onChange={(e) => updateQuizDraftField("question", e.target.value)} />
+            <div className="form-row">
+              <input placeholder="Option A" value={quizDraftQuestion.optionA} onChange={(e) => updateQuizDraftField("optionA", e.target.value)} />
+              <input placeholder="Option B" value={quizDraftQuestion.optionB} onChange={(e) => updateQuizDraftField("optionB", e.target.value)} />
+            </div>
+            <div className="form-row">
+              <input placeholder="Option C" value={quizDraftQuestion.optionC} onChange={(e) => updateQuizDraftField("optionC", e.target.value)} />
+              <input placeholder="Option D" value={quizDraftQuestion.optionD} onChange={(e) => updateQuizDraftField("optionD", e.target.value)} />
+            </div>
+            <div className="form-row objective-action-row">
+              <label className="assessment-field">
+                <span>Correct answer</span>
+                <select value={quizDraftQuestion.correctOption} onChange={(e) => updateQuizDraftField("correctOption", e.target.value)}>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                </select>
+              </label>
+              <button className="white-btn dark-text" type="button" onClick={addQuizDraftQuestion}>Add Objective Question</button>
+            </div>
+
+            <div className="draft-objective-list">
+              {quizDraftQuestions.map((item, index) => (
+                <div className="draft-objective-card" key={`${item.question}-${index}`}>
+                  <div>
+                    <strong>{index + 1}. {item.question}</strong>
+                    <small>Correct answer: {item.correctOption} — {getCorrectOptionText(item)}</small>
+                  </div>
+                  <button className="delete-btn" type="button" onClick={() => removeQuizDraftQuestion(index)}><Trash2 size={14} /></button>
+                </div>
+              ))}
+              {!quizDraftQuestions.length && <p className="empty-small">No objective question added yet. Add at least one question before creating the quiz.</p>}
+            </div>
+          </div>
+
+          <label className="checkbox-field"><input type="checkbox" checked={quizForm.required} onChange={(e) => setQuizForm({ ...quizForm, required: e.target.checked })} /> Required for certificate</label>
+          <label className="checkbox-field"><input type="checkbox" checked={quizForm.published} onChange={(e) => setQuizForm({ ...quizForm, published: e.target.checked })} /> Published to students</label>
+          <button className="dark-btn" type="submit">Add Quiz</button>
+        </form>
+      </div>
+
+      <div className="assessment-admin-list">
+        <div className="content-editor-header assessment-list-head"><div><span>Assignments</span><h2>Student Assignments</h2></div></div>
+        {(data.assignments || []).map((assignment) => (
+          <article className="assessment-admin-card" key={assignment.id}>
+            <div className="assessment-admin-card-head">
+              <div><span>{assignment.required ? "Required" : "Optional"} · {assignment.published ? "Published" : "Hidden"}</span><h3>{assignment.title}</h3><p>{assignment.course?.title} {assignment.lesson?.title ? `· ${assignment.lesson.title}` : ""}</p></div>
+              <button className="delete-btn" type="button" onClick={() => deleteAssignment(assignment.id)}><Trash2 size={16} /></button>
+            </div>
+            <p>{assignment.instructions}</p>
+            <div className="assessment-submissions-list">
+              {(assignment.submissions || []).map((submission) => (
+                <div className="submission-grade-card" key={submission.id}>
+                  <div><strong>{submission.user?.name}</strong><small>{submission.user?.email} · {formatPortalStatus(submission.status)}</small></div>
+                  {submission.answer && <p>{submission.answer}</p>}
+                  {submission.fileUrl && <a href={submission.fileUrl} target="_blank" rel="noreferrer">View submitted file</a>}
+                  <div className="form-row">
+                    <input type="number" placeholder="Score" value={gradeForms[submission.id]?.score ?? submission.score ?? ""} onChange={(e) => setGradeForms((current) => ({ ...current, [submission.id]: { ...(current[submission.id] || {}), score: e.target.value } }))} />
+                    <input placeholder="Feedback" value={gradeForms[submission.id]?.feedback ?? submission.feedback ?? ""} onChange={(e) => setGradeForms((current) => ({ ...current, [submission.id]: { ...(current[submission.id] || {}), feedback: e.target.value } }))} />
+                    <button className="gold-btn" type="button" onClick={() => gradeSubmission(submission.id, assignment)}>Grade</button>
+                  </div>
+                </div>
+              ))}
+              {!assignment.submissions?.length && <p className="empty-small">No submissions yet.</p>}
+            </div>
+          </article>
+        ))}
+
+        <div className="content-editor-header assessment-list-head"><div><span>Quizzes</span><h2>Quiz Builder</h2></div></div>
+        {(data.quizzes || []).map((quiz) => {
+          const qForm = questionForms[quiz.id] || { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correctOption: "A", questionOrder: (quiz.questions?.length || 0) + 1 };
+          return (
+            <article className="assessment-admin-card" key={quiz.id}>
+              <div className="assessment-admin-card-head">
+                <div><span>{quiz.required ? "Required" : "Optional"} · Pass mark {quiz.passScore}%</span><h3>{quiz.title}</h3><p>{quiz.course?.title} {quiz.lesson?.title ? `· ${quiz.lesson.title}` : ""}</p></div>
+                <button className="delete-btn" type="button" onClick={() => deleteQuiz(quiz.id)}><Trash2 size={16} /></button>
+              </div>
+              {quiz.description && <p>{quiz.description}</p>}
+              <div className="quiz-question-admin-list">
+                {(quiz.questions || []).map((question) => (
+                  <div className="quiz-question-admin" key={question.id}>
+                    <strong>{question.question}</strong>
+                    <small>Correct: {question.correctOption}</small>
+                    <button className="delete-btn" type="button" onClick={() => deleteQuestion(question.id)}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+              <div className="admin-form quiz-question-form existing-question-form">
+                <div className="objective-builder-head">
+                  <span>Add More Objective Questions</span>
+                  <small>Use options A-D and choose the correct answer.</small>
+                </div>
+                <textarea placeholder="Question" value={qForm.question} onChange={(e) => setQuestionForms((current) => ({ ...current, [quiz.id]: { ...qForm, question: e.target.value } }))} />
+                <div className="form-row"><input placeholder="Option A" value={qForm.optionA} onChange={(e) => setQuestionForms((current) => ({ ...current, [quiz.id]: { ...qForm, optionA: e.target.value } }))} /><input placeholder="Option B" value={qForm.optionB} onChange={(e) => setQuestionForms((current) => ({ ...current, [quiz.id]: { ...qForm, optionB: e.target.value } }))} /></div>
+                <div className="form-row"><input placeholder="Option C" value={qForm.optionC} onChange={(e) => setQuestionForms((current) => ({ ...current, [quiz.id]: { ...qForm, optionC: e.target.value } }))} /><input placeholder="Option D" value={qForm.optionD} onChange={(e) => setQuestionForms((current) => ({ ...current, [quiz.id]: { ...qForm, optionD: e.target.value } }))} /></div>
+                <div className="form-row"><label className="assessment-field"><span>Correct answer</span><select value={qForm.correctOption} onChange={(e) => setQuestionForms((current) => ({ ...current, [quiz.id]: { ...qForm, correctOption: e.target.value } }))}><option>A</option><option>B</option><option>C</option><option>D</option></select></label><button className="gold-btn" type="button" onClick={() => addQuestion(quiz.id)}>Add Question</button></div>
+              </div>
+              <div className="quiz-attempt-list">
+                {(quiz.attempts || []).slice(0, 10).map((attempt) => <div key={attempt.id}><strong>{attempt.user?.name}</strong><small>{attempt.score}% · {attempt.passed ? "Passed" : "Not passed"}</small></div>)}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function SupportAdmin() {
+  const [cases, setCases] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [reply, setReply] = useState("");
+  const [filter, setFilter] = useState("ACTIVE");
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    try {
+      setLoading(true);
+      const result = await api("/admin/support/cases");
+      setCases(result);
+      if (!activeId && result[0]?.id) setActiveId(result[0].id);
+    } catch (error) {
+      showToast(error.message || "Could not load support cases", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(() => load().catch(() => null), 8000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const stats = useMemo(() => {
+    const openStatuses = ["OPEN", "WAITING_ADMIN", "UNDER_REVIEW", "WAITING_STUDENT"];
+    return {
+      total: cases.length,
+      active: cases.filter((item) => openStatuses.includes(item.status)).length,
+      open: cases.filter((item) => item.status === "OPEN" || item.status === "WAITING_ADMIN").length,
+      review: cases.filter((item) => item.status === "UNDER_REVIEW").length,
+      waitingStudent: cases.filter((item) => item.status === "WAITING_STUDENT").length,
+      resolved: cases.filter((item) => item.status === "RESOLVED").length,
+      closed: cases.filter((item) => item.status === "CLOSED").length
+    };
+  }, [cases]);
+
+  const filteredCases = cases.filter((item) => {
+    if (filter === "ALL") return true;
+    if (filter === "ACTIVE") return ["OPEN", "WAITING_ADMIN", "UNDER_REVIEW", "WAITING_STUDENT"].includes(item.status);
+    return item.status === filter;
+  });
+
+  const activeCase = cases.find((item) => item.id === activeId) || filteredCases[0] || cases[0] || null;
+  const canRestoreAccess = Boolean(
+    activeCase?.enrollment &&
+    (
+      activeCase.user?.status !== "ACTIVE" ||
+      activeCase.enrollment?.admissionStatus !== "APPROVED" ||
+      activeCase.enrollment?.paymentStatus !== "PAYMENT_CONFIRMED"
+    )
+  );
+
+  async function sendReply(e) {
+    e.preventDefault();
+    if (!activeCase || !reply.trim()) return;
+    try {
+      await api(`/admin/support/cases/${activeCase.id}/messages`, { method: "POST", body: { message: reply } });
+      setReply("");
+      await load();
+      showToast("Reply sent to student.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not send reply", "error");
+    }
+  }
+
+  async function updateCase(status) {
+    if (!activeCase) return;
+    try {
+      await api(`/admin/support/cases/${activeCase.id}`, { method: "PATCH", body: { status } });
+      await load();
+      showToast(`Case marked ${formatAdminStatusLabel(status)}`, "success");
+    } catch (error) {
+      showToast(error.message || "Could not update case", "error");
+    }
+  }
+
+  async function restoreAccess() {
+    if (!activeCase) return;
+    const confirmed = await showConfirm({
+      title: "Restore student access?",
+      message: "This will confirm payment, approve admission, activate the student account and resolve this support case.",
+      confirmText: "Restore Access",
+      danger: false
+    });
+    if (!confirmed) return;
+
+    try {
+      const result = await api(`/admin/support/cases/${activeCase.id}/restore-access`, {
+        method: "POST",
+        body: { message: "Your appeal has been reviewed. Your payment and admission have been approved. You can now access your CROBIC learning portal." }
+      });
+      await load();
+      showToast(result.message || "Student access restored.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not restore access", "error");
+    }
+  }
+
+  return (
+    <section className="admin-section support-admin-panel support-admin-dashboard">
+      <div className="content-editor-header students-admin-header">
+        <div>
+          <span>Support Inbox</span>
+          <h2>Appeals & Support</h2>
+          <p>Review student cases, restore access after successful appeal, reply to messages and keep resolved issues cleanly archived.</p>
+        </div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="support-stats-grid">
+        <button type="button" className={filter === "ACTIVE" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("ACTIVE")}>
+          <span>Active Issues</span><strong>{stats.active}</strong><small>Open / review / waiting</small>
+        </button>
+        <button type="button" className={filter === "OPEN" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("OPEN")}>
+          <span>New / Waiting Admin</span><strong>{stats.open}</strong><small>Needs admin action</small>
+        </button>
+        <button type="button" className={filter === "UNDER_REVIEW" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("UNDER_REVIEW")}>
+          <span>Under Review</span><strong>{stats.review}</strong><small>Being handled</small>
+        </button>
+        <button type="button" className={filter === "RESOLVED" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("RESOLVED")}>
+          <span>Resolved</span><strong>{stats.resolved}</strong><small>Completed cases</small>
+        </button>
+        <button type="button" className={filter === "ALL" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("ALL")}>
+          <span>All Cases</span><strong>{stats.total}</strong><small>Full history</small>
+        </button>
+      </div>
+
+      {loading && <p>Loading support cases...</p>}
+      {!loading && !cases.length && <div className="quiet-banner"><strong>No appeals yet.</strong><p>Rejected, suspended or pending students can submit appeal messages from their portal gate.</p></div>}
+
+      <div className="support-admin-grid">
+        <div className="support-admin-list">
+          <div className="support-list-heading">
+            <strong>{filter === "ACTIVE" ? "Active Cases" : `${formatAdminStatusLabel(filter)} Cases`}</strong>
+            <span>{filteredCases.length} shown</span>
+          </div>
+          {filteredCases.map((item) => (
+            <button key={item.id} type="button" className={activeCase?.id === item.id ? "active-admin-support-case" : ""} onClick={() => setActiveId(item.id)}>
+              <strong>{item.subject}</strong>
+              <span>{item.user?.name || "Student"}</span>
+              <small>{formatAdminStatusLabel(item.status)} · {formatAdminStatusLabel(item.category)}</small>
+            </button>
+          ))}
+          {!filteredCases.length && <p className="empty-small">No case in this filter.</p>}
+        </div>
+
+        {activeCase && (
+          <div className="support-admin-thread">
+            <div className="support-admin-case-head">
+              <div>
+                <span className={statusBadgeClass(activeCase.status)}>{formatAdminStatusLabel(activeCase.status)}</span>
+                <h3>{activeCase.subject}</h3>
+                <p>{activeCase.user?.name} · {activeCase.user?.email}</p>
+                {activeCase.enrollment?.course && <p><strong>Programme:</strong> {activeCase.enrollment.course.title}</p>}
+              </div>
+              <div className="support-case-actions">
+                {canRestoreAccess && <button className="gold-btn restore-access-btn" type="button" onClick={restoreAccess}>Restore Access & Resolve</button>}
+                <button className="gold-btn" type="button" onClick={() => updateCase("UNDER_REVIEW")}>Under Review</button>
+                <button className="dark-btn" type="button" onClick={() => updateCase("RESOLVED")}>Resolve Case Only</button>
+                <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => updateCase("CLOSED")}>Close</button>
+              </div>
+            </div>
+
+            <div className="support-access-state-grid">
+              <div><span>Account</span><strong>{formatAdminStatusLabel(activeCase.user?.status)}</strong></div>
+              <div><span>Admission</span><strong>{formatAdminStatusLabel(activeCase.enrollment?.admissionStatus || "NO ENROLLMENT")}</strong></div>
+              <div><span>Payment</span><strong>{formatAdminStatusLabel(activeCase.enrollment?.paymentStatus || "NO PAYMENT")}</strong></div>
+              <div><span>Support Case</span><strong>{formatAdminStatusLabel(activeCase.status)}</strong></div>
+            </div>
+
+            {activeCase.enrollment && canRestoreAccess && (
+              <div className="support-access-note">
+                <strong>Access is still blocked.</strong>
+                <p>Resolving a support case only closes the conversation. Use <b>Restore Access & Resolve</b> when admin has decided to approve the student after appeal.</p>
+              </div>
+            )}
+
+            <div className="support-message-list admin-support-message-list">
+              {(activeCase.messages || []).map((message) => (
+                <div className={message.sender?.role === "ADMIN" ? "support-message admin-message" : "support-message student-message"} key={message.id}>
+                  <strong>{message.sender?.role === "ADMIN" ? "CROBIC Support" : message.sender?.name || "Student"}</strong>
+                  <p>{message.message}</p>
+                  <small>{new Date(message.createdAt).toLocaleString()}</small>
+                </div>
+              ))}
+            </div>
+
+            <form className="support-reply-form" onSubmit={sendReply}>
+              <input placeholder="Reply student..." value={reply} onChange={(e) => setReply(e.target.value)} />
+              <button className="gold-btn" type="submit"><Send size={14} /> Send Reply</button>
+            </form>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Overview({ overview }) {
+  if (!overview) return <p>Loading overview...</p>;
+  return (
+    <div className="dashboard-grid">
+      <DashboardCard icon={<Users />} label="Students" value={overview.students} />
+      <DashboardCard icon={<ShoppingBag />} label="Books" value={overview.books} />
+      <DashboardCard icon={<GraduationCap />} label="Courses" value={overview.courses} />
+      <DashboardCard icon={<CreditCard />} label="Pending Approval" value={overview.pendingEnrollments} />
+      <DashboardCard icon={<MessageCircle />} label="Open Support" value={overview.openSupport || 0} />
+    </div>
+  );
+}
+
+
+function formatAdminStatusLabel(value) {
+  return String(value || "UNKNOWN").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function statusBadgeClass(value) {
+  const status = String(value || "").toUpperCase();
+  if (["ACTIVE", "APPROVED", "PAYMENT_CONFIRMED", "GRADUATED"].includes(status)) return "status-badge status-good";
+  if (["MANUAL_PAYMENT_PENDING", "PENDING_PAYMENT", "AWAITING_PAYMENT", "AWAITING_ADMIN_APPROVAL", "PAYMENT_CONFIRMED"].includes(status)) return "status-badge status-waiting";
+  if (["REJECTED", "SUSPENDED", "FAILED", "REFUNDED"].includes(status)) return "status-badge status-danger";
+  return "status-badge";
+}
+
+function StudentsAdmin() {
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingStudentId, setEditingStudentId] = useState(null);
+  const [studentForm, setStudentForm] = useState({ name: "", email: "", phone: "", country: "" });
+
+  async function load() {
+    try {
+      setLoading(true);
+      setStudents(await api("/admin/students"));
+    } catch (error) {
+      showToast(error.message || "Could not load students", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function startEditStudent(student) {
+    setEditingStudentId(student.id);
+    setStudentForm({
+      name: student.name || "",
+      email: student.email || "",
+      phone: student.phone || "",
+      country: student.country || ""
+    });
+  }
+
+  function cancelEditStudent() {
+    setEditingStudentId(null);
+    setStudentForm({ name: "", email: "", phone: "", country: "" });
+  }
+
+  async function saveStudentDetails(e) {
+    e.preventDefault();
+    const fullName = String(studentForm.name || "").trim();
+    if (!fullName || fullName.split(/\s+/).length < 2) {
+      showToast("Please enter the student's full name before saving.", "error");
+      return;
+    }
+
+    try {
+      const result = await api(`/admin/students/${editingStudentId}`, { method: "PATCH", body: studentForm });
+      showToast(result.message || "Student details updated", "success");
+      cancelEditStudent();
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not update student details", "error");
+    }
+  }
+
+  async function action(enrollment, actionName) {
+    const actionCopy = {
+      approve: {
+        title: "Approve student?",
+        message: "This will confirm the payment, approve admission and open the student learning portal.",
+        confirmText: "Approve"
+      },
+      reject: {
+        title: "Reject admission?",
+        message: "This will reject this student's admission request.",
+        confirmText: "Reject",
+        danger: true
+      },
+      suspend: {
+        title: "Suspend student?",
+        message: "This will block the student's portal access until you reactivate them.",
+        confirmText: "Suspend",
+        danger: true
+      },
+      graduate: {
+        title: "Mark as graduated?",
+        message: "Use this only after the student has completed the programme.",
+        confirmText: "Graduate"
+      }
+    };
+
+    const copy = actionCopy[actionName] || { title: "Confirm action?", message: "Continue with this action?", confirmText: "Continue" };
+    if (!(await showConfirm(copy))) return;
+
+    try {
+      const result = await api(`/admin/enrollments/${enrollment.id}/status`, { method: "PATCH", body: { action: actionName } });
+      showToast(result.message || "Student status updated", "success");
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not update student status", "error");
+    }
+  }
+
+  return (
+    <section className="admin-section students-admin-polished">
+      <div className="content-editor-header students-admin-header">
+        <div>
+          <span>Admissions</span>
+          <h2>Admissions and Payments</h2>
+          <p>Review payment receipts, confirm payment, approve portal access, suspend students or mark completed students as graduated.</p>
+        </div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      {loading ? <p>Loading students...</p> : null}
+
+      {!loading && !students.length ? (
+        <div className="quiet-banner"><strong>No students yet.</strong><p>New student applications will appear here after registration.</p></div>
+      ) : null}
+
+      <div className="student-list admissions-list-polished">
+        {students.map((student) => {
+          const enrollments = student.enrollments || [];
+          return (
+            <div className="student-card admission-student-card" key={student.id}>
+              <div className="student-card-top">
+                <div>
+                  <h3>{student.name}</h3>
+                  <p>{student.email} · {student.phone || "No phone"}</p>
+                </div>
+                <div className="student-card-actions-top">
+                  <span className={statusBadgeClass(student.status)}>{formatAdminStatusLabel(student.status)}</span>
+                  <button className="edit-btn" type="button" onClick={() => startEditStudent(student)}>Edit Details</button>
+                </div>
+              </div>
+
+              {editingStudentId === student.id ? (
+                <form className="admin-form admin-student-edit-form" onSubmit={saveStudentDetails}>
+                  <div className="form-row two-columns">
+                    <input placeholder="Full name" value={studentForm.name} onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })} required />
+                    <input type="email" placeholder="Email address" value={studentForm.email} onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })} required />
+                  </div>
+                  <div className="form-row two-columns">
+                    <input placeholder="Phone number" value={studentForm.phone} onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })} />
+                    <input placeholder="Country" value={studentForm.country} onChange={(e) => setStudentForm({ ...studentForm, country: e.target.value })} />
+                  </div>
+                  <div className="form-row">
+                    <button className="gold-btn" type="submit">Save Student Details</button>
+                    <button className="ghost-btn admin-cancel-btn" type="button" onClick={cancelEditStudent}>Cancel</button>
+                  </div>
+                  <p className="empty-small">Status is controlled by approve, reject, suspend and graduate actions. This form only updates personal details.</p>
+                </form>
+              ) : null}
+
+              {!enrollments.length ? <p className="empty-small">This student has not selected a programme or submitted payment yet.</p> : null}
+
+              {enrollments.map((enrollment) => {
+                const paymentConfirmed = enrollment.paymentStatus === "PAYMENT_CONFIRMED";
+                const approved = enrollment.admissionStatus === "APPROVED";
+                const rejected = enrollment.admissionStatus === "REJECTED";
+                const suspended = enrollment.admissionStatus === "SUSPENDED";
+                const graduated = enrollment.admissionStatus === "GRADUATED";
+                const canApprove = !graduated && (!approved || !paymentConfirmed);
+                const canReject = !rejected && !graduated;
+                const canSuspend = !suspended && !graduated;
+                const canGraduate = approved && paymentConfirmed && !graduated;
+
+                return (
+                  <div className="enrollment-box enrollment-box-polished" key={enrollment.id}>
+                    <div className="enrollment-summary-row">
+                      <div>
+                        <span>Programme</span>
+                        <strong>{enrollment.course?.title || "Course not found"}</strong>
+                      </div>
+                      <div>
+                        <span>Amount</span>
+                        <strong>₦{Number(enrollment.amount || 0).toLocaleString()}</strong>
+                      </div>
+                    </div>
+
+                    <div className="enrollment-status-grid">
+                      <div><small>Payment</small><span className={statusBadgeClass(enrollment.paymentStatus)}>{formatAdminStatusLabel(enrollment.paymentStatus)}</span></div>
+                      <div><small>Admission</small><span className={statusBadgeClass(enrollment.admissionStatus)}>{formatAdminStatusLabel(enrollment.admissionStatus)}</span></div>
+                      <div><small>Method</small><strong>{formatAdminStatusLabel(enrollment.paymentMethod)}</strong></div>
+                      <div><small>Reference</small><strong>{enrollment.paystackReference || enrollment.manualReference || "None"}</strong></div>
+                    </div>
+
+                    <div className="payment-proof-row">
+                      {enrollment.paymentProofUrl ? (
+                        <a className="proof-btn" href={enrollment.paymentProofUrl} target="_blank" rel="noreferrer">View Payment Receipt</a>
+                      ) : (
+                        <span className="no-proof-note">No receipt uploaded</span>
+                      )}
+                    </div>
+
+                    <div className="student-action-row">
+                      {canApprove ? <button className="gold-btn" type="button" onClick={() => action(enrollment, "approve")}>Approve & Confirm Payment</button> : null}
+                      {canReject ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "reject")}>Reject</button> : null}
+                      {canSuspend ? <button className="dark-btn" type="button" onClick={() => action(enrollment, "suspend")}>Suspend</button> : null}
+                      {canGraduate ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "graduate")}>Graduate</button> : null}
+                      {graduated ? <span className="status-badge status-good">Graduated</span> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+const bookFields = [
+  ["title", "Book title"], ["author", "Author"], ["category", "Category"], ["price", "Price e.g ₦8,500"], ["buyLink", "Stellar purchase link"], ["imageUrl", "Book cover image URL"], ["description", "Description", "textarea"]
+];
+const courseFields = [
+  ["title", "Course title"], ["level", "Level"], ["duration", "Duration e.g 12 Months"], ["fee", "Fee e.g 50000", "number"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]
+];
+const slideFields = [
+  ["eyebrow", "Small heading"], ["title", "Slide title"], ["description", "Description", "textarea"], ["imageUrl", "Image URL"], ["ctaText", "CTA text"], ["ctaPage", "CTA page e.g admissions"], ["slideOrder", "Order", "number"]
+];
+const announcementFields = [["title", "Title"], ["body", "Message", "textarea"]];
+const galleryFields = [["title", "Image title"], ["category", "Category"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]];
+
+
+function SlidesAdmin({ reloadPublic }) {
+  const empty = { eyebrow: "", title: "", description: "", imageUrl: "", ctaText: "Apply Now", ctaPage: "admissions", slideOrder: 1 };
+  const [items, setItems] = useState([]);
+  const [form, setForm] = useState(empty);
+  const [editingId, setEditingId] = useState(null);
+
+  async function load() {
+    const result = await api("/admin/slides");
+    setItems([...result].sort((a, b) => Number(a.slideOrder || 0) - Number(b.slideOrder || 0)));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function startEdit(item) {
+    setForm({
+      eyebrow: item.eyebrow || "",
+      title: item.title || "",
+      description: item.description || "",
+      imageUrl: item.imageUrl || "",
+      ctaText: item.ctaText || "Apply Now",
+      ctaPage: item.ctaPage || "admissions",
+      slideOrder: Number(item.slideOrder || 1)
+    });
+    setEditingId(item.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function createSlot(order) {
+    const fallback = DEFAULT_SLIDES[order - 1] || DEFAULT_SLIDES[0];
+    setForm({
+      eyebrow: fallback.eyebrow || "",
+      title: fallback.title || "",
+      description: fallback.description || "",
+      imageUrl: fallback.imageUrl || "",
+      ctaText: fallback.ctaText || "Apply Now",
+      ctaPage: fallback.ctaPage || "admissions",
+      slideOrder: order
+    });
+    setEditingId(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setForm(empty);
+    setEditingId(null);
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    const payload = { ...form, slideOrder: Number(form.slideOrder || 1) };
+
+    if (editingId) {
+      await api(`/admin/slides/${editingId}`, { method: "PATCH", body: payload });
+    } else {
+      await api("/admin/slides", { method: "POST", body: payload });
+    }
+
+    const wasEditing = Boolean(editingId);
+    setForm(empty);
+    setEditingId(null);
+    await load();
+    await reloadPublic();
+    showToast(wasEditing ? `${title} updated successfully` : `${title} added successfully`, "success");
+  }
+
+  async function remove(id) {
+    if (!(await showConfirm({ title: "Delete homepage slide?", message: "This slide will be removed from the homepage slider.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/slides/${id}`, { method: "DELETE" });
+    if (editingId === id) cancelEdit();
+    await load();
+    await reloadPublic();
+  }
+
+  const slots = [1, 2, 3, 4].map((order) => items.find((item) => Number(item.slideOrder) === order) || null);
+
+  return (
+    <section className="admin-section slider-admin-section">
+      <div className="slider-admin-note">
+        <h2>Homepage Hero Slider</h2>
+        <p>Edit the 4 big homepage slides here. Each slide controls the image, small heading, title, description and button on the homepage hero.</p>
+        <strong>Slide Order 1 controls Slide 01, Order 2 controls Slide 02, Order 3 controls Slide 03 and Order 4 controls Slide 04. Missing slots use the safe default image only until admin creates them.</strong>
+      </div>
+
+      <form className="admin-form slider-editor-form" onSubmit={submit}>
+        <h3>{editingId ? `Editing Slide ${String(form.slideOrder).padStart(2, "0")}` : `Create / Replace Slide ${String(form.slideOrder).padStart(2, "0")}`}</h3>
+        <select value={form.slideOrder} onChange={(e) => setForm({ ...form, slideOrder: Number(e.target.value) })} required>
+          <option value={1}>Slide 01</option>
+          <option value={2}>Slide 02</option>
+          <option value={3}>Slide 03</option>
+          <option value={4}>Slide 04</option>
+        </select>
+        <input placeholder="Small heading e.g Flagship Program" value={form.eyebrow} onChange={(e) => setForm({ ...form, eyebrow: e.target.value })} required />
+        <input placeholder="Slide title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+        <textarea placeholder="Slide description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
+        <input placeholder="Slide image URL" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} required />
+        {form.imageUrl && <img className="slide-form-preview" src={form.imageUrl} alt="Slide preview" />}
+        <div className="form-row two-columns">
+          <input placeholder="CTA text e.g Apply Now" value={form.ctaText} onChange={(e) => setForm({ ...form, ctaText: e.target.value })} />
+          <input placeholder="CTA page e.g admissions, programs, library" value={form.ctaPage} onChange={(e) => setForm({ ...form, ctaPage: e.target.value })} />
+        </div>
+        <div className="form-row">
+          <button className="gold-btn" type="submit">{editingId ? "Update Slide" : "Save Slide"}</button>
+          <button className="ghost-btn admin-cancel-btn" type="button" onClick={cancelEdit}>Clear Form</button>
+        </div>
+      </form>
+
+      <div className="slider-slot-grid">
+        {slots.map((item, index) => {
+          const order = index + 1;
+          return (
+            <div className={item ? "slider-slot-card" : "slider-slot-card empty-slot"} key={order}>
+              {item?.imageUrl ? <img src={item.imageUrl} alt={item.title} /> : <div className="slot-placeholder">No image</div>}
+              <div className="slider-slot-body">
+                <span>Slide {String(order).padStart(2, "0")}</span>
+                <h3>{item?.title || "Empty slide slot"}</h3>
+                <p>{item?.eyebrow || "Create this slide for the homepage hero."}</p>
+                <div className="admin-item-actions">
+                  {item ? (
+                    <>
+                      <button className="edit-btn" type="button" onClick={() => startEdit(item)}>Edit</button>
+                      <button className="delete-btn" type="button" onClick={() => remove(item.id)}><Trash2 size={18} /></button>
+                    </>
+                  ) : (
+                    <button className="gold-btn" type="button" onClick={() => createSlot(order)}>Create Slide {String(order).padStart(2, "0")}</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function CrudAdmin({ title, path, fields, reloadPublic }) {
+  const empty = Object.fromEntries(fields.map(([name]) => [name, ""]));
+  const [items, setItems] = useState([]);
+  const [form, setForm] = useState(empty);
+  const [editingId, setEditingId] = useState(null);
+
+  async function load() { setItems(await api(`/admin/${path}`)); }
+  useEffect(() => { load(); }, []);
+
+  function startEdit(item) {
+    const nextForm = { ...empty };
+    fields.forEach(([name]) => {
+      nextForm[name] = item[name] ?? "";
+    });
+    setForm(nextForm);
+    setEditingId(item.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setForm(empty);
+    setEditingId(null);
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    const payload = { ...form };
+    fields.forEach(([name, _label, type]) => {
+      if (type === "number") payload[name] = Number(payload[name] || 0);
+    });
+
+    if (editingId) {
+      await api(`/admin/${path}/${editingId}`, { method: "PATCH", body: payload });
+    } else {
+      await api(`/admin/${path}`, { method: "POST", body: payload });
+    }
+
+    setForm(empty);
+    setEditingId(null);
+    await load();
+    await reloadPublic();
+  }
+
+  async function remove(id) {
+    if (!(await showConfirm({ title: `Delete ${title}?`, message: "This item will be removed. This action cannot be undone.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/${path}/${id}`, { method: "DELETE" });
+    if (editingId === id) cancelEdit();
+    await load();
+    await reloadPublic();
+    showToast(`${title} deleted successfully`, "success");
+  }
+
+  return (
+    <section className="admin-section">
+      <h2>{editingId ? `Edit ${title}` : title}</h2>
+      <form className="admin-form" onSubmit={submit}>
+        {fields.map(([name, label, type]) => type === "textarea" ? <textarea key={name} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} /> : <input key={name} type={type || "text"} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} required={name !== "imageUrl" && name !== "ctaText" && name !== "ctaPage"} />)}
+        <div className="form-row">
+          <button className="gold-btn" type="submit">{editingId ? `Update ${title}` : `Add ${title}`}</button>
+          {editingId && <button className="ghost-btn" type="button" onClick={cancelEdit}>Cancel Edit</button>}
+        </div>
+      </form>
+      <AdminList items={items} onDelete={remove} onEdit={startEdit} />
+    </section>
+  );
+}
+
+function CourseBuilderAdmin({ reloadPublic = async () => {} }) {
+  const blankModule = { title: "", description: "", moduleOrder: 1, published: true };
+  const blankLesson = { moduleId: "", title: "", videoUrl: "", notesUrl: "", duration: "", lessonOrder: 1, completionPercentRequired: 90, required: true, published: true };
+  const [courses, setCourses] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [moduleForm, setModuleForm] = useState(blankModule);
+  const [lessonForm, setLessonForm] = useState(blankLesson);
+  const [editingModuleId, setEditingModuleId] = useState(null);
+  const [editingLessonId, setEditingLessonId] = useState(null);
+  const [previewLesson, setPreviewLesson] = useState(null);
+  const [statusMessage, setStatusMessage] = useState("");
+
+  async function load() {
+    const result = await api("/admin/course-builder");
+    setCourses(result);
+    if (!selectedCourseId && result[0]?.id) setSelectedCourseId(String(result[0].id));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const selectedCourse = courses.find((course) => String(course.id) === String(selectedCourseId));
+  const sortedModules = [...(selectedCourse?.modules || [])].sort((a, b) => Number(a.moduleOrder || 0) - Number(b.moduleOrder || 0));
+  const moduleLessonIds = new Set(sortedModules.flatMap((module) => (module.lessons || []).map((lesson) => lesson.id)));
+  const generalLessons = [...(selectedCourse?.lessons || [])]
+    .filter((lesson) => !moduleLessonIds.has(lesson.id))
+    .sort((a, b) => Number(a.lessonOrder || 0) - Number(b.lessonOrder || 0));
+
+  function resetModuleForm(nextOrder = 1) {
+    setModuleForm({ ...blankModule, moduleOrder: nextOrder });
+    setEditingModuleId(null);
+  }
+
+  function resetLessonForm(nextOrder = 1, moduleId = lessonForm.moduleId || "") {
+    setLessonForm({ ...blankLesson, moduleId, lessonOrder: nextOrder });
+    setEditingLessonId(null);
+  }
+
+  function startEditModule(module) {
+    setModuleForm({
+      title: module.title || "",
+      description: module.description || "",
+      moduleOrder: Number(module.moduleOrder || 1),
+      published: module.published !== false
+    });
+    setEditingModuleId(module.id);
+    setStatusMessage(`Editing module: ${module.title}`);
+  }
+
+  function startEditLesson(lesson) {
+    setLessonForm({
+      moduleId: lesson.moduleId ? String(lesson.moduleId) : "",
+      title: lesson.title || "",
+      videoUrl: lesson.videoUrl || "",
+      notesUrl: lesson.notesUrl || "",
+      duration: lesson.duration || "",
+      lessonOrder: Number(lesson.lessonOrder || 1),
+      completionPercentRequired: Number(lesson.completionPercentRequired || 90),
+      required: lesson.required !== false,
+      published: lesson.published !== false
+    });
+    setEditingLessonId(lesson.id);
+    setPreviewLesson(lesson.videoUrl ? lesson : null);
+    setStatusMessage(`Editing lesson: ${lesson.title}`);
+  }
+
+  async function saveAndReload(message) {
+    await load();
+    await reloadPublic();
+    setStatusMessage(message);
+    showToast(message, "success");
+  }
+
+  async function saveModule(e) {
+    e.preventDefault();
+    if (!selectedCourseId) { showToast("Select a course first.", "error"); return; }
+    const payload = {
+      courseId: selectedCourseId,
+      title: moduleForm.title,
+      description: moduleForm.description,
+      moduleOrder: Number(moduleForm.moduleOrder || 1),
+      published: moduleForm.published
+    };
+
+    if (editingModuleId) {
+      await api(`/admin/modules/${editingModuleId}`, { method: "PATCH", body: payload });
+    } else {
+      await api("/admin/modules", { method: "POST", body: payload });
+    }
+
+    resetModuleForm(Number(moduleForm.moduleOrder || 1) + 1);
+    await saveAndReload(editingModuleId ? "Module updated" : "Module added");
+  }
+
+  async function deleteModule(id) {
+    if (!(await showConfirm({ title: "Delete module?", message: "Lessons under this module will move to General Lessons.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/modules/${id}`, { method: "DELETE" });
+    if (editingModuleId === id) resetModuleForm();
+    await saveAndReload("Module deleted");
+  }
+
+  async function toggleModule(module) {
+    await api(`/admin/modules/${module.id}`, { method: "PATCH", body: { published: module.published === false } });
+    await saveAndReload(module.published === false ? "Module published" : "Module hidden from students");
+  }
+
+  async function moveModule(module, direction) {
+    const index = sortedModules.findIndex((item) => item.id === module.id);
+    const target = sortedModules[index + direction];
+    if (!target) return;
+    await Promise.all([
+      api(`/admin/modules/${module.id}`, { method: "PATCH", body: { moduleOrder: Number(target.moduleOrder || 1) } }),
+      api(`/admin/modules/${target.id}`, { method: "PATCH", body: { moduleOrder: Number(module.moduleOrder || 1) } })
+    ]);
+    await saveAndReload("Module order updated");
+  }
+
+  function buildLessonPayload(lessonLike, overrides = {}) {
+    return {
+      courseId: selectedCourseId,
+      moduleId: lessonLike.moduleId ? String(lessonLike.moduleId) : "",
+      title: lessonLike.title || "",
+      videoUrl: lessonLike.videoUrl || "",
+      notesUrl: lessonLike.notesUrl || "",
+      duration: lessonLike.duration || "",
+      lessonOrder: Number(lessonLike.lessonOrder || 1),
+      completionPercentRequired: Number(lessonLike.completionPercentRequired || 90),
+      required: lessonLike.required !== false,
+      published: lessonLike.published !== false,
+      ...overrides
+    };
+  }
+
+  async function saveLesson(e) {
+    e.preventDefault();
+    if (!selectedCourseId) { showToast("Select a course first.", "error"); return; }
+    const payload = buildLessonPayload(lessonForm);
+
+    if (editingLessonId) {
+      await api(`/admin/lessons/${editingLessonId}`, { method: "PATCH", body: payload });
+    } else {
+      await api("/admin/lessons", { method: "POST", body: payload });
+    }
+
+    resetLessonForm(Number(lessonForm.lessonOrder || 1) + 1, lessonForm.moduleId);
+    setPreviewLesson(null);
+    await saveAndReload(editingLessonId ? "Lesson updated" : "Lesson added");
+  }
+
+  async function deleteLesson(id) {
+    if (!(await showConfirm({ title: "Delete lesson?", message: "This lesson will be removed from the course builder.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/lessons/${id}`, { method: "DELETE" });
+    if (editingLessonId === id) resetLessonForm();
+    await saveAndReload("Lesson deleted");
+  }
+
+  async function toggleLesson(lesson) {
+    await api(`/admin/lessons/${lesson.id}`, {
+      method: "PATCH",
+      body: buildLessonPayload(lesson, { published: lesson.published === false })
+    });
+    await saveAndReload(lesson.published === false ? "Lesson published" : "Lesson hidden from students");
+  }
+
+  async function moveLesson(lesson, lessonList, direction) {
+    const index = lessonList.findIndex((item) => item.id === lesson.id);
+    const target = lessonList[index + direction];
+    if (!target) return;
+    await Promise.all([
+      api(`/admin/lessons/${lesson.id}`, { method: "PATCH", body: buildLessonPayload(lesson, { lessonOrder: Number(target.lessonOrder || 1) }) }),
+      api(`/admin/lessons/${target.id}`, { method: "PATCH", body: buildLessonPayload(target, { lessonOrder: Number(lesson.lessonOrder || 1) }) })
+    ]);
+    await saveAndReload("Lesson order updated");
+  }
+
+  function renderLessonRow(lesson, lessonList) {
+    const isHidden = lesson.published === false;
+    return (
+      <div className={isHidden ? "builder-lesson-row builder-row-muted" : "builder-lesson-row"} key={lesson.id}>
+        <div>
+          <strong>{lesson.lessonOrder}. {lesson.title}</strong>
+          <small>{lesson.duration || "Video lesson"} · {lesson.required ? "Required" : "Optional"} · {lesson.completionPercentRequired || 90}% · {isHidden ? "Hidden" : "Published"}</small>
+        </div>
+        <div className="builder-row-actions">
+          <button type="button" className="edit-btn" onClick={() => startEditLesson(lesson)}>Edit</button>
+          <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => moveLesson(lesson, lessonList, -1)}>↑</button>
+          <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => moveLesson(lesson, lessonList, 1)}>↓</button>
+          <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => setPreviewLesson(lesson)}>Preview</button>
+          <button type="button" className="dark-btn mini-btn" onClick={() => toggleLesson(lesson)}>{isHidden ? "Publish" : "Hide"}</button>
+          <button type="button" className="delete-btn" onClick={() => deleteLesson(lesson.id)}><Trash2 size={16} /></button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <section className="admin-section course-builder-admin course-builder-polish">
+      <div className="content-editor-header">
+        <div>
+          <span>LMS Builder</span>
+          <h2>Course Builder</h2>
+          <p>Create modules/stages, edit lessons, preview videos, publish/hide content and control learning order.</p>
+        </div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="admin-form builder-course-select">
+        <select value={selectedCourseId} onChange={(e) => { setSelectedCourseId(e.target.value); resetModuleForm(); resetLessonForm(1, ""); setPreviewLesson(null); }}>
+          <option value="">Select programme/course</option>
+          {courses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+        </select>
+      </div>
+
+      {statusMessage && <p className="editing-note">{statusMessage}</p>}
+
+      {selectedCourse && (
+        <div className="builder-layout builder-layout-polished">
+          <div className="builder-forms">
+            <form className="admin-form builder-box builder-editor-card" onSubmit={saveModule}>
+              <div className="builder-form-title-row">
+                <h3>{editingModuleId ? "Edit Module / Stage" : "Add Module / Stage"}</h3>
+                {editingModuleId && <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => resetModuleForm()}>Cancel</button>}
+              </div>
+              <input placeholder="Module title e.g Stage 1: Foundations" value={moduleForm.title} onChange={(e) => setModuleForm({ ...moduleForm, title: e.target.value })} required />
+              <textarea placeholder="Module description" value={moduleForm.description} onChange={(e) => setModuleForm({ ...moduleForm, description: e.target.value })} />
+              <input type="number" placeholder="Module order" value={moduleForm.moduleOrder} onChange={(e) => setModuleForm({ ...moduleForm, moduleOrder: Number(e.target.value) })} />
+              <label className="checkbox-field"><input type="checkbox" checked={moduleForm.published} onChange={(e) => setModuleForm({ ...moduleForm, published: e.target.checked })} /> Show this module to students</label>
+              <button className="gold-btn" type="submit">{editingModuleId ? "Update Module" : "Add Module"}</button>
+            </form>
+
+            <form className="admin-form builder-box builder-editor-card" onSubmit={saveLesson}>
+              <div className="builder-form-title-row">
+                <h3>{editingLessonId ? "Edit Video Lesson" : "Add Video Lesson"}</h3>
+                {editingLessonId && <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => { resetLessonForm(); setPreviewLesson(null); }}>Cancel</button>}
+              </div>
+              <select value={lessonForm.moduleId} onChange={(e) => setLessonForm({ ...lessonForm, moduleId: e.target.value })}>
+                <option value="">General Lessons / No Module</option>
+                {sortedModules.map((module) => <option key={module.id} value={module.id}>{module.moduleOrder}. {module.title}</option>)}
+              </select>
+              <input placeholder="Lesson title" value={lessonForm.title} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} required />
+              <input placeholder="Video link or embed code" value={lessonForm.videoUrl} onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })} />
+              <input placeholder="Notes/PDF link optional" value={lessonForm.notesUrl} onChange={(e) => setLessonForm({ ...lessonForm, notesUrl: e.target.value })} />
+              <div className="form-row builder-three-cols">
+                <input type="text" placeholder="Duration e.g 18 mins" value={lessonForm.duration} onChange={(e) => setLessonForm({ ...lessonForm, duration: e.target.value })} />
+                <input type="number" placeholder="Lesson order" value={lessonForm.lessonOrder} onChange={(e) => setLessonForm({ ...lessonForm, lessonOrder: Number(e.target.value) })} />
+                <input type="number" placeholder="Completion %" value={lessonForm.completionPercentRequired} onChange={(e) => setLessonForm({ ...lessonForm, completionPercentRequired: Number(e.target.value) })} />
+              </div>
+              <label className="checkbox-field"><input type="checkbox" checked={lessonForm.required} onChange={(e) => setLessonForm({ ...lessonForm, required: e.target.checked })} /> Required before next lesson opens</label>
+              <label className="checkbox-field"><input type="checkbox" checked={lessonForm.published} onChange={(e) => setLessonForm({ ...lessonForm, published: e.target.checked })} /> Show this lesson to students</label>
+              {lessonForm.videoUrl && <div className="admin-video-preview builder-form-preview"><PortalVideoPlayer url={lessonForm.videoUrl} title={lessonForm.title || "Lesson preview"} /></div>}
+              <button className="gold-btn" type="submit">{editingLessonId ? "Update Lesson" : "Add Lesson"}</button>
+            </form>
+          </div>
+
+          <div className="builder-preview builder-preview-polished">
+            <div className="builder-course-head">
+              <span>{selectedCourse.level || "Programme"}</span>
+              <h3>{selectedCourse.title}</h3>
+              <p>{selectedCourse.description}</p>
+            </div>
+
+            {sortedModules.length === 0 && generalLessons.length === 0 && <div className="quiet-banner"><strong>No modules or lessons yet.</strong><p>Add Stage 1, Stage 2, Stage 3, then add lessons inside each stage.</p></div>}
+
+            {sortedModules.map((module, moduleIndex) => {
+              const lessons = [...(module.lessons || [])].sort((a, b) => Number(a.lessonOrder || 0) - Number(b.lessonOrder || 0));
+              const isHidden = module.published === false;
+              return (
+                <div className={isHidden ? "builder-module-card builder-row-muted" : "builder-module-card"} key={module.id}>
+                  <div className="module-title-row builder-module-title-row">
+                    <div>
+                      <strong>{module.moduleOrder}. {module.title}</strong>
+                      <small>{module.description || "No description"} · {isHidden ? "Hidden from students" : "Published"}</small>
+                    </div>
+                    <div className="builder-row-actions">
+                      <button type="button" className="edit-btn" onClick={() => startEditModule(module)}>Edit</button>
+                      <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => moveModule(module, -1)} disabled={moduleIndex === 0}>↑</button>
+                      <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => moveModule(module, 1)} disabled={moduleIndex === sortedModules.length - 1}>↓</button>
+                      <button type="button" className="dark-btn mini-btn" onClick={() => toggleModule(module)}>{isHidden ? "Publish" : "Hide"}</button>
+                      <button type="button" className="delete-btn" onClick={() => deleteModule(module.id)}><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div className="builder-lesson-list">
+                    {lessons.map((lesson) => renderLessonRow(lesson, lessons))}
+                    {lessons.length === 0 && <p className="empty-small lesson-empty-note">No lesson under this module yet.</p>}
+                  </div>
+                </div>
+              );
+            })}
+
+            {generalLessons.length > 0 && (
+              <div className="builder-module-card general-module-card">
+                <div className="module-title-row builder-module-title-row">
+                  <div><strong>General Lessons</strong><small>Lessons not assigned to any module yet</small></div>
+                </div>
+                <div className="builder-lesson-list">
+                  {generalLessons.map((lesson) => renderLessonRow(lesson, generalLessons))}
+                </div>
+              </div>
+            )}
+
+            {previewLesson && (
+              <div className="builder-video-preview-card">
+                <div className="module-title-row">
+                  <div><strong>Preview: {previewLesson.title}</strong><small>This is how the lesson video will appear inside the portal.</small></div>
+                  <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => setPreviewLesson(null)}>Close</button>
+                </div>
+                <div className="admin-video-preview"><PortalVideoPlayer url={previewLesson.videoUrl} title={previewLesson.title} /></div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function formatCertificateDate(date) {
+  if (!date) return "Not issued yet";
+  return new Date(date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function certificateVerifyUrl(number) {
+  return `${window.location.origin}/certificate-verification?code=${encodeURIComponent(number || "")}`;
+}
+
+const DEFAULT_CERTIFICATE_SETTINGS = {
+  certificate_rector_name: "Joshua Iginla",
+  certificate_rector_title: "Rector / President",
+  certificate_footer_text: "Raising world class ministers",
+  certificate_signature_url: "",
+  certificate_seal_url: LOGO,
+  certificate_show_qr: "true"
+};
+
+function normalizeCertificateSettings(settings = {}) {
+  return { ...DEFAULT_CERTIFICATE_SETTINGS, ...(settings || {}) };
+}
+
+function certificateQrUrl(number) {
+  if (!number) return "";
+  const verifyUrl = certificateVerifyUrl(number);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=10&data=${encodeURIComponent(verifyUrl)}`;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function CertificateSheet({ certificate, enrollment, settings = {} }) {
+  const course = certificate?.course || enrollment?.course || {};
+  const studentName = certificate?.user?.name || enrollment?.user?.name || "Student";
+  const certSettings = normalizeCertificateSettings(settings);
+  const certificateNumber = certificate?.certificateNumber || "";
+  const sealUrl = certSettings.certificate_seal_url || LOGO;
+  const signatureUrl = certSettings.certificate_signature_url || "";
+  const showQr = certSettings.certificate_show_qr !== "false";
+  return (
+    <div className="certificate-sheet">
+      <div className="certificate-sheet-border">
+        <img className="certificate-main-seal" src={sealUrl} alt="CROBIC seal" />
+        <span>Champions Royal Bible College</span>
+        <h2>Certificate of Completion</h2>
+        <p>This certifies that</p>
+        <h3>{studentName}</h3>
+        <p>has successfully completed the required course of study in</p>
+        <h4>{course.title || "CROBIC Programme"}</h4>
+        <div className="certificate-sheet-meta">
+          <div><small>Certificate No.</small><strong>{certificateNumber || "Pending"}</strong></div>
+          <div><small>Date Issued</small><strong>{formatCertificateDate(certificate?.issuedAt)}</strong></div>
+          <div><small>Status</small><strong>{certificate?.status || "PENDING"}</strong></div>
+        </div>
+
+        <div className="certificate-authority-row">
+          <div className="certificate-signature-block">
+            {signatureUrl ? <img className="certificate-signature-image" src={signatureUrl} alt="Authorized signature" /> : <div className="certificate-signature-placeholder">Signature</div>}
+            <strong>{certSettings.certificate_rector_name || "Joshua Iginla"}</strong>
+            <small>{certSettings.certificate_rector_title || "Rector / President"}</small>
+          </div>
+          {showQr && certificateNumber ? (
+            <div className="certificate-qr-block">
+              <img src={certificateQrUrl(certificateNumber)} alt="Certificate verification QR code" />
+              <small>Scan to verify</small>
+            </div>
+          ) : null}
+        </div>
+
+        <p className="certificate-footer-text">{certSettings.certificate_footer_text || "Raising world class ministers"}</p>
+        <p className="certificate-verify-line">Verify: {certificateNumber ? certificateVerifyUrl(certificateNumber) : "Certificate not issued yet"}</p>
+      </div>
+    </div>
+  );
+}
+
+
+function scoreLabel(value, suffix = "%") {
+  if (value === null || value === undefined || value === "") return "Pending";
+  return `${value}${suffix}`;
+}
+
+function resultTone(status = "") {
+  const value = String(status || "").toUpperCase();
+  if (["PASSED", "APPROVED", "CERTIFICATE_READY", "CERTIFICATE_ISSUED", "COMPLETED"].includes(value)) return "success";
+  if (["FAILED", "NEEDS_REVISION", "NOT_PASSED", "NEEDS_ATTENTION"].includes(value)) return "danger";
+  if (["PENDING_GRADE", "PENDING_SUBMISSION", "IN_PROGRESS", "PENDING_REQUIREMENTS"].includes(value)) return "warning";
+  return "neutral";
+}
+
+function ResultStatusPill({ status }) {
+  return <span className={`result-status-pill result-${resultTone(status)}`}>{formatPortalStatus(status)}</span>;
+}
+
+
+function formatDateTime(value) {
+  if (!value) return "Not available";
+  try { return new Date(value).toLocaleString(); } catch { return "Not available"; }
+}
+
+function StudentAttendancePanel() {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    try {
+      setLoading(true);
+      setRecords(await api("/student/attendance-history"));
+    } catch (error) {
+      showToast(error.message || "Could not load attendance history", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div className="attendance-panel">
+      <div className="student-tab-heading profile-heading-card">
+        <span>Class Record</span>
+        <h2>My Attendance</h2>
+        <p>Your live class attendance history is recorded automatically when you join a live session inside the portal.</p>
+      </div>
+      {loading ? <p>Loading attendance...</p> : (
+        <div className="attendance-record-list">
+          {records.map((record) => (
+            <div className="attendance-record-card" key={record.id}>
+              <div>
+                <strong>{record.liveSession?.title || "Live Class"}</strong>
+                <small>{record.liveSession?.description || "CROBIC live session"}</small>
+              </div>
+              <div><span>Joined</span><b>{formatDateTime(record.joinedAt)}</b></div>
+              <div><span>Last Seen</span><b>{formatDateTime(record.lastSeenAt)}</b></div>
+            </div>
+          ))}
+          {!records.length && <div className="quiet-banner"><strong>No attendance record yet.</strong><p>Your record will appear after you join a live class.</p></div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CourseDiscussionPanel({ courseId }) {
+  const [discussions, setDiscussions] = useState([]);
+  const [form, setForm] = useState({ title: "", message: "" });
+  const [replyMap, setReplyMap] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  async function load() {
+    if (!courseId) return;
+    try {
+      setDiscussions(await api(`/student/courses/${courseId}/discussions`));
+    } catch (error) {
+      showToast(error.message || "Could not load course discussions", "error");
+    }
+  }
+
+  useEffect(() => { load(); }, [courseId]);
+
+  async function createDiscussion(e) {
+    e.preventDefault();
+    if (!form.message.trim()) {
+      showToast("Please type your course question or comment.", "error");
+      return;
+    }
+    try {
+      setLoading(true);
+      await api(`/student/courses/${courseId}/discussions`, { method: "POST", body: form });
+      setForm({ title: "", message: "" });
+      await load();
+      showToast("Course discussion posted.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not post discussion", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendReply(e, discussionId) {
+    e.preventDefault();
+    const message = String(replyMap[discussionId] || "").trim();
+    if (!message) return;
+    try {
+      await api(`/student/course-discussions/${discussionId}/replies`, { method: "POST", body: { message } });
+      setReplyMap((current) => ({ ...current, [discussionId]: "" }));
+      await load();
+      showToast("Reply posted.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not send reply", "error");
+    }
+  }
+
+  return (
+    <section className="course-discussion-panel">
+      <div className="student-tab-heading compact-learning-heading">
+        <span>Class Discussion</span>
+        <h2>Course Discussion / Comments</h2>
+        <p>Ask questions related to this course. Admin replies will appear under your discussion.</p>
+      </div>
+      <form className="discussion-new-form" onSubmit={createDiscussion}>
+        <input placeholder="Discussion title, e.g. Question about lesson 2" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        <textarea placeholder="Type your course question or comment..." value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+        <button className="gold-btn" type="submit" disabled={loading}>{loading ? "Posting..." : "Post Discussion"}</button>
+      </form>
+      <div className="discussion-thread-list">
+        {discussions.map((discussion) => (
+          <article className="discussion-card" key={discussion.id}>
+            <div className="discussion-card-head">
+              <div><strong>{discussion.title}</strong><small>{discussion.author?.name || "Student"} · {formatPortalStatus(discussion.status)} · {formatDateTime(discussion.createdAt)}</small></div>
+            </div>
+            <p>{discussion.message}</p>
+            <div className="discussion-replies">
+              {(discussion.replies || []).map((reply) => (
+                <div className={reply.author?.role === "ADMIN" ? "discussion-reply admin-reply" : "discussion-reply"} key={reply.id}>
+                  <strong>{reply.author?.role === "ADMIN" ? "CROBIC Admin" : reply.author?.name || "Student"}</strong>
+                  <p>{reply.message}</p>
+                  <small>{formatDateTime(reply.createdAt)}</small>
+                </div>
+              ))}
+            </div>
+            <form className="discussion-reply-form" onSubmit={(e) => sendReply(e, discussion.id)}>
+              <input placeholder="Reply to discussion..." value={replyMap[discussion.id] || ""} onChange={(e) => setReplyMap((current) => ({ ...current, [discussion.id]: e.target.value }))} />
+              <button className="dark-btn" type="submit"><Send size={14} /> Reply</button>
+            </form>
+          </article>
+        ))}
+        {!discussions.length && <div className="quiet-banner"><strong>No course discussion yet.</strong><p>Be the first to ask a question about this course.</p></div>}
+      </div>
+    </section>
+  );
+}
+
+function StudentResultsPanel() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    try {
+      setLoading(true);
+      setRows(await api("/student/results"));
+    } catch (error) {
+      showToast(error.message || "Could not load your results", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const totalCourses = rows.length;
+  const readyCourses = rows.filter((row) => row.status === "CERTIFICATE_READY" || row.status === "CERTIFICATE_ISSUED").length;
+  const pendingItems = rows.reduce((sum, row) => sum + Number(row.pendingRequired || 0), 0);
+
+  return (
+    <>
+      <div className="student-tab-heading results-heading-row">
+        <div>
+          <span>Academic Record</span>
+          <h2>My Results</h2>
+          <p>Track your lesson progress, assignment grades, quiz scores, certificate eligibility and admin feedback.</p>
+        </div>
+        <button className="ghost-btn dark-text" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="results-summary-grid">
+        <DashboardCard icon={<BookOpen />} label="Courses" value={totalCourses} />
+        <DashboardCard icon={<Award />} label="Certificate Ready" value={readyCourses} />
+        <DashboardCard icon={<Clock />} label="Pending Items" value={pendingItems} />
+      </div>
+
+      {loading ? <p>Loading results...</p> : (
+        <div className="student-results-list">
+          {rows.map((row) => (
+            <article className="result-course-card" key={row.enrollmentId}>
+              <div className="result-course-head">
+                <div>
+                  <span>{row.course?.level || "Programme"}</span>
+                  <h3>{row.course?.title}</h3>
+                  <p>{row.completedRequirements} of {row.totalRequirements} required items completed.</p>
+                </div>
+                <div className="result-score-box">
+                  <strong>{row.percent}%</strong>
+                  <ResultStatusPill status={row.status} />
+                </div>
+              </div>
+
+              <div className="learning-progress-mini result-progress-bar">
+                <i><b style={{ width: `${row.percent}%` }} /></i>
+              </div>
+
+              <div className="result-breakdown-grid">
+                <div><small>Lessons</small><strong>{row.completedLessons}/{row.totalLessons}</strong></div>
+                <div><small>Assignments</small><strong>{row.passedAssignments}/{row.totalAssignments}</strong></div>
+                <div><small>Quizzes</small><strong>{row.passedQuizzes}/{row.totalQuizzes}</strong></div>
+                <div><small>Overall Score</small><strong>{scoreLabel(row.overallScore)}</strong></div>
+              </div>
+
+              <div className="result-detail-grid">
+                <div className="result-detail-panel">
+                  <h4>Assignments</h4>
+                  {(row.assignments || []).map((item) => (
+                    <div className="result-item-row" key={item.id}>
+                      <div><strong>{item.title}</strong><small>Pass score: {item.passScore}%</small></div>
+                      <div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.score, `/${item.maxScore}`)}</small></div>
+                      {item.feedback && <p><b>Feedback:</b> {item.feedback}</p>}
+                    </div>
+                  ))}
+                  {!row.assignments?.length && <p className="empty-small">No assignment has been added for this course yet.</p>}
+                </div>
+
+                <div className="result-detail-panel">
+                  <h4>Quizzes</h4>
+                  {(row.quizzes || []).map((item) => (
+                    <div className="result-item-row" key={item.id}>
+                      <div><strong>{item.title}</strong><small>Pass mark: {item.passScore}% · Questions: {item.questionCount}</small></div>
+                      <div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.bestScore)}</small></div>
+                    </div>
+                  ))}
+                  {!row.quizzes?.length && <p className="empty-small">No quiz has been added for this course yet.</p>}
+                </div>
+              </div>
+            </article>
+          ))}
+          {!rows.length && <div className="quiet-banner"><strong>No result record yet.</strong><p>Your results will appear here after admission approval and course activities.</p></div>}
+        </div>
+      )}
+    </>
+  );
+}
+
+function StudentCertificatesPanel() {
+  const [records, setRecords] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [certSettings, setCertSettings] = useState(DEFAULT_CERTIFICATE_SETTINGS);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    try {
+      setLoading(true);
+      const [certificateRows, settingsResult] = await Promise.all([
+        api("/student/certificates"),
+        api("/certificates/settings").catch(() => DEFAULT_CERTIFICATE_SETTINGS)
+      ]);
+      setRecords(certificateRows);
+      setCertSettings(normalizeCertificateSettings(settingsResult));
+    } catch (error) {
+      showToast(error.message || "Could not load certificates", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const issuedRecord = selected || records.find((item) => item.certificate?.status === "ISSUED");
+
+  return (
+    <>
+      <div className="student-tab-heading certificate-heading-row">
+        <div>
+          <span>Completion</span>
+          <h2>Certificates</h2>
+          <p>Certificates are issued by admin after you complete all required lessons, assignments and quizzes.</p>
+        </div>
+        <button className="ghost-btn dark-text" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      {loading ? <p>Loading certificates...</p> : (
+        <div className="certificate-grid">
+          {records.map((enrollment) => {
+            const summary = enrollment.learningSummary || getCourseProgressSummary(enrollment.course);
+            const certificate = enrollment.certificate;
+            const issued = certificate?.status === "ISSUED";
+            const completed = summary.percent >= 100;
+            return (
+              <div className={issued ? "certificate-card certificate-issued-card" : "certificate-card"} key={enrollment.id}>
+                <span>{issued ? "Certificate Issued" : completed ? "Awaiting Admin Issuance" : "In Progress"}</span>
+                <h3>{enrollment.course.title}</h3>
+                <p>{summary.completedRequirements || summary.completedRequired} of {summary.totalRequirements || summary.totalRequired} required items completed.</p>
+                <strong>{summary.percent}%</strong>
+                <i><b style={{ width: `${summary.percent}%` }} /></i>
+                {issued ? (
+                  <div className="certificate-actions">
+                    <small>Certificate No: {certificate.certificateNumber}</small>
+                    <button className="gold-btn" type="button" onClick={() => setSelected(enrollment)}>View Certificate</button>
+                    <a className="ghost-btn dark-text" href={certificateVerifyUrl(certificate.certificateNumber)} target="_blank" rel="noreferrer">Verify</a>
+                  </div>
+                ) : (
+                  <small>{completed ? "Your course is complete. Admin can now issue your certificate." : "Complete all required lessons, assignments and quizzes to become eligible."}</small>
+                )}
+              </div>
+            );
+          })}
+          {!records.length && <div className="quiet-banner"><strong>No certificate record yet.</strong><p>Your certificate progress begins after admission approval.</p></div>}
+        </div>
+      )}
+
+      {issuedRecord?.certificate?.status === "ISSUED" && (
+        <div className="certificate-preview-panel">
+          <div className="certificate-preview-actions">
+            <h3>Certificate Preview</h3>
+            <button className="gold-btn" type="button" onClick={() => window.print()}>Print / Save as PDF</button>
+          </div>
+          <CertificateSheet certificate={issuedRecord.certificate} enrollment={{ ...issuedRecord, user: { name: issuedRecord.student?.name } }} settings={certSettings} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function CertificatesAdmin() {
+  const [rows, setRows] = useState([]);
+  const [filter, setFilter] = useState("READY");
+  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState(DEFAULT_CERTIFICATE_SETTINGS);
+  const [uploadingAsset, setUploadingAsset] = useState("");
+
+  async function loadCertificateSettings() {
+    const result = await api("/admin/settings");
+    setSettings(normalizeCertificateSettings(result));
+  }
+
+  async function load() {
+    try {
+      setLoading(true);
+      const [certificateRows, settingsResult] = await Promise.all([
+        api("/admin/certificates"),
+        api("/admin/settings").catch(() => DEFAULT_CERTIFICATE_SETTINGS)
+      ]);
+      setRows(certificateRows);
+      setSettings(normalizeCertificateSettings(settingsResult));
+    } catch (error) {
+      showToast(error.message || "Could not load certificate records", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const stats = useMemo(() => ({
+    total: rows.length,
+    ready: rows.filter((row) => (row.learningSummary?.percent || 0) >= 100 && !row.certificate).length,
+    issued: rows.filter((row) => row.certificate?.status === "ISSUED").length,
+    progress: rows.filter((row) => (row.learningSummary?.percent || 0) < 100).length
+  }), [rows]);
+
+  const filtered = rows.filter((row) => {
+    const percent = row.learningSummary?.percent || 0;
+    if (filter === "ALL") return true;
+    if (filter === "READY") return percent >= 100 && !row.certificate;
+    if (filter === "ISSUED") return row.certificate?.status === "ISSUED";
+    if (filter === "IN_PROGRESS") return percent < 100;
+    return true;
+  });
+
+  function updateCertificateSetting(key, value) {
+    setSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  async function uploadCertificateAsset(field, file) {
+    if (!file) return;
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      showToast("Please upload a JPG, PNG or WEBP image.", "error");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      showToast("Certificate asset must not be more than 4MB.", "error");
+      return;
+    }
+
+    try {
+      setUploadingAsset(field);
+      const dataUrl = await readFileAsDataUrl(file);
+      const result = await api("/uploads/certificate-asset", {
+        method: "POST",
+        body: { fileName: file.name, contentType: file.type, dataUrl }
+      });
+      updateCertificateSetting(field, result.url);
+      showToast("Certificate image uploaded. Click Save Certificate Settings to apply it.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not upload certificate image", "error");
+    } finally {
+      setUploadingAsset("");
+    }
+  }
+
+  async function saveCertificateSettings(e) {
+    e.preventDefault();
+    const payload = {
+      certificate_rector_name: settings.certificate_rector_name || "Joshua Iginla",
+      certificate_rector_title: settings.certificate_rector_title || "Rector / President",
+      certificate_footer_text: settings.certificate_footer_text || "Raising world class ministers",
+      certificate_signature_url: settings.certificate_signature_url || "",
+      certificate_seal_url: settings.certificate_seal_url || LOGO,
+      certificate_show_qr: settings.certificate_show_qr === "false" ? "false" : "true"
+    };
+    await api("/admin/settings", { method: "PATCH", body: payload });
+    await loadCertificateSettings();
+    showToast("Certificate settings saved", "success");
+  }
+
+  async function issueCertificate(row) {
+    if (!(await showConfirm({ title: "Issue certificate?", message: `Issue certificate for ${row.user.name} in ${row.course.title}?`, confirmText: "Issue Certificate" }))) return;
+    try {
+      const result = await api(`/admin/enrollments/${row.id}/certificate`, { method: "POST", body: {} });
+      showToast(result.message || "Certificate issued", "success");
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not issue certificate", "error");
+    }
+  }
+
+  async function revokeCertificate(row) {
+    if (!row.certificate) return;
+    if (!(await showConfirm({ title: "Revoke certificate?", message: "This certificate will no longer verify as valid.", confirmText: "Revoke", danger: true }))) return;
+    try {
+      const result = await api(`/admin/certificates/${row.certificate.id}/revoke`, { method: "PATCH", body: {} });
+      showToast(result.message || "Certificate revoked", "success");
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not revoke certificate", "error");
+    }
+  }
+
+  return (
+    <section className="admin-section certificates-admin">
+      <div className="content-editor-header">
+        <div><span>Certification</span><h2>Certificates</h2><p>Review completed students, issue certificates, update certificate branding and verify certificate status.</p></div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <details className="certificate-settings-panel" open>
+        <summary><strong>Certificate Settings</strong><span>Signature, seal, rector name, footer text and QR</span></summary>
+        <form className="certificate-settings-form" onSubmit={saveCertificateSettings}>
+          <div className="certificate-settings-grid">
+            <label>
+              <span>Rector / President Name</span>
+              <input value={settings.certificate_rector_name || ""} onChange={(e) => updateCertificateSetting("certificate_rector_name", e.target.value)} placeholder="Joshua Iginla" />
+            </label>
+            <label>
+              <span>Rector / President Title</span>
+              <input value={settings.certificate_rector_title || ""} onChange={(e) => updateCertificateSetting("certificate_rector_title", e.target.value)} placeholder="Rector / President" />
+            </label>
+            <label className="certificate-settings-wide">
+              <span>Footer Text</span>
+              <input value={settings.certificate_footer_text || ""} onChange={(e) => updateCertificateSetting("certificate_footer_text", e.target.value)} placeholder="Raising world class ministers" />
+            </label>
+            <label>
+              <span>Signature Image URL</span>
+              <input value={settings.certificate_signature_url || ""} onChange={(e) => updateCertificateSetting("certificate_signature_url", e.target.value)} placeholder="Paste signature image URL or upload below" />
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadCertificateAsset("certificate_signature_url", e.target.files?.[0])} />
+              <small>{uploadingAsset === "certificate_signature_url" ? "Uploading signature..." : "Upload transparent PNG/JPG/WEBP signature"}</small>
+            </label>
+            <label>
+              <span>College Seal Image URL</span>
+              <input value={settings.certificate_seal_url || ""} onChange={(e) => updateCertificateSetting("certificate_seal_url", e.target.value)} placeholder="Paste seal image URL or upload below" />
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadCertificateAsset("certificate_seal_url", e.target.files?.[0])} />
+              <small>{uploadingAsset === "certificate_seal_url" ? "Uploading seal..." : "Upload college seal/stamp image"}</small>
+            </label>
+            <label className="checkbox-field certificate-settings-wide">
+              <input type="checkbox" checked={settings.certificate_show_qr !== "false"} onChange={(e) => updateCertificateSetting("certificate_show_qr", e.target.checked ? "true" : "false")} /> Show automatic certificate verification QR code
+            </label>
+          </div>
+          <div className="certificate-settings-preview-row">
+            <div>
+              <strong>Seal Preview</strong>
+              <img src={settings.certificate_seal_url || LOGO} alt="Certificate seal preview" />
+            </div>
+            <div>
+              <strong>Signature Preview</strong>
+              {settings.certificate_signature_url ? <img src={settings.certificate_signature_url} alt="Certificate signature preview" /> : <span>No signature uploaded yet</span>}
+            </div>
+          </div>
+          <button className="gold-btn" type="submit">Save Certificate Settings</button>
+        </form>
+      </details>
+
+      <div className="certificate-admin-stats">
+        <button className={filter === "READY" ? "active-filter" : "filter"} onClick={() => setFilter("READY")}>Ready: {stats.ready}</button>
+        <button className={filter === "ISSUED" ? "active-filter" : "filter"} onClick={() => setFilter("ISSUED")}>Issued: {stats.issued}</button>
+        <button className={filter === "IN_PROGRESS" ? "active-filter" : "filter"} onClick={() => setFilter("IN_PROGRESS")}>In Progress: {stats.progress}</button>
+        <button className={filter === "ALL" ? "active-filter" : "filter"} onClick={() => setFilter("ALL")}>All: {stats.total}</button>
+      </div>
+
+      {loading ? <p>Loading certificate records...</p> : (
+        <div className="certificate-admin-list">
+          {filtered.map((row) => {
+            const summary = row.learningSummary || { percent: 0, completedRequired: 0, totalRequired: 0 };
+            const canIssue = summary.percent >= 100 && !row.certificate && row.paymentStatus === "PAYMENT_CONFIRMED";
+            return (
+              <div className="certificate-admin-row" key={row.id}>
+                <div>
+                  <span>{row.certificate?.status === "ISSUED" ? "Issued" : summary.percent >= 100 ? "Ready for Certificate" : "In Progress"}</span>
+                  <h3>{row.user.name}</h3>
+                  <p>{row.user.email} · {row.course.title}</p>
+                  <small>Payment: {formatPortalStatus(row.paymentStatus)} · Admission: {formatPortalStatus(row.admissionStatus)}</small>
+                </div>
+                <div className="learning-progress-mini admin-progress-mini">
+                  <div><strong>{summary.percent}%</strong><small>{summary.completedRequirements || summary.completedRequired} of {summary.totalRequirements || summary.totalRequired} required items</small></div>
+                  <i><b style={{ width: `${summary.percent}%` }} /></i>
+                </div>
+                <div className="certificate-admin-actions">
+                  {row.certificate?.status === "ISSUED" ? (
+                    <>
+                      <small>{row.certificate.certificateNumber}</small>
+                      <a className="ghost-btn dark-text" href={certificateVerifyUrl(row.certificate.certificateNumber)} target="_blank" rel="noreferrer">Verify</a>
+                      <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => revokeCertificate(row)}>Revoke</button>
+                    </>
+                  ) : (
+                    <button className="gold-btn" type="button" onClick={() => issueCertificate(row)} disabled={!canIssue}>{canIssue ? "Issue Certificate" : "Not Eligible Yet"}</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {!filtered.length && <div className="quiet-banner"><strong>No records in this filter.</strong><p>Completed students will appear here when they reach 100% course progress.</p></div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CertificateVerification() {
+  const params = new URLSearchParams(window.location.search);
+  const [code, setCode] = useState(params.get("code") || "");
+  const [result, setResult] = useState(null);
+  const [certSettings, setCertSettings] = useState(DEFAULT_CERTIFICATE_SETTINGS);
+  const [message, setMessage] = useState("");
+
+  async function verify(e) {
+    e?.preventDefault?.();
+    if (!code.trim()) return;
+    try {
+      const response = await api(`/certificates/verify/${encodeURIComponent(code.trim())}`);
+      setResult(response.certificate);
+      setCertSettings(normalizeCertificateSettings(response.settings));
+      setMessage("");
+    } catch (error) {
+      setResult(null);
+      setMessage(error.message || "Certificate not found.");
+    }
+  }
+
+  useEffect(() => { if (code) verify(); }, []);
+
+  return (
+    <main className="page container certificate-verification-page">
+      <div className="section-intro">
+        <Kicker text="Certificate Verification" center />
+        <h1>Verify CROBIC Certificate</h1>
+        <p>Enter a certificate number to confirm if it was issued by Champions Royal Bible College.</p>
+      </div>
+      <form className="certificate-verify-form" onSubmit={verify}>
+        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="CROBIC-2026-001-0001-ABC123" />
+        <button className="gold-btn" type="submit">Verify Certificate</button>
+      </form>
+      {message && <div className="quiet-banner"><strong>Verification failed</strong><p>{message}</p></div>}
+      {result && (
+        <div className="certificate-verification-result">
+          <CheckCircle size={42} />
+          <h2>Certificate Verified</h2>
+          <p>This certificate is valid and was issued by CROBIC.</p>
+          <CertificateSheet certificate={result} settings={certSettings} />
+        </div>
+      )}
+    </main>
+  );
+}
+
+
+function GradebookAdmin() {
+  const [rows, setRows] = useState([]);
+  const [filter, setFilter] = useState("ALL");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    try {
+      setLoading(true);
+      setRows(await api("/admin/gradebook"));
+    } catch (error) {
+      showToast(error.message || "Could not load gradebook", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const stats = useMemo(() => ({
+    total: rows.length,
+    ready: rows.filter((row) => row.status === "CERTIFICATE_READY").length,
+    issued: rows.filter((row) => row.status === "CERTIFICATE_ISSUED").length,
+    attention: rows.filter((row) => row.status === "NEEDS_ATTENTION").length,
+    pending: rows.filter((row) => ["IN_PROGRESS", "PENDING_REQUIREMENTS"].includes(row.status)).length
+  }), [rows]);
+
+  const filtered = rows.filter((row) => {
+    const haystack = `${row.student?.name || ""} ${row.student?.email || ""} ${row.course?.title || ""}`.toLowerCase();
+    const matchesSearch = !search.trim() || haystack.includes(search.toLowerCase());
+    const matchesFilter = filter === "ALL" || row.status === filter;
+    return matchesSearch && matchesFilter;
+  });
+
+  return (
+    <section className="admin-section gradebook-admin-panel">
+      <div className="content-editor-header students-admin-header">
+        <div>
+          <span>Academic Results</span>
+          <h2>Gradebook</h2>
+          <p>Review lesson completion, assignment grades, quiz scores, overall progress and certificate readiness in one place.</p>
+        </div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="gradebook-stats-grid">
+        <button type="button" className={filter === "ALL" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("ALL")}><span>All Records</span><strong>{stats.total}</strong><small>All approved students</small></button>
+        <button type="button" className={filter === "CERTIFICATE_READY" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("CERTIFICATE_READY")}><span>Ready</span><strong>{stats.ready}</strong><small>Can issue certificate</small></button>
+        <button type="button" className={filter === "NEEDS_ATTENTION" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("NEEDS_ATTENTION")}><span>Needs Attention</span><strong>{stats.attention}</strong><small>Failed or revision</small></button>
+        <button type="button" className={filter === "IN_PROGRESS" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("IN_PROGRESS")}><span>In Progress</span><strong>{stats.pending}</strong><small>Still learning</small></button>
+        <button type="button" className={filter === "CERTIFICATE_ISSUED" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("CERTIFICATE_ISSUED")}><span>Issued</span><strong>{stats.issued}</strong><small>Certificate issued</small></button>
+      </div>
+
+      <div className="library-tools gradebook-toolbar">
+        <div className="search-box"><Search size={18} /><input placeholder="Search by student, email or course..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+      </div>
+
+      {loading ? <p>Loading gradebook...</p> : (
+        <div className="gradebook-list">
+          {filtered.map((row) => (
+            <article className="gradebook-card" key={row.enrollmentId}>
+              <div className="gradebook-card-head">
+                <div>
+                  <span>{row.course?.level || "Programme"}</span>
+                  <h3>{row.student?.name}</h3>
+                  <p>{row.student?.email} · {row.course?.title}</p>
+                </div>
+                <div className="gradebook-score-box">
+                  <strong>{row.percent}%</strong>
+                  <ResultStatusPill status={row.status} />
+                </div>
+              </div>
+
+              <div className="learning-progress-mini admin-progress-mini">
+                <div><strong>{row.completedRequirements}/{row.totalRequirements}</strong><small>required items completed</small></div>
+                <i><b style={{ width: `${row.percent}%` }} /></i>
+              </div>
+
+              <div className="gradebook-metrics">
+                <div><small>Lessons</small><strong>{row.completedLessons}/{row.totalLessons}</strong></div>
+                <div><small>Assignments</small><strong>{row.passedAssignments}/{row.totalAssignments}</strong></div>
+                <div><small>Quizzes</small><strong>{row.passedQuizzes}/{row.totalQuizzes}</strong></div>
+                <div><small>Overall Score</small><strong>{scoreLabel(row.overallScore)}</strong></div>
+                <div><small>Certificate</small><strong>{row.certificate?.status || "Not issued"}</strong></div>
+              </div>
+
+              <details className="gradebook-details">
+                <summary>View assignment and quiz breakdown</summary>
+                <div className="result-detail-grid">
+                  <div className="result-detail-panel">
+                    <h4>Assignments</h4>
+                    {(row.assignments || []).map((item) => (
+                      <div className="result-item-row" key={item.id}>
+                        <div><strong>{item.title}</strong><small>{item.studentSubmittedAt ? `Submitted: ${new Date(item.studentSubmittedAt).toLocaleDateString()}` : "Not submitted"}</small></div>
+                        <div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.score, `/${item.maxScore}`)}</small></div>
+                        {item.fileUrl && <a href={item.fileUrl} target="_blank" rel="noreferrer">View file</a>}
+                        {item.feedback && <p><b>Feedback:</b> {item.feedback}</p>}
+                      </div>
+                    ))}
+                    {!row.assignments?.length && <p className="empty-small">No assignments for this course.</p>}
+                  </div>
+                  <div className="result-detail-panel">
+                    <h4>Quizzes</h4>
+                    {(row.quizzes || []).map((item) => (
+                      <div className="result-item-row" key={item.id}>
+                        <div><strong>{item.title}</strong><small>{item.attemptCount} attempt(s) · Pass mark {item.passScore}%</small></div>
+                        <div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.bestScore)}</small></div>
+                      </div>
+                    ))}
+                    {!row.quizzes?.length && <p className="empty-small">No quizzes for this course.</p>}
+                  </div>
+                </div>
+              </details>
+            </article>
+          ))}
+          {!filtered.length && <div className="quiet-banner"><strong>No gradebook records found.</strong><p>Approved students with course activities will appear here.</p></div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ProgressAdmin() {
+  const [rows, setRows] = useState([]);
+  async function load() { setRows(await api("/admin/student-progress")); }
+  useEffect(() => { load(); }, []);
+
+  return (
+    <section className="admin-section">
+      <div className="content-editor-header">
+        <div><span>Learning Analytics</span><h2>Student Progress</h2><p>See who has started, who is stuck, and who has completed required lessons, assignments and quizzes.</p></div>
+        <button className="gold-btn" onClick={load}>Refresh</button>
+      </div>
+      <div className="progress-admin-list">
+        {rows.map((row) => (
+          <div className="progress-admin-card" key={`${row.enrollmentId}-${row.student.id}`}>
+            <div>
+              <strong>{row.student.name}</strong>
+              <p>{row.student.email}</p>
+              <small>{row.course.title}</small>
+              {row.certificate?.status === "ISSUED" && <em className="cert-mini-badge">Certificate Issued</em>}
+            </div>
+            <div className="learning-progress-mini admin-progress-mini">
+              <div><strong>{row.percent}%</strong><small>{row.completedRequired} of {row.totalRequired} required items</small></div>
+              <i><b style={{ width: `${row.percent}%` }} /></i>
+            </div>
+          </div>
+        ))}
+        {rows.length === 0 && <p>No approved student progress yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+function LessonsAdmin() {
+  return <CourseBuilderAdmin />;
+}
+
+function LiveAdmin({ reloadPublic }) {
+  const [form, setForm] = useState({ title: "", description: "", liveUrl: "" });
+  const [classroom, setClassroom] = useState(null);
+  const [answers, setAnswers] = useState({});
+
+  async function loadClassroom() {
+    const result = await api("/admin/live/classroom");
+    setClassroom(result);
+  }
+
+  useEffect(() => {
+    loadClassroom().catch(() => null);
+    const interval = setInterval(() => loadClassroom().catch(() => null), 7000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function start(e) {
+    e.preventDefault();
+    await api("/admin/live/start", { method: "POST", body: form });
+    setForm({ title: "", description: "", liveUrl: "" });
+    await reloadPublic();
+    await loadClassroom();
+    showToast("Live class started inside the student portal", "success");
+  }
+
+  async function stop() {
+    await api("/admin/live/stop", { method: "POST" });
+    await reloadPublic();
+    await loadClassroom();
+    showToast("Live class stopped", "success");
+  }
+
+  async function answerQuestion(questionId) {
+    const answer = answers[questionId] || "";
+    await api(`/admin/live/questions/${questionId}`, { method: "PATCH", body: { answer, status: "ANSWERED" } });
+    setAnswers({ ...answers, [questionId]: "" });
+    await loadClassroom();
+  }
+
+  async function markQuestionStatus(questionId, status) {
+    await api(`/admin/live/questions/${questionId}`, { method: "PATCH", body: { status } });
+    await loadClassroom();
+  }
+
+  async function deleteChat(chatId) {
+    if (!(await showConfirm({ title: "Delete chat message?", message: "This chat message will be removed from the live classroom record.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/live/chat/${chatId}`, { method: "DELETE" });
+    await loadClassroom();
+  }
+
+  const liveSession = classroom?.liveSession;
+
+  return (
+    <section className="admin-section live-admin-panel">
+      <div className="live-admin-header">
+        <div>
+          <h2>Live Classroom Control</h2>
+          <p className="admin-help-text">Start a live class that students watch inside their portal. Chat, questions and attendance are also handled inside CROBIC.</p>
+        </div>
+        {liveSession && <span className={liveSession.active ? "live-status active-live-status" : "live-status"}>{liveSession.active ? "Live Active" : "Last Class"}</span>}
+      </div>
+
+      <form className="admin-form live-start-form" onSubmit={start}>
+        <input placeholder="Live class title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+        <input placeholder="Embeddable live/video link or iframe code" value={form.liveUrl} onChange={(e) => setForm({ ...form, liveUrl: e.target.value })} required />
+        <textarea placeholder="Description for students" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        {form.liveUrl && <div className="admin-video-preview"><PortalVideoPlayer url={form.liveUrl} title={form.title || "Live class preview"} /></div>}
+        <div className="form-row">
+          <button className="gold-btn" type="submit">Start Live Class</button>
+          <button type="button" className="dark-btn" onClick={stop}>Stop Live Class</button>
+          <button type="button" className="ghost-btn admin-cancel-btn" onClick={loadClassroom}>Refresh Classroom</button>
+        </div>
+      </form>
+
+      {liveSession ? (
+        <div className="admin-classroom-monitor">
+          <div className="admin-live-preview-card">
+            <div className="classroom-box-title"><h3>{liveSession.title}</h3><span>{classroom?.attendanceCount || 0} present</span></div>
+            <div className="portal-video-shell small-admin-video"><PortalVideoPlayer url={liveSession.liveUrl} title={liveSession.title} /></div>
+          </div>
+
+          <div className="admin-monitor-grid">
+            <div className="classroom-box">
+              <div className="classroom-box-title"><h3>Attendance</h3><span>{classroom?.attendanceCount || 0}</span></div>
+              <div className="attendance-list">
+                {(classroom?.attendances || []).map((item) => (
+                  <div key={item.id}><strong>{item.user?.name}</strong><small>{item.user?.email}</small></div>
+                ))}
+                {!(classroom?.attendances || []).length && <p className="empty-small">No student has joined yet.</p>}
+              </div>
+            </div>
+
+            <div className="classroom-box">
+              <div className="classroom-box-title"><h3>Live Chat</h3><span>{classroom?.chatMessages?.length || 0}</span></div>
+              <div className="chat-thread admin-chat-thread">
+                {(classroom?.chatMessages || []).map((chat) => (
+                  <div className="chat-bubble" key={chat.id}>
+                    <strong>{chat.user?.name || "Student"}</strong>
+                    <p>{chat.message}</p>
+                    <button type="button" onClick={() => deleteChat(chat.id)}>Delete</button>
+                  </div>
+                ))}
+                {!(classroom?.chatMessages || []).length && <p className="empty-small">No chat yet.</p>}
+              </div>
+            </div>
+
+            <div className="classroom-box admin-question-box">
+              <div className="classroom-box-title"><h3>Student Questions</h3><span>{classroom?.questions?.length || 0}</span></div>
+              <div className="admin-question-list">
+                {(classroom?.questions || []).map((item) => (
+                  <div className="question-item" key={item.id}>
+                    <strong>{item.user?.name || "Student"}</strong>
+                    <p>{item.question}</p>
+                    {item.answer && <div className="answer-box"><b>Answer:</b> {item.answer}</div>}
+                    <small>{item.status || "OPEN"}</small>
+                    <textarea placeholder="Type lecturer/admin answer..." value={answers[item.id] || ""} onChange={(e) => setAnswers({ ...answers, [item.id]: e.target.value })} />
+                    <div className="form-row">
+                      <button type="button" className="gold-btn" onClick={() => answerQuestion(item.id)}>Send Answer</button>
+                      <button type="button" className="ghost-btn admin-cancel-btn" onClick={() => markQuestionStatus(item.id, "ANSWERED")}>Mark Answered</button>
+                      <button type="button" className="dark-btn" onClick={() => markQuestionStatus(item.id, "OPEN")}>Reopen</button>
+                    </div>
+                  </div>
+                ))}
+                {!(classroom?.questions || []).length && <p className="empty-small">No questions yet.</p>}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="quiet-banner"><strong>No live classroom record yet.</strong><p>Start a live class to activate video, attendance, chat and questions.</p></div>
+      )}
+    </section>
+  );
+}
+
+const websiteContentGroups = [
+  {
+    title: "Home Page",
+    fields: [
+      ["home_card_1_title", "Info Card 1 Title"], ["home_card_1_text", "Info Card 1 Text", "textarea"],
+      ["home_card_2_title", "Info Card 2 Title"], ["home_card_2_text", "Info Card 2 Text", "textarea"],
+      ["home_card_3_title", "Info Card 3 Title"], ["home_card_3_text", "Info Card 3 Text", "textarea"],
+      ["home_stat_1_value", "Stat 1 Value"], ["home_stat_1_label", "Stat 1 Label"],
+      ["home_stat_2_value", "Stat 2 Value"], ["home_stat_2_label", "Stat 2 Label"],
+      ["home_stat_3_value", "Stat 3 Value"], ["home_stat_3_label", "Stat 3 Label"],
+      ["home_stat_4_value", "Stat 4 Value"], ["home_stat_4_label", "Stat 4 Label"],
+      ["home_about_kicker", "About Preview Kicker"], ["home_about_title", "About Preview Title"],
+      ["home_about_paragraph_1", "About Preview Paragraph 1", "textarea"], ["home_about_paragraph_2", "About Preview Paragraph 2", "textarea"],
+      ["home_about_image_url", "About Preview Image URL"], ["home_about_caption_name", "Image Caption Name"], ["home_about_caption_title", "Image Caption Title"],
+      ["home_programs_eyebrow", "Programs Section Eyebrow"], ["home_programs_title", "Programs Section Title"], ["home_programs_text", "Programs Section Text", "textarea"],
+      ["home_paths_eyebrow", "Learning Paths Eyebrow"], ["home_paths_title", "Learning Paths Title"], ["home_paths_text", "Learning Paths Text", "textarea"],
+      ["home_regular_class_title", "Regular Class Title"], ["home_regular_class_text", "Regular Class Text", "textarea"], ["home_regular_class_points", "Regular Class Points (separate with |)", "textarea"],
+      ["home_executive_class_title", "Executive Class Title"], ["home_executive_class_text", "Executive Class Text", "textarea"], ["home_executive_class_points", "Executive Class Points (separate with |)", "textarea"],
+      ["home_graduate_kicker", "Graduates Kicker"], ["home_graduate_title", "Graduates Title"], ["home_graduate_quote", "Graduates Quote", "textarea"], ["home_graduate_author", "Quote Author"], ["home_graduate_number", "Graduate Number"], ["home_graduate_number_label", "Graduate Number Label"], ["home_graduate_image_url", "Graduates Background Image URL"],
+      ["home_books_eyebrow", "Book Preview Eyebrow"], ["home_books_title", "Book Preview Title"], ["home_books_text", "Book Preview Text", "textarea"],
+      ["home_cta_kicker", "CTA Kicker"], ["home_cta_title", "CTA Title"], ["home_cta_text", "CTA Text", "textarea"], ["home_cta_primary_button", "CTA Primary Button"], ["home_cta_secondary_button", "CTA Secondary Button"]
+    ]
+  },
+  {
+    title: "About Page",
+    fields: [
+      ["about_hero_eyebrow", "Hero Eyebrow"], ["about_hero_title", "Hero Title"], ["about_hero_text", "Hero Text", "textarea"], ["about_hero_image_url", "Hero Image URL"],
+      ["about_section_kicker", "Section Kicker"], ["about_section_title", "Section Title"], ["about_section_paragraph_1", "Paragraph 1", "textarea"], ["about_section_paragraph_2", "Paragraph 2", "textarea"], ["about_section_image_url", "Section Image URL"],
+      ["about_mission_title", "Mission Title"], ["about_mission_text", "Mission Text", "textarea"], ["about_vision_title", "Vision Title"], ["about_vision_text", "Vision Text", "textarea"]
+    ]
+  },
+  {
+    title: "Programs Page",
+    fields: [
+      ["programs_hero_eyebrow", "Hero Eyebrow"], ["programs_hero_title", "Hero Title"], ["programs_hero_text", "Hero Text", "textarea"], ["programs_hero_image_url", "Hero Image URL"],
+      ["programs_classes_eyebrow", "Class Options Eyebrow"], ["programs_classes_title", "Class Options Title"], ["programs_classes_text", "Class Options Text", "textarea"],
+      ["programs_regular_title", "Regular Classes Title"], ["programs_regular_text", "Regular Classes Text", "textarea"], ["programs_regular_points", "Regular Classes Points (separate with |)", "textarea"],
+      ["programs_executive_title", "Executive Classes Title"], ["programs_executive_text", "Executive Classes Text", "textarea"], ["programs_executive_points", "Executive Classes Points (separate with |)", "textarea"]
+    ]
+  },
+  {
+    title: "Book Library, Gallery and Contact Pages",
+    fields: [
+      ["books_hero_eyebrow", "Book Hero Eyebrow"], ["books_hero_title", "Book Hero Title"], ["books_hero_text", "Book Hero Text", "textarea"], ["books_hero_image_url", "Book Hero Image URL"],
+      ["gallery_hero_eyebrow", "Gallery Hero Eyebrow"], ["gallery_hero_title", "Gallery Hero Title"], ["gallery_hero_text", "Gallery Hero Text", "textarea"], ["gallery_hero_image_url", "Gallery Hero Image URL"],
+      ["contact_hero_eyebrow", "Contact Hero Eyebrow"], ["contact_hero_title", "Contact Hero Title"], ["contact_hero_text", "Contact Hero Text", "textarea"], ["contact_hero_image_url", "Contact Hero Image URL"],
+      ["contact_phone_title", "Phone Card Title"], ["contact_phone", "Phone Number"], ["contact_location_title", "Location Card Title"], ["contact_address", "Address"], ["contact_enquiry_title", "Enquiry Card Title"], ["contact_enquiry_text", "Enquiry Card Text", "textarea"], ["contact_email", "Contact Email"], ["office_hours", "Office Hours"]
+    ]
+  },
+  {
+    title: "Admission Page",
+    fields: [
+      ["admission_hero_eyebrow", "Hero Eyebrow"], ["admission_hero_title", "Hero Title"], ["admission_hero_text", "Hero Text", "textarea"], ["admission_hero_image_url", "Hero Image URL"],
+      ["admission_eligibility_eyebrow", "Eligibility Eyebrow"], ["admission_eligibility_title", "Eligibility Title"], ["admission_eligibility_text", "Eligibility Text", "textarea"], ["admission_roles", "Who Should Apply Items (one per line: Title|Subtitle)", "textarea"],
+      ["admission_requirements_eyebrow", "Requirements Eyebrow"], ["admission_requirements_title", "Requirements Title"], ["admission_requirements_text", "Requirements Text", "textarea"], ["admission_basic_requirements", "Basic Requirements (one per line)", "textarea"], ["admission_additional_requirements", "Additional Requirements (one per line)", "textarea"],
+      ["admission_apply_eyebrow", "Apply Section Eyebrow"], ["admission_apply_title", "Apply Section Title"], ["admission_apply_text", "Apply Section Text", "textarea"], ["admission_start_title", "Start Title"], ["admission_start_text", "Start Text", "textarea"], ["admission_start_box_title", "Start Box Title"], ["admission_start_box_text", "Start Box Text", "textarea"], ["admission_student_payment_title", "Student Payment Title"],
+      ["admission_process_eyebrow", "Process Eyebrow"], ["admission_process_title", "Process Title"], ["admission_process_text", "Process Text", "textarea"], ["admission_application_steps", "Application Steps (one per line: Title|Description)", "textarea"],
+      ["admission_fees_eyebrow", "Fees Eyebrow"], ["admission_fees_title", "Fees Title"], ["admission_fees_text", "Fees Text", "textarea"],
+      ["admission_calendar_eyebrow", "Calendar Eyebrow"], ["admission_calendar_title", "Calendar Title"], ["admission_calendar_text", "Calendar Text", "textarea"], ["admission_calendar", "Calendar Items (one per line: Label|Value)", "textarea"],
+      ["admission_contact_eyebrow", "Admission Contact Eyebrow"], ["admission_contact_title", "Admission Contact Title"], ["admission_contact_text", "Admission Contact Text", "textarea"], ["admission_contact_location", "Admission Contact Location"], ["admission_contact_phone_title", "Admission Phone Title"], ["admission_contact_location_title", "Admission Location Title"], ["admission_contact_hours_title", "Admission Hours Title"]
+    ]
+  },
+  {
+    title: "Footer",
+    fields: [
+      ["footer_brand_title", "Footer Brand Title"], ["footer_brand_text", "Footer Brand Text"], ["footer_brand_small", "Footer Small Text"], ["footer_address", "Footer Address"], ["footer_phone", "Footer Phone"], ["footer_email", "Footer Email"], ["footer_copyright", "Copyright Text"], ["footer_bottom_note", "Footer Bottom Note"]
+    ]
+  }
+];
+
+function getContentSection(key) {
+  if (key.includes("_hero_")) return "Hero Section";
+
+  if (key.startsWith("home_card_")) return "Home Info Cards";
+  if (key.startsWith("home_stat_")) return "Home Statistics";
+  if (key.startsWith("home_about_")) return "Home About Preview";
+  if (key.startsWith("home_programs_")) return "Home Programs Intro";
+  if (key.startsWith("home_paths_") || key.startsWith("home_regular_") || key.startsWith("home_executive_")) return "Home Learning Paths";
+  if (key.startsWith("home_graduate_")) return "Home Graduates Section";
+  if (key.startsWith("home_books_")) return "Home Book Preview";
+  if (key.startsWith("home_cta_")) return "Home Admission CTA";
+
+  if (key.startsWith("about_section_")) return "About Main Section";
+  if (key.startsWith("about_mission_") || key.startsWith("about_vision_")) return "Mission and Vision";
+
+  if (key.startsWith("programs_classes_") || key.startsWith("programs_regular_") || key.startsWith("programs_executive_")) return "Programs Class Options";
+
+  if (key.startsWith("books_")) return "Book Library Page";
+  if (key.startsWith("gallery_")) return "Gallery Page";
+  if (key.startsWith("contact_")) return "Contact Page";
+  if (key.startsWith("office_")) return "Contact Page";
+
+  if (key.startsWith("admission_eligibility_") || key === "admission_roles") return "Who Should Apply";
+  if (key.startsWith("admission_requirements_") || key.includes("_requirements")) return "Admission Requirements";
+  if (key.startsWith("admission_apply_") || key.startsWith("admission_start_") || key.startsWith("admission_student_")) return "Apply Online Section";
+  if (key.startsWith("admission_process_") || key === "admission_application_steps") return "Application Process";
+  if (key.startsWith("admission_fees_")) return "Programme Fees Section";
+  if (key.startsWith("admission_calendar_") || key === "admission_calendar") return "Academic Calendar";
+  if (key.startsWith("admission_contact_")) return "Admission Contact Section";
+
+  if (key.startsWith("footer_")) return "Footer";
+
+  return "General Content";
+}
+
+function groupWebsiteFields(fields) {
+  return fields.reduce((groups, field) => {
+    const section = getContentSection(field[0]);
+    if (!groups[section]) groups[section] = [];
+    groups[section].push(field);
+    return groups;
+  }, {});
+}
+
+function WebsiteContentAdmin({ reloadPublic }) {
+  const [settings, setSettings] = useState({});
+  const [activeGroupTitle, setActiveGroupTitle] = useState(websiteContentGroups[0]?.title || "Home Page");
+
+  async function load() {
+    setSettings(await api("/admin/settings"));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const activeGroup = websiteContentGroups.find((group) => group.title === activeGroupTitle) || websiteContentGroups[0];
+  const sectionGroups = groupWebsiteFields(activeGroup.fields);
+  const sectionEntries = Object.entries(sectionGroups);
+  const imageFieldCount = activeGroup.fields.filter(([key, label]) => key.includes("image_url") || label.toLowerCase().includes("image url")).length;
+
+  async function submit(e) {
+    e.preventDefault();
+    const savedSettings = await api("/admin/settings", { method: "PATCH", body: settings });
+    setSettings(savedSettings);
+    await reloadPublic();
+    showToast(`${activeGroup.title} content saved and synced to the public website`, "success");
+  }
+
+  function updateSetting(key, value) {
+    setSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  return (
+    <section className="admin-section content-manager">
+      <div className="content-manager-title">
+        <div>
+          <p className="eyebrow dark">Website Content</p>
+          <h2>Public Page Editor</h2>
+          <p>
+            Choose the page or section first, then edit only what belongs there. Homepage hero slides are managed separately under the Slides tab.
+          </p>
+        </div>
+      </div>
+
+      <div className="content-manager-layout">
+        <aside className="content-page-menu">
+          <h3>Choose Area</h3>
+          {websiteContentGroups.map((group) => {
+            const isActive = activeGroup.title === group.title;
+            const imageCount = group.fields.filter(([key, label]) => key.includes("image_url") || label.toLowerCase().includes("image url")).length;
+
+            return (
+              <button
+                type="button"
+                key={group.title}
+                className={isActive ? "content-page-card active-content-page" : "content-page-card"}
+                onClick={() => setActiveGroupTitle(group.title)}
+              >
+                <strong>{group.title}</strong>
+                <span>{group.fields.length} fields · {imageCount} images</span>
+              </button>
+            );
+          })}
+        </aside>
+
+        <form className="admin-form content-editor-panel" onSubmit={submit}>
+          <div className="content-editor-header">
+            <div>
+              <span>Now editing</span>
+              <h3>{activeGroup.title}</h3>
+              <p>{sectionEntries.length} sections · {activeGroup.fields.length} editable fields · {imageFieldCount} image fields</p>
+            </div>
+            <button className="gold-btn" type="submit">Save {activeGroup.title}</button>
+          </div>
+
+          {activeGroup.title === "Home Page" && (
+            <div className="content-help-box">
+              <strong>Homepage note:</strong>
+              <p>The large 01–04 hero slider is edited under <b>Slides</b>. This page controls the homepage cards, statistics, about section, programmes intro, graduates section, book preview and admission CTA.</p>
+            </div>
+          )}
+
+          {sectionEntries.map(([sectionTitle, fields]) => (
+            <details className="content-section-panel" key={sectionTitle} open>
+              <summary>
+                <strong>{sectionTitle}</strong>
+                <span>{fields.length} fields</span>
+              </summary>
+
+              <div className="content-admin-grid clean-content-grid">
+                {fields.map(([key, label, type]) => {
+                  const isImageField = key.includes("image_url") || label.toLowerCase().includes("image url");
+                  const value = settings[key] || "";
+
+                  return (
+                    <label className={type === "textarea" ? "content-field content-field-wide" : "content-field"} key={key}>
+                      <span>{label}</span>
+                      {type === "textarea" ? (
+                        <textarea value={value} onChange={(e) => updateSetting(key, e.target.value)} />
+                      ) : (
+                        <input value={value} onChange={(e) => updateSetting(key, e.target.value)} />
+                      )}
+
+                      {isImageField && value && (
+                        <div className="image-url-preview">
+                          <img src={value} alt={`${label} preview`} />
+                          <small>Image preview</small>
+                        </div>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </details>
+          ))}
+
+          <div className="content-save-footer">
+            <button className="gold-btn" type="submit">Save {activeGroup.title}</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+
+
+function ActivityLogAdmin() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    try {
+      setLoading(true);
+      setLogs(await api("/admin/activity-logs"));
+    } catch (error) {
+      showToast(error.message || "Could not load activity log", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <section className="admin-section audit-admin-panel">
+      <div className="content-editor-header students-admin-header">
+        <div>
+          <span>Audit Trail</span>
+          <h2>Admin Activity Log</h2>
+          <p>Track important admin actions such as approvals, grading, certificate actions, settings changes and content updates.</p>
+        </div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+      {loading ? <p>Loading activity log...</p> : (
+        <div className="audit-log-list">
+          {logs.map((log) => {
+            let details = {};
+            try { details = log.details ? JSON.parse(log.details) : {}; } catch { details = { raw: log.details }; }
+            return (
+              <div className="audit-log-card" key={log.id}>
+                <div>
+                  <strong>{formatPortalStatus(log.action)}</strong>
+                  <small>{log.admin?.name || "System/Admin"} · {log.admin?.email || "No email"}</small>
+                </div>
+                <div><span>Entity</span><b>{log.entityType || "System"}{log.entityId ? ` #${log.entityId}` : ""}</b></div>
+                <div><span>Date</span><b>{formatDateTime(log.createdAt)}</b></div>
+                <div className="audit-details"><span>Details</span><p>{Object.keys(details).length ? Object.entries(details).map(([key, value]) => `${key}: ${value}`).join(" · ") : "No extra details"}</p></div>
+              </div>
+            );
+          })}
+          {!logs.length && <div className="quiet-banner"><strong>No activity yet.</strong><p>Admin actions will appear here after the new audit system is active.</p></div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AttendanceRecordsAdmin() {
+  const [payload, setPayload] = useState({ records: [], grouped: [] });
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    try {
+      setLoading(true);
+      setPayload(await api("/admin/attendance-records"));
+    } catch (error) {
+      showToast(error.message || "Could not load attendance records", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <section className="admin-section attendance-admin-panel">
+      <div className="content-editor-header students-admin-header">
+        <div>
+          <span>Live Class Records</span>
+          <h2>Student Attendance Record</h2>
+          <p>View all students who joined live classes, including joined time and last seen time.</p>
+        </div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+      {loading ? <p>Loading attendance records...</p> : (
+        <div className="attendance-session-list">
+          {(payload.grouped || []).map((group) => (
+            <div className="attendance-session-card" key={group.liveSession?.id || group.liveSession?.title}>
+              <div className="attendance-session-head">
+                <div><strong>{group.liveSession?.title || "Live Session"}</strong><small>{group.liveSession?.description || "CROBIC live class"}</small></div>
+                <span>{group.count} present</span>
+              </div>
+              <div className="attendance-table">
+                {(group.students || []).map((item) => (
+                  <div key={item.id}>
+                    <strong>{item.student?.name || "Student"}</strong>
+                    <small>{item.student?.email || "No email"}</small>
+                    <span>Joined: {formatDateTime(item.joinedAt)}</span>
+                    <span>Last seen: {formatDateTime(item.lastSeenAt)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {!(payload.grouped || []).length && <div className="quiet-banner"><strong>No attendance records yet.</strong><p>Records appear after students join live classes.</p></div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CourseDiscussionsAdmin() {
+  const [discussions, setDiscussions] = useState([]);
+  const [replyMap, setReplyMap] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    try {
+      setLoading(true);
+      setDiscussions(await api("/admin/course-discussions"));
+    } catch (error) {
+      showToast(error.message || "Could not load course discussions", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function reply(e, discussionId) {
+    e.preventDefault();
+    const message = String(replyMap[discussionId] || "").trim();
+    if (!message) return;
+    try {
+      await api(`/admin/course-discussions/${discussionId}/replies`, { method: "POST", body: { message } });
+      setReplyMap((current) => ({ ...current, [discussionId]: "" }));
+      await load();
+      showToast("Reply sent to discussion.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not send reply", "error");
+    }
+  }
+
+  async function changeStatus(discussionId, status) {
+    try {
+      await api(`/admin/course-discussions/${discussionId}/status`, { method: "PATCH", body: { status } });
+      await load();
+      showToast("Discussion status updated.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not update discussion", "error");
+    }
+  }
+
+  async function removeDiscussion(discussionId) {
+    const confirmed = await showConfirm({ title: "Remove discussion?", message: "This will hide the discussion from students.", confirmText: "Remove", danger: true });
+    if (!confirmed) return;
+    try {
+      await api(`/admin/course-discussions/${discussionId}`, { method: "DELETE" });
+      await load();
+      showToast("Discussion removed.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not remove discussion", "error");
+    }
+  }
+
+  return (
+    <section className="admin-section discussions-admin-panel">
+      <div className="content-editor-header students-admin-header">
+        <div>
+          <span>Course Comments</span>
+          <h2>Course Discussions</h2>
+          <p>Reply to student course questions and manage discussion status.</p>
+        </div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+      {loading ? <p>Loading discussions...</p> : (
+        <div className="admin-discussion-list">
+          {discussions.map((discussion) => (
+            <article className="admin-discussion-card" key={discussion.id}>
+              <div className="discussion-card-head">
+                <div>
+                  <strong>{discussion.title}</strong>
+                  <small>{discussion.course?.title || "Course"} · {discussion.author?.name || "Student"} · {formatPortalStatus(discussion.status)}</small>
+                </div>
+                <div className="admin-item-actions">
+                  <button className="edit-btn" type="button" onClick={() => changeStatus(discussion.id, discussion.status === "CLOSED" ? "OPEN" : "CLOSED")}>{discussion.status === "CLOSED" ? "Reopen" : "Close"}</button>
+                  <button className="delete-btn" type="button" onClick={() => removeDiscussion(discussion.id)}><Trash2 size={16} /></button>
+                </div>
+              </div>
+              <p>{discussion.message}</p>
+              <div className="discussion-replies">
+                {(discussion.replies || []).map((reply) => (
+                  <div className={reply.author?.role === "ADMIN" ? "discussion-reply admin-reply" : "discussion-reply"} key={reply.id}>
+                    <strong>{reply.author?.role === "ADMIN" ? "CROBIC Admin" : reply.author?.name || "Student"}</strong>
+                    <p>{reply.message}</p>
+                    <small>{formatDateTime(reply.createdAt)}</small>
+                  </div>
+                ))}
+              </div>
+              <form className="discussion-reply-form" onSubmit={(e) => reply(e, discussion.id)}>
+                <input placeholder="Reply as admin..." value={replyMap[discussion.id] || ""} onChange={(e) => setReplyMap((current) => ({ ...current, [discussion.id]: e.target.value }))} />
+                <button className="dark-btn" type="submit"><Send size={14} /> Reply</button>
+              </form>
+            </article>
+          ))}
+          {!discussions.length && <div className="quiet-banner"><strong>No discussion yet.</strong><p>Student course comments will appear here.</p></div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EmailSettingsAdmin() {
+  const [settings, setSettings] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+
+  async function load() {
+    const result = await api("/admin/settings");
+    setSettings({
+      email_notifications_enabled: result.email_notifications_enabled || "false",
+      email_school_name: result.email_school_name || "Champions Royal Bible College",
+      email_from_name: result.email_from_name || "CROBIC Admissions",
+      email_from_address: result.email_from_address || "",
+      email_reply_to: result.email_reply_to || "",
+      email_admin_recipients: result.email_admin_recipients || "",
+      email_smtp_host: result.email_smtp_host || "",
+      email_smtp_port: result.email_smtp_port || "587",
+      email_smtp_user: result.email_smtp_user || "",
+      email_smtp_password: result.email_smtp_password || "",
+      email_smtp_secure: result.email_smtp_secure || "false",
+      email_base_url: result.email_base_url || window.location.origin,
+      email_footer_text: result.email_footer_text || "Raising world class ministers"
+    });
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function updateField(key, value) {
+    setSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      const saved = await api("/admin/settings", { method: "PATCH", body: settings });
+      setSettings((current) => ({ ...current, ...saved }));
+      showToast("Email notification settings saved.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not save email settings", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function sendTestEmail() {
+    const to = testEmail || settings.email_admin_recipients || settings.email_from_address;
+    if (!to) {
+      showToast("Enter a test email address or admin recipient email first.", "error");
+      return;
+    }
+    try {
+      setTesting(true);
+      const result = await api("/admin/email/test", { method: "POST", body: { to } });
+      showToast(result.message || "Test email request completed.", result.message?.includes("not sent") ? "error" : "success");
+    } catch (error) {
+      showToast(error.message || "Could not send test email", "error");
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <section className="admin-section email-settings-panel">
+      <div className="content-editor-header students-admin-header">
+        <div>
+          <span>Communication</span>
+          <h2>Email Settings</h2>
+          <p>Send automatic email notifications for admissions, payments, support replies, assignments, quizzes and certificates.</p>
+        </div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <form className="admin-form email-settings-form" onSubmit={submit}>
+        <div className="email-settings-grid">
+          <div className="email-settings-card">
+            <h3>Notification Control</h3>
+            <label className="checkbox-field email-toggle-field">
+              <input type="checkbox" checked={settings.email_notifications_enabled === "true"} onChange={(e) => updateField("email_notifications_enabled", e.target.checked ? "true" : "false")} />
+              Enable email notifications
+            </label>
+            <label className="content-field content-field-wide">
+              <span>School email name</span>
+              <input value={settings.email_school_name || ""} onChange={(e) => updateField("email_school_name", e.target.value)} placeholder="Champions Royal Bible College" />
+            </label>
+            <label className="content-field content-field-wide">
+              <span>Website / portal base URL</span>
+              <input value={settings.email_base_url || ""} onChange={(e) => updateField("email_base_url", e.target.value)} placeholder="https://yourdomain.com" />
+            </label>
+            <label className="content-field content-field-wide">
+              <span>Email footer text</span>
+              <input value={settings.email_footer_text || ""} onChange={(e) => updateField("email_footer_text", e.target.value)} placeholder="Raising world class ministers" />
+            </label>
+          </div>
+
+          <div className="email-settings-card">
+            <h3>Sender Details</h3>
+            <label className="content-field content-field-wide">
+              <span>From name</span>
+              <input value={settings.email_from_name || ""} onChange={(e) => updateField("email_from_name", e.target.value)} placeholder="CROBIC Admissions" />
+            </label>
+            <label className="content-field content-field-wide">
+              <span>From email address</span>
+              <input type="email" value={settings.email_from_address || ""} onChange={(e) => updateField("email_from_address", e.target.value)} placeholder="noreply@yourdomain.com" />
+            </label>
+            <label className="content-field content-field-wide">
+              <span>Reply-to email</span>
+              <input type="email" value={settings.email_reply_to || ""} onChange={(e) => updateField("email_reply_to", e.target.value)} placeholder="admissions@yourdomain.com" />
+            </label>
+            <label className="content-field content-field-wide">
+              <span>Admin recipients</span>
+              <textarea value={settings.email_admin_recipients || ""} onChange={(e) => updateField("email_admin_recipients", e.target.value)} placeholder="admin@crobic.org\nadmissions@crobic.org" />
+            </label>
+          </div>
+
+          <div className="email-settings-card">
+            <h3>SMTP Settings</h3>
+            <label className="content-field content-field-wide">
+              <span>SMTP host</span>
+              <input value={settings.email_smtp_host || ""} onChange={(e) => updateField("email_smtp_host", e.target.value)} placeholder="smtp.gmail.com or mail.yourdomain.com" />
+            </label>
+            <div className="email-two-cols">
+              <label className="content-field">
+                <span>SMTP port</span>
+                <input value={settings.email_smtp_port || "587"} onChange={(e) => updateField("email_smtp_port", e.target.value)} placeholder="587" />
+              </label>
+              <label className="checkbox-field email-secure-field">
+                <input type="checkbox" checked={settings.email_smtp_secure === "true"} onChange={(e) => updateField("email_smtp_secure", e.target.checked ? "true" : "false")} />
+                Use SSL / secure port
+              </label>
+            </div>
+            <label className="content-field content-field-wide">
+              <span>SMTP username</span>
+              <input value={settings.email_smtp_user || ""} onChange={(e) => updateField("email_smtp_user", e.target.value)} placeholder="email username" />
+            </label>
+            <label className="content-field content-field-wide">
+              <span>SMTP password / app password</span>
+              <input type="password" value={settings.email_smtp_password || ""} onChange={(e) => updateField("email_smtp_password", e.target.value)} placeholder="SMTP password" />
+            </label>
+          </div>
+
+          <div className="email-settings-card email-test-card">
+            <h3>Test Email</h3>
+            <p>After saving SMTP details, send a test email to confirm delivery before going live.</p>
+            <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="test@example.com" />
+            <button className="dark-btn" type="button" onClick={sendTestEmail} disabled={testing}>{testing ? "Sending..." : "Send Test Email"}</button>
+          </div>
+        </div>
+
+        <div className="content-save-footer email-save-footer">
+          <button className="gold-btn" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Email Settings"}</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function SettingsAdmin({ reloadPublic }) {
+  const [settings, setSettings] = useState({});
+  async function load() { setSettings(await api("/admin/settings")); }
+  useEffect(() => { load(); }, []);
+  async function submit(e) { e.preventDefault(); const savedSettings = await api("/admin/settings", { method: "PATCH", body: settings }); setSettings(savedSettings); await reloadPublic(); showToast("Settings saved and synced", "success"); }
+  return <section className="admin-section"><h2>Settings</h2><form className="admin-form" onSubmit={submit}><input placeholder="Student WhatsApp Group Link" value={settings.student_whatsapp_group_link || ""} onChange={(e) => setSettings({ ...settings, student_whatsapp_group_link: e.target.value })} /><input placeholder="Bank Name" value={settings.bank_name || ""} onChange={(e) => setSettings({ ...settings, bank_name: e.target.value })} /><input placeholder="Account Name" value={settings.account_name || ""} onChange={(e) => setSettings({ ...settings, account_name: e.target.value })} /><input placeholder="Account Number" value={settings.account_number || ""} onChange={(e) => setSettings({ ...settings, account_number: e.target.value })} /><button className="gold-btn">Save Settings</button></form></section>;
+}
+
+const COUNTRY_OPTIONS = [
+  { name: "Nigeria", code: "NG", dialCode: "+234" },
+  { name: "Ghana", code: "GH", dialCode: "+233" },
+  { name: "United States", code: "US", dialCode: "+1" },
+  { name: "United Kingdom", code: "GB", dialCode: "+44" },
+  { name: "Canada", code: "CA", dialCode: "+1" },
+  { name: "South Africa", code: "ZA", dialCode: "+27" },
+  { name: "Kenya", code: "KE", dialCode: "+254" },
+  { name: "Uganda", code: "UG", dialCode: "+256" },
+  { name: "Tanzania", code: "TZ", dialCode: "+255" },
+  { name: "Rwanda", code: "RW", dialCode: "+250" },
+  { name: "Cameroon", code: "CM", dialCode: "+237" },
+  { name: "Benin", code: "BJ", dialCode: "+229" },
+  { name: "Togo", code: "TG", dialCode: "+228" },
+  { name: "Sierra Leone", code: "SL", dialCode: "+232" },
+  { name: "Liberia", code: "LR", dialCode: "+231" },
+  { name: "Ethiopia", code: "ET", dialCode: "+251" },
+  { name: "Zambia", code: "ZM", dialCode: "+260" },
+  { name: "Zimbabwe", code: "ZW", dialCode: "+263" },
+  { name: "United Arab Emirates", code: "AE", dialCode: "+971" },
+  { name: "Qatar", code: "QA", dialCode: "+974" },
+  { name: "Saudi Arabia", code: "SA", dialCode: "+966" },
+  { name: "Australia", code: "AU", dialCode: "+61" },
+  { name: "Germany", code: "DE", dialCode: "+49" },
+  { name: "France", code: "FR", dialCode: "+33" },
+  { name: "Italy", code: "IT", dialCode: "+39" },
+  { name: "Spain", code: "ES", dialCode: "+34" },
+  { name: "Netherlands", code: "NL", dialCode: "+31" },
+  { name: "Ireland", code: "IE", dialCode: "+353" },
+  { name: "Singapore", code: "SG", dialCode: "+65" },
+  { name: "Malaysia", code: "MY", dialCode: "+60" },
+  { name: "China", code: "CN", dialCode: "+86" },
+  { name: "India", code: "IN", dialCode: "+91" }
+];
+
+function findCountry(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return COUNTRY_OPTIONS[0];
+  return (
+    COUNTRY_OPTIONS.find((item) => item.name.toLowerCase() === text || item.code.toLowerCase() === text) ||
+    COUNTRY_OPTIONS.find((item) => item.name.toLowerCase().startsWith(text)) ||
+    COUNTRY_OPTIONS.find((item) => item.name.toLowerCase().includes(text)) ||
+    COUNTRY_OPTIONS[0]
+  );
+}
+
+function AuthModal({ mode, setMode, close, setUser, goTo }) {
+  const [form, setForm] = useState({ name: "", email: "", phone: "", country: "Nigeria", password: "" });
+  const selectedCountry = findCountry(form.country);
+  const isRegister = mode === "register";
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    try {
+      const endpoint = isRegister ? "/auth/register" : "/auth/login";
+      const payload = isRegister
+        ? {
+            ...form,
+            country: selectedCountry?.name || form.country,
+            phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : ""
+          }
+        : { email: form.email, password: form.password };
+      const result = await api(endpoint, { method: "POST", body: payload });
+      setToken(result.token);
+      setUser(result.user);
+      close();
+      goTo(result.user.role === "ADMIN" ? "admin" : result.user.status === "ACTIVE" ? "student" : "admissions");
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  return (
+    <div className="modal-backdrop auth-backdrop">
+      <div className={`auth-modal auth-modal-premium ${isRegister ? "auth-modal-register" : "auth-modal-login"}`}>
+        <button type="button" className="close-btn auth-close-btn" onClick={close} aria-label="Close"><X /></button>
+
+        <div className="auth-modal-grid">
+          <aside className="auth-brand-panel">
+            <img src={LOGO} alt="CROBIC Logo" />
+            <p className="eyebrow framed">Champions Royal Bible College</p>
+            <h2>{isRegister ? "Begin Your CROBIC Journey" : "Welcome Back"}</h2>
+            <p>
+              {isRegister
+                ? "Create your student application. Portal access opens after payment confirmation and admin approval."
+                : "Login securely to continue to your student or admin portal."}
+            </p>
+            <div className="auth-mini-points">
+              <span><CheckCircle size={14} /> Secure portal access</span>
+              <span><CheckCircle size={14} /> Structured Bible learning</span>
+              <span><CheckCircle size={14} /> Live and recorded classes</span>
+            </div>
+          </aside>
+
+          <section className="auth-form-panel">
+            <div className="auth-tabs auth-tabs-premium">
+              <button type="button" className={mode === "login" ? "active-auth" : ""} onClick={() => setMode("login")}>Login</button>
+              <button type="button" className={mode === "register" ? "active-auth" : ""} onClick={() => setMode("register")}>Register</button>
+            </div>
+
+            <div className="auth-heading-block">
+              <span>{isRegister ? "Student Application" : "Portal Login"}</span>
+              <h2>{isRegister ? "Create Application" : "Login"}</h2>
+              <p>{isRegister ? "Use your correct details. You will choose your programme and complete payment after registration." : "Enter your email and password to continue."}</p>
+            </div>
+
+            <form onSubmit={submit} className="auth-form premium-auth-form">
+              {isRegister && (
+                <>
+                  <label className="auth-field">
+                    <span>Full name</span>
+                    <input placeholder="e.g Justice Emmanuel" value={form.name} onChange={(e) => updateField("name", e.target.value)} required />
+                  </label>
+
+                  <div className="auth-two-cols">
+                    <label className="auth-field">
+                      <span>Country</span>
+                      <input
+                        list="crobic-country-options"
+                        placeholder="Start typing country"
+                        value={form.country}
+                        onChange={(e) => updateField("country", e.target.value)}
+                        required
+                      />
+                      <datalist id="crobic-country-options">
+                        {COUNTRY_OPTIONS.map((country) => (
+                          <option key={country.code} value={country.name}>{country.dialCode}</option>
+                        ))}
+                      </datalist>
+                    </label>
+
+                    <label className="auth-field">
+                      <span>Phone number</span>
+                      <div className="phone-input-wrap">
+                        <b>{selectedCountry?.dialCode || "+"}</b>
+                        <input
+                          inputMode="tel"
+                          placeholder="Phone number"
+                          value={form.phone}
+                          onChange={(e) => updateField("phone", e.target.value.replace(/[^0-9 ]/g, ""))}
+                        />
+                      </div>
+                    </label>
+                  </div>
+                </>
+              )}
+
+              <label className="auth-field">
+                <span>Email address</span>
+                <input type="email" placeholder="you@example.com" value={form.email} onChange={(e) => updateField("email", e.target.value)} required />
+              </label>
+
+              <label className="auth-field">
+                <span>Password</span>
+                <input type="password" placeholder="Enter password" value={form.password} onChange={(e) => updateField("password", e.target.value)} required minLength={6} />
+              </label>
+
+              <button className="gold-btn full auth-submit-btn" type="submit">{isRegister ? "Create Application" : "Login Securely"}</button>
+            </form>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CourseCard({ course, openAuth, user, goTo }) {
+  return <div className="course-card"><img src={course.imageUrl || CROBIC_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{Number(course.fee) > 0 && <strong>₦{Number(course.fee).toLocaleString()}</strong>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
+}
+function BookCard({ book }) { return <div className="book-card"><img src={book.imageUrl || CROBIC_IMAGES.logo} alt={book.title} /><div><span>{book.category}</span><h3>{book.title}</h3><p>{book.description}</p><strong>{book.price}</strong><a className="gold-btn full" href={book.buyLink} target="_blank" rel="noreferrer">Buy Book</a></div></div>; }
+function Feature({ icon, title, text }) { return <div className="feature-card"><div className="icon-box">{icon}</div><h3>{title}</h3><p>{text}</p></div>; }
+function SectionIntro({ eyebrow, title, text }) { return <div className="section-intro"><Kicker text={eyebrow} center /><h2>{title}</h2><p>{text}</p><div className="gold-divider"><span /></div></div>; }
+function Kicker({ text, center }) { return <div className={center ? "kicker kicker-center" : "kicker"}><span /> <small>{text}</small> <span /></div>; }
+function PageHero({ eyebrow, title, text, image }) { return <section className="page-hero"><div className="page-hero-bg" style={{ backgroundImage: `url(${image})` }} /><div className="page-hero-overlay" /><div className="container page-hero-content"><Kicker text={eyebrow} /><h1>{title}</h1><p>{text}</p></div></section>; }
+function DashboardCard({ icon, label, value }) { return <div className="dashboard-card"><div className="icon-box">{icon}</div><span>{label}</span><strong>{value}</strong></div>; }
+function Step({ number, title, text }) { return <div className="step"><strong>{number}</strong><h3>{title}</h3><p>{text}</p></div>; }
+function PathCard({ icon, title, text, points }) { return <div className="path-card"><div className="icon-box">{icon}</div><h3>{title}</h3><div className="short-gold-line" /><p>{text}</p><small>Ideal For</small><ul>{points.map((point) => <li key={point}><span />{point}</li>)}</ul></div>; }
+function AdminList({ items, onDelete, onEdit }) { return <div className="admin-list">{items.map((item) => <div className="admin-item" key={item.id}><div><strong>{item.title}</strong><p>ID: {item.id}</p></div><div className="admin-item-actions">{onEdit && <button className="edit-btn" onClick={() => onEdit(item)}>Edit</button>}<button className="delete-btn" onClick={() => onDelete(item.id)}><Trash2 size={18} /></button></div></div>)}</div>; }
+function PortalSidebar({ title, items, tab, setTab }) { return <div className="portal-sidebar"><img src={LOGO} alt="CROBIC" /><h3>{title}</h3>{items.map((item) => <button key={item} className={tab === item.toLowerCase() ? "side-active" : ""} onClick={() => setTab && setTab(item.toLowerCase())}>{item}</button>)}</div>; }
+function AccessGate({ title, openAuth }) { return <main className="page container gate"><ShieldCheck size={56} /><h1>{title}</h1><p>You need to login before accessing this section.</p><button className="gold-btn big" onClick={openAuth}>Login</button></main>; }
+function Footer({ goTo, settings = {} }) {
+  return (
+    <footer className="footer">
+      <div className="footer-line" />
+
+      <div className="container footer-grid">
+        <div>
+          <img src={LOGO} alt="CROBIC" />
+          <h3>{getSetting(settings, "footer_brand_title", "CROBIC")}</h3>
+          <p>{getSetting(settings, "footer_brand_text", "Champions Royal Bible College")}</p>
+          <small>{getSetting(settings, "footer_brand_small", "Raising a Generation of Champions")}</small>
+        </div>
+
+        <div>
+          <h4>Navigation</h4>
+          <button onClick={() => goTo("home")}>Home</button>
+          <button onClick={() => goTo("about")}>About</button>
+          <button onClick={() => goTo("programs")}>Programs</button>
+          <button onClick={() => goTo("admissions")}>Admission</button>
+          <button onClick={() => goTo("gallery")}>Gallery</button>
+          <button onClick={() => goTo("contact")}>Contact</button>
+        </div>
+
+        <div>
+          <h4>Explore</h4>
+          <button onClick={() => goTo("library")}>Book Library</button>
+          <button onClick={() => goTo("programs")}>Regular Classes</button>
+          <button onClick={() => goTo("programs")}>Executive Classes</button>
+          <button onClick={() => goTo("admissions")}>Apply for Admission</button>
+        </div>
+
+        <div>
+          <h4>Contact</h4>
+          <p>{getSetting(settings, "footer_address", getSetting(settings, "contact_address", "Kubwa, Abuja, FCT, Nigeria"))}</p>
+          <p>{getSetting(settings, "footer_phone", getSetting(settings, "contact_phone", "+234 814 943 9447"))}</p>
+          <p>{getSetting(settings, "footer_email", getSetting(settings, "contact_email", "info@crobic.org"))}</p>
+        </div>
+      </div>
+
+      <div className="container footer-bottom">
+        <p>{getSetting(settings, "footer_copyright", "© 2026 Champions Royal Bible College (CROBIC). All Rights Reserved.")}</p>
+        <p>{getSetting(settings, "footer_bottom_note", "The Biblical Arm of Champions Royal Assembly International")}</p>
+      </div>
+    </footer>
+  );
+}
+
+createRoot(document.getElementById("root")).render(<App />);

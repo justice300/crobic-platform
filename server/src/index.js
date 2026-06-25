@@ -1,0 +1,2570 @@
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import morgan from "morgan";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import fs from "fs/promises";
+import path from "path";
+import { prisma, seedDatabase } from "./db.js";
+import { createToken, requireAuth, requireAdmin, requireActiveStudent } from "./middleware.js";
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
+const PAYMENT_PROOF_DIR = path.join(UPLOAD_ROOT, "payment-proofs");
+const CERTIFICATE_ASSET_DIR = path.join(UPLOAD_ROOT, "certificate-assets");
+const ASSIGNMENT_FILE_DIR = path.join(UPLOAD_ROOT, "assignment-files");
+
+app.use(cors({ origin: CLIENT_URL, credentials: true }));
+app.use("/uploads", express.static(UPLOAD_ROOT));
+app.use(express.json({ limit: "12mb" }));
+app.use(morgan("dev"));
+app.set("trust proxy", 1);
+
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
+
+if ((process.env.JWT_SECRET || "change-this-secret-before-live") === "change-this-secret-before-live") {
+  console.warn("SECURITY WARNING: JWT_SECRET is still using the default value. Change it before going live.");
+}
+
+function publicUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    country: user.country,
+    role: user.role,
+    status: user.status,
+    createdAt: user.createdAt
+  };
+}
+
+function amountToKobo(amount) {
+  return Number(amount) * 100;
+}
+
+function getCertificateSettingDefaults() {
+  return {
+    certificate_rector_name: "Joshua Iginla",
+    certificate_rector_title: "Rector / President",
+    certificate_footer_text: "Raising world class ministers",
+    certificate_signature_url: "",
+    certificate_seal_url: "/crobic-images/cra-logo.png",
+    certificate_show_qr: "true"
+  };
+}
+
+async function getCertificateSettings() {
+  const rows = await prisma.setting.findMany({
+    where: { key: { startsWith: "certificate_" } }
+  });
+  return { ...getCertificateSettingDefaults(), ...Object.fromEntries(rows.map((row) => [row.key, row.value])) };
+}
+
+
+function getEmailSettingDefaults() {
+  return {
+    email_notifications_enabled: "false",
+    email_school_name: "Champions Royal Bible College",
+    email_from_name: "CROBIC Admissions",
+    email_from_address: "",
+    email_reply_to: "",
+    email_admin_recipients: "",
+    email_smtp_host: "",
+    email_smtp_port: "587",
+    email_smtp_user: "",
+    email_smtp_password: "",
+    email_smtp_secure: "false",
+    email_base_url: CLIENT_URL,
+    email_footer_text: "Raising world class ministers"
+  };
+}
+
+async function getEmailSettings() {
+  const rows = await prisma.setting.findMany({ where: { key: { startsWith: "email_" } } });
+  return { ...getEmailSettingDefaults(), ...Object.fromEntries(rows.map((row) => [row.key, row.value])) };
+}
+
+function splitEmailList(value = "") {
+  return String(value || "")
+    .split(/[;,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function emailTemplate({ heading, body, ctaText, ctaUrl, settings }) {
+  const safeHeading = String(heading || "CROBIC Notification");
+  const safeBody = String(body || "").replace(/\n/g, "<br />");
+  const footer = String(settings.email_footer_text || "Raising world class ministers");
+  const school = String(settings.email_school_name || "Champions Royal Bible College");
+  const button = ctaText && ctaUrl
+    ? `<p style="margin:28px 0"><a href="${ctaUrl}" style="background:#c49f64;color:#070b18;padding:14px 22px;text-decoration:none;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:12px;display:inline-block">${ctaText}</a></p>`
+    : "";
+
+  return `
+  <div style="margin:0;padding:0;background:#f8f3e9;font-family:Inter,Arial,sans-serif;color:#111827">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8f3e9;padding:28px 14px">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid rgba(17,24,39,.1)">
+          <tr><td style="background:#070b18;padding:28px 30px;border-bottom:3px solid #c49f64">
+            <div style="color:#c49f64;font-size:11px;letter-spacing:.22em;text-transform:uppercase;font-weight:800">${school}</div>
+            <h1 style="margin:12px 0 0;color:#ffffff;font-size:28px;line-height:1.15;font-family:Georgia,serif">${safeHeading}</h1>
+          </td></tr>
+          <tr><td style="padding:32px 30px">
+            <div style="font-size:15px;line-height:1.75;color:#374151">${safeBody}</div>
+            ${button}
+          </td></tr>
+          <tr><td style="padding:20px 30px;background:#fbf7ef;border-top:1px solid rgba(17,24,39,.08)">
+            <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.6">${footer}</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </div>`;
+}
+
+async function sendEmailNotification({ to, subject, heading, body, ctaText, ctaUrl }) {
+  const settings = await getEmailSettings();
+  if (String(settings.email_notifications_enabled || "false") !== "true") return { skipped: true, reason: "Email notifications disabled" };
+
+  const recipients = Array.isArray(to) ? to.filter(Boolean) : splitEmailList(to);
+  if (!recipients.length) return { skipped: true, reason: "No recipient" };
+
+  const host = String(settings.email_smtp_host || "").trim();
+  const user = String(settings.email_smtp_user || "").trim();
+  const pass = String(settings.email_smtp_password || "").trim();
+  const fromAddress = String(settings.email_from_address || user || "").trim();
+  if (!host || !user || !pass || !fromAddress) return { skipped: true, reason: "SMTP settings incomplete" };
+
+  const { default: nodemailer } = await import("nodemailer");
+  const transporter = nodemailer.createTransport({
+    host,
+    port: Number(settings.email_smtp_port || 587),
+    secure: String(settings.email_smtp_secure || "false") === "true",
+    auth: { user, pass }
+  });
+
+  const baseUrl = String(settings.email_base_url || CLIENT_URL).replace(/\/$/, "");
+  const finalCtaUrl = ctaUrl ? (String(ctaUrl).startsWith("http") ? ctaUrl : `${baseUrl}${ctaUrl.startsWith("/") ? "" : "/"}${ctaUrl}`) : "";
+  const html = emailTemplate({ heading: heading || subject, body, ctaText, ctaUrl: finalCtaUrl, settings });
+  const fromName = String(settings.email_from_name || settings.email_school_name || "CROBIC");
+
+  return transporter.sendMail({
+    from: `"${fromName.replace(/"/g, "")}" <${fromAddress}>`,
+    to: recipients.join(", "),
+    replyTo: settings.email_reply_to || fromAddress,
+    subject,
+    text: `${heading || subject}\n\n${body}\n\n${finalCtaUrl || ""}`,
+    html
+  });
+}
+
+function queueEmailNotification(payload) {
+  sendEmailNotification(payload).catch((error) => {
+    console.error("Email notification failed:", error.message);
+  });
+}
+
+async function queueAdminEmail({ subject, heading, body, ctaText = "Open Admin Dashboard", ctaUrl = "/admin" }) {
+  const settings = await getEmailSettings();
+  const recipients = splitEmailList(settings.email_admin_recipients);
+  if (!recipients.length) return;
+  queueEmailNotification({ to: recipients, subject, heading, body, ctaText, ctaUrl });
+}
+
+function requestMeta(req) {
+  return {
+    ipAddress: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.socket?.remoteAddress || "",
+    userAgent: String(req.headers["user-agent"] || "").slice(0, 500)
+  };
+}
+
+async function logAdminActivity(req, { action, entityType = "SYSTEM", entityId = null, details = {} } = {}) {
+  try {
+    if (!req.user || req.user.role !== "ADMIN" || !action) return;
+    const meta = requestMeta(req);
+    await prisma.adminActivityLog.create({
+      data: {
+        adminId: req.user.id,
+        action: String(action).slice(0, 120),
+        entityType: entityType ? String(entityType).slice(0, 80) : null,
+        entityId: entityId === null || entityId === undefined ? null : String(entityId).slice(0, 80),
+        details: JSON.stringify(details || {}).slice(0, 4000),
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent
+      }
+    });
+  } catch (error) {
+    console.error("Admin activity log failed:", error.message);
+  }
+}
+
+
+
+function safeUploadExtension(fileName = "", contentType = "") {
+  const name = String(fileName || "").toLowerCase();
+  const type = String(contentType || "").toLowerCase();
+  if (type.includes("pdf") || name.endsWith(".pdf")) return ".pdf";
+  if (type.includes("png") || name.endsWith(".png")) return ".png";
+  if (type.includes("webp") || name.endsWith(".webp")) return ".webp";
+  if (type.includes("jpg") || type.includes("jpeg") || name.endsWith(".jpg") || name.endsWith(".jpeg")) return ".jpg";
+  return null;
+}
+
+async function saveBase64PaymentProof({ fileName, contentType, dataUrl }) {
+  const ext = safeUploadExtension(fileName, contentType);
+  if (!ext) {
+    const error = new Error("Only JPG, PNG, WEBP or PDF payment receipts are allowed.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const raw = String(dataUrl || "");
+  const base64 = raw.includes(",") ? raw.split(",").pop() : raw;
+  if (!base64) {
+    const error = new Error("Payment receipt file is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const buffer = Buffer.from(base64, "base64");
+  const maxBytes = 6 * 1024 * 1024;
+  if (!buffer.length || buffer.length > maxBytes) {
+    const error = new Error("Receipt file must not be more than 6MB.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await fs.mkdir(PAYMENT_PROOF_DIR, { recursive: true });
+  const savedName = `${Date.now()}-${crypto.randomUUID()}${ext}`;
+  const savedPath = path.join(PAYMENT_PROOF_DIR, savedName);
+  await fs.writeFile(savedPath, buffer);
+  return `/uploads/payment-proofs/${savedName}`;
+}
+
+
+async function saveBase64CertificateAsset({ fileName, contentType, dataUrl }) {
+  const ext = safeUploadExtension(fileName, contentType);
+  if (!ext || ext === ".pdf") {
+    const error = new Error("Only JPG, PNG or WEBP certificate images are allowed.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const raw = String(dataUrl || "");
+  const base64 = raw.includes(",") ? raw.split(",").pop() : raw;
+  if (!base64) {
+    const error = new Error("Certificate image file is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const buffer = Buffer.from(base64, "base64");
+  const maxBytes = 4 * 1024 * 1024;
+  if (!buffer.length || buffer.length > maxBytes) {
+    const error = new Error("Certificate image must not be more than 4MB.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await fs.mkdir(CERTIFICATE_ASSET_DIR, { recursive: true });
+  const savedName = `${Date.now()}-${crypto.randomUUID()}${ext}`;
+  const savedPath = path.join(CERTIFICATE_ASSET_DIR, savedName);
+  await fs.writeFile(savedPath, buffer);
+  return `/uploads/certificate-assets/${savedName}`;
+}
+
+
+function safeAssignmentUploadExtension(fileName = "", contentType = "") {
+  const name = String(fileName || "").toLowerCase();
+  const type = String(contentType || "").toLowerCase();
+  if (type.includes("pdf") || name.endsWith(".pdf")) return ".pdf";
+  if (type.includes("png") || name.endsWith(".png")) return ".png";
+  if (type.includes("webp") || name.endsWith(".webp")) return ".webp";
+  if (type.includes("jpg") || type.includes("jpeg") || name.endsWith(".jpg") || name.endsWith(".jpeg")) return ".jpg";
+  if (type.includes("wordprocessingml") || name.endsWith(".docx")) return ".docx";
+  if (type.includes("msword") || name.endsWith(".doc")) return ".doc";
+  return null;
+}
+
+async function saveBase64AssignmentFile({ fileName, contentType, dataUrl }) {
+  const ext = safeAssignmentUploadExtension(fileName, contentType);
+  if (!ext) {
+    const error = new Error("Only JPG, PNG, WEBP, PDF, DOC or DOCX assignment files are allowed.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const raw = String(dataUrl || "");
+  const base64 = raw.includes(",") ? raw.split(",").pop() : raw;
+  if (!base64) {
+    const error = new Error("Assignment file is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const buffer = Buffer.from(base64, "base64");
+  const maxBytes = 10 * 1024 * 1024;
+  if (!buffer.length || buffer.length > maxBytes) {
+    const error = new Error("Assignment file must not be more than 10MB.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await fs.mkdir(ASSIGNMENT_FILE_DIR, { recursive: true });
+  const savedName = `${Date.now()}-${crypto.randomUUID()}${ext}`;
+  const savedPath = path.join(ASSIGNMENT_FILE_DIR, savedName);
+  await fs.writeFile(savedPath, buffer);
+  return `/uploads/assignment-files/${savedName}`;
+}
+
+function assignmentPassed(assignment, userId) {
+  if (assignment.required === false || assignment.published === false) return true;
+  const submissions = Array.isArray(assignment.submissions) ? assignment.submissions : [];
+  return submissions.some((submission) => {
+    if (submission.userId !== userId) return false;
+    if (["PASSED", "APPROVED"].includes(submission.status)) return true;
+    if (submission.score === null || submission.score === undefined) return false;
+    return Number(submission.score) >= Number(assignment.passScore || 50);
+  });
+}
+
+function quizPassed(quiz, userId) {
+  if (quiz.required === false || quiz.published === false) return true;
+  const attempts = Array.isArray(quiz.attempts) ? quiz.attempts : [];
+  return attempts.some((attempt) => attempt.userId === userId && attempt.passed);
+}
+
+function calculateCourseCompletionForUser(course, userId) {
+  const lessonSummary = calculateCourseProgressForUser(course, userId);
+  const assignments = (course.assignments || []).filter((item) => item.published !== false);
+  const quizzes = (course.quizzes || []).filter((item) => item.published !== false);
+  const requiredAssignments = assignments.filter((item) => item.required !== false);
+  const requiredQuizzes = quizzes.filter((item) => item.required !== false);
+  const completedAssignments = requiredAssignments.filter((item) => assignmentPassed(item, userId)).length;
+  const completedQuizzes = requiredQuizzes.filter((item) => quizPassed(item, userId)).length;
+  const completedRequirements = lessonSummary.completedRequired + completedAssignments + completedQuizzes;
+  const totalRequirements = lessonSummary.totalRequired + requiredAssignments.length + requiredQuizzes.length;
+  const percent = totalRequirements ? Math.round((completedRequirements / totalRequirements) * 100) : lessonSummary.percent;
+  return {
+    ...lessonSummary,
+    lessonPercent: lessonSummary.percent,
+    completedAssignments,
+    totalAssignments: requiredAssignments.length,
+    completedQuizzes,
+    totalQuizzes: requiredQuizzes.length,
+    completedRequirements,
+    totalRequirements,
+    percent
+  };
+}
+
+
+
+function latestAssignmentSubmissionForUser(assignment, userId) {
+  const submissions = Array.isArray(assignment.submissions) ? assignment.submissions : [];
+  return submissions.find((submission) => submission.userId === userId) || null;
+}
+
+function bestQuizAttemptForUser(quiz, userId) {
+  const attempts = (Array.isArray(quiz.attempts) ? quiz.attempts : []).filter((attempt) => attempt.userId === userId);
+  return attempts.sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || new Date(b.createdAt) - new Date(a.createdAt))[0] || null;
+}
+
+function assignmentResultStatus(assignment, userId) {
+  if (assignment.published === false) return "HIDDEN";
+  if (assignment.required === false) return "OPTIONAL";
+  const submission = latestAssignmentSubmissionForUser(assignment, userId);
+  if (!submission) return "PENDING_SUBMISSION";
+  if (submission.status === "PASSED" || submission.status === "APPROVED") return "PASSED";
+  if (submission.status === "NEEDS_REVISION") return "NEEDS_REVISION";
+  if (submission.score === null || submission.score === undefined) return "PENDING_GRADE";
+  return Number(submission.score) >= Number(assignment.passScore || 50) ? "PASSED" : "NEEDS_REVISION";
+}
+
+function quizResultStatus(quiz, userId) {
+  if (quiz.published === false) return "HIDDEN";
+  if (quiz.required === false) return "OPTIONAL";
+  const attempt = bestQuizAttemptForUser(quiz, userId);
+  if (!attempt) return "PENDING_ATTEMPT";
+  return attempt.passed ? "PASSED" : "NOT_PASSED";
+}
+
+function average(numbers) {
+  const clean = numbers.filter((value) => value !== null && value !== undefined && !Number.isNaN(Number(value))).map(Number);
+  if (!clean.length) return null;
+  return Math.round(clean.reduce((sum, value) => sum + value, 0) / clean.length);
+}
+
+function buildGradebookRow(enrollment) {
+  const userId = enrollment.userId;
+  const course = enrollment.course;
+  const summary = calculateCourseCompletionForUser(course, userId);
+  const assignments = (course.assignments || []).filter((item) => item.published !== false).map((assignment) => {
+    const submission = latestAssignmentSubmissionForUser(assignment, userId);
+    const status = assignmentResultStatus(assignment, userId);
+    return {
+      id: assignment.id,
+      title: assignment.title,
+      required: assignment.required,
+      maxScore: assignment.maxScore || 100,
+      passScore: assignment.passScore || 50,
+      status,
+      score: submission?.score ?? null,
+      feedback: submission?.feedback || "",
+      answer: submission?.answer || "",
+      fileUrl: submission?.fileUrl || "",
+      studentSubmittedAt: submission?.submittedAt || null,
+      gradedAt: submission?.gradedAt || null
+    };
+  });
+  const quizzes = (course.quizzes || []).filter((item) => item.published !== false).map((quiz) => {
+    const bestAttempt = bestQuizAttemptForUser(quiz, userId);
+    const attempts = (quiz.attempts || []).filter((attempt) => attempt.userId === userId);
+    return {
+      id: quiz.id,
+      title: quiz.title,
+      required: quiz.required,
+      passScore: quiz.passScore || 70,
+      status: quizResultStatus(quiz, userId),
+      bestScore: bestAttempt?.score ?? null,
+      passed: Boolean(bestAttempt?.passed),
+      attemptCount: attempts.length,
+      questionCount: (quiz.questions || []).length,
+      lastAttemptAt: bestAttempt?.createdAt || null
+    };
+  });
+
+  const assignmentPercentScores = assignments
+    .map((item) => item.score === null || item.score === undefined ? null : Math.round((Number(item.score) / Number(item.maxScore || 100)) * 100));
+  const quizScores = quizzes.map((item) => item.bestScore);
+  const overallScore = average([summary.lessonPercent, average(assignmentPercentScores), average(quizScores)]);
+  const requiredAssignments = assignments.filter((item) => item.required !== false);
+  const requiredQuizzes = quizzes.filter((item) => item.required !== false);
+  const pendingRequired = (summary.totalRequired - summary.completedRequired) + (requiredAssignments.length - summary.completedAssignments) + (requiredQuizzes.length - summary.completedQuizzes);
+  const hasNeedsAttention = assignments.some((item) => item.required !== false && ["NEEDS_REVISION"].includes(item.status)) || quizzes.some((item) => item.required !== false && ["NOT_PASSED"].includes(item.status));
+  const status = enrollment.certificate?.status === "ISSUED"
+    ? "CERTIFICATE_ISSUED"
+    : summary.percent >= 100
+      ? "CERTIFICATE_READY"
+      : hasNeedsAttention
+        ? "NEEDS_ATTENTION"
+        : pendingRequired > 0
+          ? "IN_PROGRESS"
+          : "PENDING_REQUIREMENTS";
+
+  return {
+    enrollmentId: enrollment.id,
+    student: enrollment.user ? publicUser(enrollment.user) : null,
+    course: { id: course.id, title: course.title, level: course.level, duration: course.duration },
+    certificate: enrollment.certificate,
+    completedRequirements: summary.completedRequirements,
+    totalRequirements: summary.totalRequirements,
+    pendingRequired,
+    percent: summary.percent,
+    lessonPercent: summary.lessonPercent,
+    completedLessons: summary.completedRequired,
+    totalLessons: summary.totalRequired,
+    passedAssignments: summary.completedAssignments,
+    totalAssignments: summary.totalAssignments,
+    passedQuizzes: summary.completedQuizzes,
+    totalQuizzes: summary.totalQuizzes,
+    overallScore,
+    status,
+    assignments,
+    quizzes
+  };
+}
+
+function sanitizeLessonPayload(body = {}) {
+  const required = body.required === undefined ? true : body.required === true || body.required === "true" || body.required === "on";
+  return {
+    courseId: Number(body.courseId),
+    moduleId: body.moduleId ? Number(body.moduleId) : null,
+    title: String(body.title || "").trim(),
+    videoUrl: body.videoUrl ? String(body.videoUrl).trim() : null,
+    notesUrl: body.notesUrl ? String(body.notesUrl).trim() : null,
+    duration: body.duration ? String(body.duration).trim() : null,
+    lessonOrder: Number(body.lessonOrder || 1),
+    required,
+    completionPercentRequired: Math.max(1, Math.min(100, Number(body.completionPercentRequired || 90))),
+    published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on"
+  };
+}
+
+function flattenCourseLessons(course) {
+  const modules = [...(course.modules || [])].sort((a, b) => Number(a.moduleOrder || 0) - Number(b.moduleOrder || 0));
+  const ordered = [];
+  const seen = new Set();
+
+  for (const module of modules) {
+    const lessons = [...(module.lessons || [])].sort((a, b) => Number(a.lessonOrder || 0) - Number(b.lessonOrder || 0));
+    for (const lesson of lessons) {
+      ordered.push({ ...lesson, moduleTitle: module.title, moduleOrder: module.moduleOrder });
+      seen.add(lesson.id);
+    }
+  }
+
+  const legacyLessons = [...(course.lessons || [])]
+    .filter((lesson) => !seen.has(lesson.id))
+    .sort((a, b) => Number(a.lessonOrder || 0) - Number(b.lessonOrder || 0));
+
+  for (const lesson of legacyLessons) {
+    ordered.push({ ...lesson, moduleTitle: "General Lessons", moduleOrder: 9999 });
+  }
+
+  return ordered;
+}
+
+function lessonProgressItem(lesson) {
+  return Array.isArray(lesson.progress) ? lesson.progress[0] : null;
+}
+
+function calculateCourseProgress(course) {
+  const lessons = flattenCourseLessons(course).filter((lesson) => lesson.published !== false);
+  const requiredLessons = lessons.filter((lesson) => lesson.required !== false);
+  const completedRequired = requiredLessons.filter((lesson) => lessonProgressItem(lesson)?.completed).length;
+  const totalRequired = requiredLessons.length;
+  const percent = totalRequired ? Math.round((completedRequired / totalRequired) * 100) : 0;
+  return { lessons, requiredLessons, completedRequired, totalRequired, percent };
+}
+
+function calculateCourseProgressForUser(course, userId) {
+  const lessons = flattenCourseLessons(course).filter((lesson) => lesson.published !== false);
+  const requiredLessons = lessons.filter((lesson) => lesson.required !== false);
+  const completedRequired = requiredLessons.filter((lesson) => {
+    const progressItems = Array.isArray(lesson.progress) ? lesson.progress : [];
+    return progressItems.some((item) => item.userId === userId && item.completed);
+  }).length;
+  const totalRequired = requiredLessons.length;
+  const percent = totalRequired ? Math.round((completedRequired / totalRequired) * 100) : 0;
+  return { lessons, requiredLessons, completedRequired, totalRequired, percent };
+}
+
+function makeCertificateNumber(enrollment) {
+  const year = new Date().getFullYear();
+  const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `CROBIC-${year}-${String(enrollment.courseId).padStart(3, "0")}-${String(enrollment.userId).padStart(4, "0")}-${random}`;
+}
+
+function isLessonUnlocked(course, targetLessonId) {
+  const { lessons } = calculateCourseProgress(course);
+  for (const lesson of lessons) {
+    if (lesson.id === targetLessonId) return true;
+    if (lesson.required !== false && !lessonProgressItem(lesson)?.completed) return false;
+  }
+  return false;
+}
+
+async function getStudentLearningCourse(userId, courseId) {
+  const enrollment = await prisma.enrollment.findFirst({
+    where: { userId, courseId: Number(courseId), admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+    include: {
+      certificate: true,
+      course: {
+        include: {
+          modules: {
+            where: { published: true },
+            include: {
+              lessons: {
+                where: { published: true },
+                include: { progress: { where: { userId } } },
+                orderBy: { lessonOrder: "asc" }
+              }
+            },
+            orderBy: { moduleOrder: "asc" }
+          },
+          lessons: {
+            where: { published: true },
+            include: { progress: { where: { userId } } },
+            orderBy: { lessonOrder: "asc" }
+          },
+          assignments: {
+            where: { published: true },
+            include: { submissions: { where: { userId } } },
+            orderBy: { createdAt: "asc" }
+          },
+          quizzes: {
+            where: { published: true },
+            include: {
+              questions: { orderBy: { questionOrder: "asc" } },
+              attempts: { where: { userId }, orderBy: { createdAt: "desc" } }
+            },
+            orderBy: { createdAt: "asc" }
+          }
+        }
+      }
+    }
+  });
+
+  return enrollment;
+}
+
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, message: "CROBIC API is running" });
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const { name, email, phone, country, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email and password are required" });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return res.status(409).json({ message: "Email already exists. Please login." });
+
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        phone,
+        country,
+        password: hashed,
+        role: "STUDENT",
+        status: "PENDING_PAYMENT"
+      }
+    });
+
+    queueEmailNotification({
+      to: user.email,
+      subject: "Welcome to CROBIC",
+      heading: "Your CROBIC Application Has Started",
+      body: `Dear ${user.name},
+
+Your CROBIC student account has been created. Please login, select your programme and complete payment to continue your admission process.`,
+      ctaText: "Continue Application",
+      ctaUrl: "/admission"
+    });
+    queueAdminEmail({
+      subject: "New CROBIC student registration",
+      heading: "New Student Registered",
+      body: `${user.name} (${user.email}) has created a student account and may proceed to payment.`,
+      ctaUrl: "/admin"
+    }).catch((error) => console.error("Admin registration email failed:", error.message));
+
+    res.status(201).json({
+      message: "Registration created. Please complete payment to continue.",
+      token: createToken(user),
+      user: publicUser(user)
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Registration failed", error: error.message });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(401).json({ message: "Invalid login details" });
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ message: "Invalid login details" });
+
+    res.json({ token: createToken(user), user: publicUser(user) });
+  } catch (error) {
+    res.status(500).json({ message: "Login failed", error: error.message });
+  }
+});
+
+app.get("/api/auth/me", requireAuth, async (req, res) => {
+  res.json({ user: publicUser(req.user) });
+});
+
+
+app.patch("/api/student/profile", requireAuth, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const phone = req.body?.phone === undefined ? undefined : String(req.body.phone || "").trim();
+    const country = req.body?.country === undefined ? undefined : String(req.body.country || "").trim();
+
+    if (!name || name.split(/\s+/).length < 2) {
+      return res.status(400).json({ message: "Please enter your full name." });
+    }
+    if (!email) return res.status(400).json({ message: "Email address is required." });
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing && existing.id !== req.user.id) {
+      return res.status(409).json({ message: "This email address is already used by another account." });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { name, email, phone, country }
+    });
+
+    res.json({ message: "Profile updated successfully.", user: publicUser(updated) });
+  } catch (error) {
+    res.status(500).json({ message: "Profile update failed", error: error.message });
+  }
+});
+
+
+app.post("/api/admin/email/test", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const settings = await getEmailSettings();
+    const to = req.body?.to || req.user.email || settings.email_admin_recipients;
+    const result = await sendEmailNotification({
+      to,
+      subject: "CROBIC email notification test",
+      heading: "Email Notifications Are Working",
+      body: "This is a test email from your CROBIC platform. If you received this, your SMTP settings are correct.",
+      ctaText: "Open CROBIC",
+      ctaUrl: "/admin"
+    });
+    res.json({ message: result?.skipped ? `Email not sent: ${result.reason}` : "Test email sent successfully.", result: result?.skipped ? result : { accepted: result.accepted, rejected: result.rejected } });
+  } catch (error) {
+    res.status(500).json({ message: "Could not send test email", error: error.message });
+  }
+});
+
+app.get("/api/public/bootstrap", async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  const [slides, books, courses, announcements, liveSession, settingsRows, testimonials, faqs, gallery] = await Promise.all([
+    prisma.slide.findMany({ where: { active: true }, orderBy: { slideOrder: "asc" } }),
+    prisma.book.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
+    prisma.course.findMany({
+      where: { published: true },
+      include: {
+        modules: { where: { published: true }, include: { lessons: { where: { published: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
+        lessons: { where: { published: true }, orderBy: { lessonOrder: "asc" } }
+      },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.announcement.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
+    prisma.liveSession.findFirst({ where: { active: true }, orderBy: { updatedAt: "desc" } }),
+    prisma.setting.findMany(),
+    prisma.testimonial.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
+    prisma.faq.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
+    prisma.gallery.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } })
+  ]);
+
+  const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
+  res.json({ slides, books, courses, announcements, liveSession, settings, testimonials, faqs, gallery });
+});
+
+app.get("/api/student/dashboard", requireAuth, requireActiveStudent, async (req, res) => {
+  const [enrollments, announcements, liveSession, settingsRows] = await Promise.all([
+    prisma.enrollment.findMany({
+      where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+      include: {
+        certificate: true,
+        course: {
+          include: {
+            modules: {
+              where: { published: true },
+              include: {
+                lessons: {
+                  where: { published: true },
+                  include: { progress: { where: { userId: req.user.id } } },
+                  orderBy: { lessonOrder: "asc" }
+                }
+              },
+              orderBy: { moduleOrder: "asc" }
+            },
+            lessons: {
+              where: { published: true },
+              include: { progress: { where: { userId: req.user.id } } },
+              orderBy: { lessonOrder: "asc" }
+            },
+            assignments: {
+              where: { published: true },
+              include: { submissions: { where: { userId: req.user.id } } },
+              orderBy: { createdAt: "asc" }
+            },
+            quizzes: {
+              where: { published: true },
+              include: {
+                questions: { orderBy: { questionOrder: "asc" } },
+                attempts: { where: { userId: req.user.id }, orderBy: { createdAt: "desc" } }
+              },
+              orderBy: { createdAt: "asc" }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.announcement.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
+    prisma.liveSession.findFirst({ where: { active: true }, orderBy: { updatedAt: "desc" } }),
+    prisma.setting.findMany()
+  ]);
+
+  const enrichedEnrollments = enrollments.map((enrollment) => {
+    const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
+    return {
+      ...enrollment,
+      course: {
+        ...enrollment.course,
+        learningSummary: {
+          percent: summary.percent,
+          completedRequired: summary.completedRequired,
+          totalRequired: summary.totalRequired
+        }
+      }
+    };
+  });
+
+  const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
+  res.json({ enrollments: enrichedEnrollments, announcements, liveSession, settings });
+});
+
+app.get("/api/student/courses/:courseId/learning", requireAuth, requireActiveStudent, async (req, res) => {
+  const enrollment = await getStudentLearningCourse(req.user.id, req.params.courseId);
+  if (!enrollment) return res.status(404).json({ message: "Course not found for this student." });
+
+  const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
+  res.json({ enrollment: { ...enrollment, course: { ...enrollment.course, learningSummary: summary } } });
+});
+
+app.post("/api/student/lessons/:lessonId/progress", requireAuth, requireActiveStudent, async (req, res) => {
+  try {
+    const lesson = await prisma.lesson.findUnique({ where: { id: Number(req.params.lessonId) } });
+    if (!lesson) return res.status(404).json({ message: "Lesson not found." });
+
+    const enrollment = await getStudentLearningCourse(req.user.id, lesson.courseId);
+    if (!enrollment) return res.status(403).json({ message: "You are not approved for this course." });
+
+    if (!isLessonUnlocked(enrollment.course, lesson.id)) {
+      return res.status(403).json({ message: "Complete the previous required lesson before opening this one." });
+    }
+
+    const currentProgress = Math.max(0, Math.min(100, Number(req.body?.progressPercent || 0)));
+    const threshold = Math.max(1, Math.min(100, Number(lesson.completionPercentRequired || 90)));
+    const completed = Boolean(req.body?.completed) || currentProgress >= threshold;
+
+    const progress = await prisma.lessonProgress.upsert({
+      where: { userId_lessonId: { userId: req.user.id, lessonId: lesson.id } },
+      update: {
+        progressPercent: completed ? Math.max(currentProgress, threshold) : currentProgress,
+        completed,
+        completedAt: completed ? new Date() : null
+      },
+      create: {
+        userId: req.user.id,
+        lessonId: lesson.id,
+        progressPercent: completed ? Math.max(currentProgress, threshold) : currentProgress,
+        completed,
+        completedAt: completed ? new Date() : null
+      }
+    });
+
+    const updatedEnrollment = await getStudentLearningCourse(req.user.id, lesson.courseId);
+    const summary = calculateCourseProgress(updatedEnrollment.course);
+    if (completed && summary.percent >= 100) {
+      queueAdminEmail({
+        subject: "CROBIC student completed required lessons",
+        heading: "Student May Be Ready for Review",
+        body: `${req.user.name} (${req.user.email}) has completed all required lessons for ${updatedEnrollment.course?.title || "a CROBIC course"}. Check Gradebook and certificate eligibility, including assignments and quizzes.`,
+        ctaText: "Open Gradebook",
+        ctaUrl: "/admin"
+      }).catch((error) => console.error("Admin completion email failed:", error.message));
+    }
+    res.json({ progress, learningSummary: summary });
+  } catch (error) {
+    res.status(400).json({ message: "Could not save lesson progress", error: error.message });
+  }
+});
+
+app.get("/api/student/payment-status", requireAuth, async (req, res) => {
+  const enrollments = await prisma.enrollment.findMany({
+    where: { userId: req.user.id },
+    include: { course: true },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json({ user: publicUser(req.user), enrollments });
+});
+
+
+async function getLiveSessionForClassroom(includeInactiveLatest = false) {
+  const active = await prisma.liveSession.findFirst({ where: { active: true }, orderBy: { updatedAt: "desc" } });
+  if (active || !includeInactiveLatest) return active;
+  return prisma.liveSession.findFirst({ orderBy: { updatedAt: "desc" } });
+}
+
+async function buildLiveClassroomPayload(liveSession, viewerUserId = null) {
+  if (!liveSession) {
+    return { liveSession: null, chatMessages: [], questions: [], attendances: [], attendance: null, attendanceCount: 0 };
+  }
+
+  const [chatMessages, questions, attendances, attendance] = await Promise.all([
+    prisma.liveChatMessage.findMany({
+      where: { liveSessionId: liveSession.id },
+      include: { user: { select: { id: true, name: true, role: true } } },
+      orderBy: { createdAt: "asc" },
+      take: 120
+    }),
+    prisma.liveQuestion.findMany({
+      where: { liveSessionId: liveSession.id },
+      include: { user: { select: { id: true, name: true, role: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 120
+    }),
+    prisma.liveAttendance.findMany({
+      where: { liveSessionId: liveSession.id },
+      include: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { joinedAt: "asc" }
+    }),
+    viewerUserId
+      ? prisma.liveAttendance.findUnique({ where: { liveSessionId_userId: { liveSessionId: liveSession.id, userId: viewerUserId } } })
+      : null
+  ]);
+
+  return { liveSession, chatMessages, questions, attendances, attendance, attendanceCount: attendances.length };
+}
+
+app.get("/api/student/live/classroom", requireAuth, requireActiveStudent, async (req, res) => {
+  const liveSession = await getLiveSessionForClassroom(false);
+  if (!liveSession) return res.json(await buildLiveClassroomPayload(null, req.user.id));
+
+  await prisma.liveAttendance.upsert({
+    where: { liveSessionId_userId: { liveSessionId: liveSession.id, userId: req.user.id } },
+    update: { lastSeenAt: new Date() },
+    create: { liveSessionId: liveSession.id, userId: req.user.id }
+  });
+
+  res.json(await buildLiveClassroomPayload(liveSession, req.user.id));
+});
+
+app.post("/api/student/live/attendance", requireAuth, requireActiveStudent, async (req, res) => {
+  const liveSession = await getLiveSessionForClassroom(false);
+  if (!liveSession) return res.status(404).json({ message: "No active live class currently." });
+
+  const attendance = await prisma.liveAttendance.upsert({
+    where: { liveSessionId_userId: { liveSessionId: liveSession.id, userId: req.user.id } },
+    update: { lastSeenAt: new Date() },
+    create: { liveSessionId: liveSession.id, userId: req.user.id }
+  });
+
+  res.json({ message: "Attendance marked", attendance });
+});
+
+app.post("/api/student/live/chat", requireAuth, requireActiveStudent, async (req, res) => {
+  const liveSession = await getLiveSessionForClassroom(false);
+  if (!liveSession) return res.status(404).json({ message: "No active live class currently." });
+
+  const message = String(req.body?.message || "").trim();
+  if (!message) return res.status(400).json({ message: "Chat message is required." });
+  if (message.length > 500) return res.status(400).json({ message: "Chat message is too long. Keep it under 500 characters." });
+
+  await prisma.liveAttendance.upsert({
+    where: { liveSessionId_userId: { liveSessionId: liveSession.id, userId: req.user.id } },
+    update: { lastSeenAt: new Date() },
+    create: { liveSessionId: liveSession.id, userId: req.user.id }
+  });
+
+  const chat = await prisma.liveChatMessage.create({
+    data: { liveSessionId: liveSession.id, userId: req.user.id, message },
+    include: { user: { select: { id: true, name: true, role: true } } }
+  });
+
+  res.status(201).json(chat);
+});
+
+app.post("/api/student/live/questions", requireAuth, requireActiveStudent, async (req, res) => {
+  const liveSession = await getLiveSessionForClassroom(false);
+  if (!liveSession) return res.status(404).json({ message: "No active live class currently." });
+
+  const question = String(req.body?.question || "").trim();
+  if (!question) return res.status(400).json({ message: "Question is required." });
+  if (question.length > 1000) return res.status(400).json({ message: "Question is too long. Keep it under 1000 characters." });
+
+  await prisma.liveAttendance.upsert({
+    where: { liveSessionId_userId: { liveSessionId: liveSession.id, userId: req.user.id } },
+    update: { lastSeenAt: new Date() },
+    create: { liveSessionId: liveSession.id, userId: req.user.id }
+  });
+
+  const created = await prisma.liveQuestion.create({
+    data: { liveSessionId: liveSession.id, userId: req.user.id, question },
+    include: { user: { select: { id: true, name: true, role: true } } }
+  });
+
+  res.status(201).json(created);
+});
+
+
+app.post("/api/uploads/payment-proof", requireAuth, async (req, res) => {
+  try {
+    const { fileName, contentType, dataUrl } = req.body || {};
+    const relativeUrl = await saveBase64PaymentProof({ fileName, contentType, dataUrl });
+    const absoluteUrl = `${req.protocol}://${req.get("host")}${relativeUrl}`;
+    res.status(201).json({ url: absoluteUrl, relativeUrl });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message || "Could not upload payment receipt" });
+  }
+});
+
+app.get("/api/certificates/settings", async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.json(await getCertificateSettings());
+});
+
+app.post("/api/uploads/certificate-asset", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { fileName, contentType, dataUrl } = req.body || {};
+    const relativeUrl = await saveBase64CertificateAsset({ fileName, contentType, dataUrl });
+    const absoluteUrl = `${req.protocol}://${req.get("host")}${relativeUrl}`;
+    res.status(201).json({ url: absoluteUrl, relativeUrl });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message || "Could not upload certificate image" });
+  }
+});
+
+app.post("/api/uploads/assignment-file", requireAuth, requireActiveStudent, async (req, res) => {
+  try {
+    const { fileName, contentType, dataUrl } = req.body || {};
+    const relativeUrl = await saveBase64AssignmentFile({ fileName, contentType, dataUrl });
+    const absoluteUrl = `${req.protocol}://${req.get("host")}${relativeUrl}`;
+    res.status(201).json({ url: absoluteUrl, relativeUrl });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message || "Could not upload assignment file" });
+  }
+});
+
+app.post("/api/payments/manual", requireAuth, async (req, res) => {
+  try {
+    const { courseId, manualReference, paymentProofUrl } = req.body;
+    if (!paymentProofUrl) return res.status(400).json({ message: "Payment receipt is required for bank transfer." });
+    const course = await prisma.course.findUnique({ where: { id: Number(courseId) } });
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    const enrollment = await prisma.enrollment.upsert({
+      where: { userId_courseId: { userId: req.user.id, courseId: course.id } },
+      create: {
+        userId: req.user.id,
+        courseId: course.id,
+        amount: course.fee,
+        paymentStatus: "MANUAL_PAYMENT_PENDING",
+        admissionStatus: "AWAITING_ADMIN_APPROVAL",
+        paymentMethod: "BANK_TRANSFER",
+        manualReference,
+        paymentProofUrl
+      },
+      update: {
+        amount: course.fee,
+        paymentStatus: "MANUAL_PAYMENT_PENDING",
+        admissionStatus: "AWAITING_ADMIN_APPROVAL",
+        paymentMethod: "BANK_TRANSFER",
+        manualReference,
+        paymentProofUrl
+      }
+    });
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { status: "MANUAL_PAYMENT_PENDING" }
+    });
+
+    queueEmailNotification({
+      to: req.user.email,
+      subject: "CROBIC payment receipt received",
+      heading: "Payment Receipt Submitted",
+      body: `Dear ${req.user.name},
+
+Your bank transfer receipt for ${course.title} has been submitted. CROBIC admin will verify your payment and approve portal access after confirmation.`,
+      ctaText: "Check Portal Status",
+      ctaUrl: "/student"
+    });
+    queueAdminEmail({
+      subject: "New CROBIC bank transfer receipt",
+      heading: "Payment Receipt Uploaded",
+      body: `${req.user.name} (${req.user.email}) submitted a bank transfer receipt for ${course.title}. Please verify and approve if payment is confirmed.`,
+      ctaText: "Review Student Payment",
+      ctaUrl: "/admin"
+    }).catch((error) => console.error("Admin payment email failed:", error.message));
+
+    res.json({ message: "Manual payment submitted. Admin will verify and approve.", enrollment });
+  } catch (error) {
+    res.status(500).json({ message: "Manual payment submission failed", error: error.message });
+  }
+});
+
+app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
+  try {
+    const { courseId } = req.body;
+    const course = await prisma.course.findUnique({ where: { id: Number(courseId) } });
+    if (!course) return res.status(404).json({ message: "Course not found" });
+    if (!process.env.PAYSTACK_SECRET_KEY) return res.status(500).json({ message: "Paystack secret key is missing" });
+
+    const reference = `CROBIC-${req.user.id}-${course.id}-${Date.now()}`;
+
+    await prisma.enrollment.upsert({
+      where: { userId_courseId: { userId: req.user.id, courseId: course.id } },
+      create: {
+        userId: req.user.id,
+        courseId: course.id,
+        amount: course.fee,
+        paymentStatus: "PENDING_PAYMENT",
+        admissionStatus: "AWAITING_PAYMENT",
+        paymentMethod: "PAYSTACK",
+        paystackReference: reference
+      },
+      update: {
+        amount: course.fee,
+        paymentStatus: "PENDING_PAYMENT",
+        admissionStatus: "AWAITING_PAYMENT",
+        paymentMethod: "PAYSTACK",
+        paystackReference: reference
+      }
+    });
+
+    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email: req.user.email,
+        amount: amountToKobo(course.fee),
+        reference,
+        callback_url: process.env.PAYSTACK_CALLBACK_URL || `${CLIENT_URL}/payment-callback`,
+        metadata: {
+          userId: req.user.id,
+          courseId: course.id,
+          courseTitle: course.title
+        }
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.status) {
+      return res.status(400).json({ message: "Could not initialize Paystack payment", data });
+    }
+
+    res.json({ authorizationUrl: data.data.authorization_url, reference });
+  } catch (error) {
+    res.status(500).json({ message: "Paystack initialization failed", error: error.message });
+  }
+});
+
+app.get("/api/payments/paystack/verify/:reference", requireAuth, async (req, res) => {
+  try {
+    const { reference } = req.params;
+    if (!process.env.PAYSTACK_SECRET_KEY) return res.status(500).json({ message: "Paystack secret key is missing" });
+
+    const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
+      }
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.status) {
+      return res.status(400).json({ message: "Could not verify payment", data });
+    }
+
+    const paid = data.data.status === "success";
+    const enrollment = await prisma.enrollment.findFirst({ where: { paystackReference: reference } });
+    if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
+
+    if (paid) {
+      await prisma.enrollment.update({
+        where: { id: enrollment.id },
+        data: {
+          paymentStatus: "PAYMENT_CONFIRMED",
+          admissionStatus: "AWAITING_ADMIN_APPROVAL",
+          paymentMethod: "PAYSTACK"
+        }
+      });
+      const paidUser = await prisma.user.update({ where: { id: enrollment.userId }, data: { status: "PAYMENT_CONFIRMED" } });
+      const paidCourse = await prisma.course.findUnique({ where: { id: enrollment.courseId } });
+      queueEmailNotification({
+        to: paidUser.email,
+        subject: "CROBIC payment confirmed",
+        heading: "Payment Confirmed",
+        body: `Dear ${paidUser.name},
+
+Your Paystack payment for ${paidCourse?.title || "your programme"} has been confirmed. CROBIC admin will complete admission approval before portal access opens.`,
+        ctaText: "Check Portal Status",
+        ctaUrl: "/student"
+      });
+      queueAdminEmail({
+        subject: "CROBIC Paystack payment confirmed",
+        heading: "Payment Confirmed",
+        body: `${paidUser.name} (${paidUser.email}) completed Paystack payment for ${paidCourse?.title || "a programme"}. Please review admission approval.`,
+        ctaUrl: "/admin"
+      }).catch((error) => console.error("Admin Paystack email failed:", error.message));
+    }
+
+    res.json({ paid, paystack: data.data });
+  } catch (error) {
+    res.status(500).json({ message: "Paystack verification failed", error: error.message });
+  }
+});
+
+
+app.get("/api/student/support/cases", requireAuth, async (req, res) => {
+  const cases = await prisma.appeal.findMany({
+    where: { userId: req.user.id },
+    include: {
+      enrollment: { include: { course: true } },
+      messages: { include: { sender: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: "asc" } }
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+  res.json(cases);
+});
+
+app.post("/api/student/support/cases", requireAuth, async (req, res) => {
+  try {
+    const subject = String(req.body?.subject || "Support Request").trim();
+    const message = String(req.body?.message || "").trim();
+    const category = String(req.body?.category || "GENERAL_SUPPORT").trim();
+    const enrollmentId = req.body?.enrollmentId ? Number(req.body.enrollmentId) : null;
+
+    if (!message) return res.status(400).json({ message: "Support message is required." });
+    if (message.length > 2000) return res.status(400).json({ message: "Support message is too long. Keep it under 2000 characters." });
+
+    if (enrollmentId) {
+      const enrollment = await prisma.enrollment.findFirst({ where: { id: enrollmentId, userId: req.user.id } });
+      if (!enrollment) return res.status(403).json({ message: "You cannot attach this enrollment to your case." });
+    }
+
+    const created = await prisma.appeal.create({
+      data: {
+        userId: req.user.id,
+        enrollmentId,
+        category,
+        subject,
+        status: "OPEN",
+        messages: { create: { senderId: req.user.id, message } }
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true, status: true } },
+        enrollment: { include: { course: true } },
+        messages: { include: { sender: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: "asc" } }
+      }
+    });
+
+    queueAdminEmail({
+      subject: "New CROBIC support / appeal case",
+      heading: "New Support Case",
+      body: `${req.user.name} (${req.user.email}) opened a support case: ${subject}.
+
+Message: ${message}`,
+      ctaText: "Open Support Inbox",
+      ctaUrl: "/admin"
+    }).catch((error) => console.error("Admin support email failed:", error.message));
+
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ message: "Could not create support case", error: error.message });
+  }
+});
+
+app.post("/api/student/support/cases/:id/messages", requireAuth, async (req, res) => {
+  try {
+    const appeal = await prisma.appeal.findFirst({ where: { id: Number(req.params.id), userId: req.user.id } });
+    if (!appeal) return res.status(404).json({ message: "Support case not found." });
+
+    const message = String(req.body?.message || "").trim();
+    if (!message) return res.status(400).json({ message: "Message is required." });
+    if (message.length > 2000) return res.status(400).json({ message: "Message is too long. Keep it under 2000 characters." });
+
+    const created = await prisma.supportMessage.create({
+      data: { appealId: appeal.id, senderId: req.user.id, message },
+      include: { sender: { select: { id: true, name: true, role: true } } }
+    });
+
+    await prisma.appeal.update({ where: { id: appeal.id }, data: { status: appeal.status === "CLOSED" ? "OPEN" : "WAITING_ADMIN" } });
+    queueAdminEmail({
+      subject: "CROBIC student replied to support",
+      heading: "Student Support Reply",
+      body: `${req.user.name} replied to a support case.
+
+Message: ${message}`,
+      ctaText: "Open Support Inbox",
+      ctaUrl: "/admin"
+    }).catch((error) => console.error("Admin support reply email failed:", error.message));
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ message: "Could not send support message", error: error.message });
+  }
+});
+
+app.get("/api/admin/support/cases", requireAuth, requireAdmin, async (req, res) => {
+  const cases = await prisma.appeal.findMany({
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true, status: true } },
+      enrollment: { include: { course: true } },
+      messages: { include: { sender: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: "asc" } }
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+  res.json(cases);
+});
+
+app.patch("/api/admin/support/cases/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const status = req.body?.status ? String(req.body.status) : undefined;
+    const priority = req.body?.priority ? String(req.body.priority) : undefined;
+    const updated = await prisma.appeal.update({
+      where: { id: Number(req.params.id) },
+      data: {
+        status,
+        priority,
+        closedAt: status === "CLOSED" || status === "RESOLVED" ? new Date() : null
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true, status: true } },
+        enrollment: { include: { course: true } },
+        messages: { include: { sender: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: "asc" } }
+      }
+    });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: "Could not update support case", error: error.message });
+  }
+});
+
+app.post("/api/admin/support/cases/:id/restore-access", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const appeal = await prisma.appeal.findUnique({
+      where: { id: Number(req.params.id) },
+      include: { enrollment: true, user: true }
+    });
+    if (!appeal) return res.status(404).json({ message: "Support case not found." });
+
+    let enrollment = appeal.enrollment;
+    if (!enrollment) {
+      enrollment = await prisma.enrollment.findFirst({
+        where: { userId: appeal.userId },
+        orderBy: { createdAt: "desc" }
+      });
+    }
+
+    if (!enrollment) {
+      return res.status(400).json({ message: "No programme enrollment found for this student. Ask the student to select a programme first." });
+    }
+
+    const note = String(req.body?.message || "Your appeal has been reviewed. Your portal access has been restored.").trim();
+    const now = new Date();
+
+    await prisma.$transaction([
+      prisma.enrollment.update({
+        where: { id: enrollment.id },
+        data: {
+          paymentStatus: "PAYMENT_CONFIRMED",
+          admissionStatus: "APPROVED",
+          approvedAt: now
+        }
+      }),
+      prisma.user.update({
+        where: { id: appeal.userId },
+        data: { status: "ACTIVE" }
+      }),
+      prisma.supportMessage.create({
+        data: { appealId: appeal.id, senderId: req.user.id, message: note }
+      }),
+      prisma.appeal.update({
+        where: { id: appeal.id },
+        data: { status: "RESOLVED", closedAt: now }
+      })
+    ]);
+
+    const updated = await prisma.appeal.findUnique({
+      where: { id: appeal.id },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true, status: true } },
+        enrollment: { include: { course: true } },
+        messages: { include: { sender: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: "asc" } }
+      }
+    });
+
+    if (updated?.user?.email) {
+      queueEmailNotification({
+        to: updated.user.email,
+        subject: "CROBIC portal access restored",
+        heading: "Portal Access Restored",
+        body: `Dear ${updated.user.name},
+
+Your appeal has been reviewed. Your payment and admission have been approved, and your CROBIC portal access has been restored.`,
+        ctaText: "Open Student Portal",
+        ctaUrl: "/student"
+      });
+    }
+
+    res.json({ message: "Student access restored. Payment confirmed, admission approved and support case resolved.", case: updated });
+  } catch (error) {
+    res.status(500).json({ message: "Could not restore student access", error: error.message });
+  }
+});
+
+app.post("/api/admin/support/cases/:id/messages", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const appeal = await prisma.appeal.findUnique({ where: { id: Number(req.params.id) }, include: { user: true } });
+    if (!appeal) return res.status(404).json({ message: "Support case not found." });
+
+    const message = String(req.body?.message || "").trim();
+    if (!message) return res.status(400).json({ message: "Reply message is required." });
+    if (message.length > 2000) return res.status(400).json({ message: "Reply is too long. Keep it under 2000 characters." });
+
+    const created = await prisma.supportMessage.create({
+      data: { appealId: appeal.id, senderId: req.user.id, message },
+      include: { sender: { select: { id: true, name: true, role: true } } }
+    });
+
+    await prisma.appeal.update({ where: { id: appeal.id }, data: { status: "WAITING_STUDENT" } });
+    if (appeal.user?.email) {
+      queueEmailNotification({
+        to: appeal.user.email,
+        subject: "CROBIC support replied to your case",
+        heading: "Support Reply Received",
+        body: `Dear ${appeal.user.name},
+
+CROBIC Support replied to your case.
+
+Reply: ${message}`,
+        ctaText: "Open Support Case",
+        ctaUrl: "/student"
+      });
+    }
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ message: "Could not send support reply", error: error.message });
+  }
+});
+
+
+async function ensureStudentCanAccessCourse(userId, courseId) {
+  const enrollment = await prisma.enrollment.findFirst({
+    where: { userId, courseId: Number(courseId), admissionStatus: { in: ["APPROVED", "GRADUATED"] } }
+  });
+  return enrollment;
+}
+
+app.post("/api/student/assignments/:id/submit", requireAuth, requireActiveStudent, async (req, res) => {
+  try {
+    const assignment = await prisma.assignment.findUnique({ where: { id: Number(req.params.id) } });
+    if (!assignment || assignment.published === false) return res.status(404).json({ message: "Assignment not found." });
+
+    const enrollment = await ensureStudentCanAccessCourse(req.user.id, assignment.courseId);
+    if (!enrollment) return res.status(403).json({ message: "You are not approved for this course." });
+
+    const answer = String(req.body?.answer || "").trim();
+    const fileUrl = req.body?.fileUrl ? String(req.body.fileUrl).trim() : null;
+    if (!answer && !fileUrl) return res.status(400).json({ message: "Please type an answer or upload an assignment file." });
+
+    const submission = await prisma.assignmentSubmission.upsert({
+      where: { assignmentId_userId: { assignmentId: assignment.id, userId: req.user.id } },
+      update: { answer, fileUrl, status: "SUBMITTED", score: null, feedback: null, submittedAt: new Date(), gradedAt: null },
+      create: { assignmentId: assignment.id, userId: req.user.id, answer, fileUrl, status: "SUBMITTED" }
+    });
+
+    queueEmailNotification({
+      to: req.user.email,
+      subject: "CROBIC assignment submitted",
+      heading: "Assignment Submitted",
+      body: `Dear ${req.user.name},
+
+Your assignment "${assignment.title}" has been submitted. Admin will review and grade it.`,
+      ctaText: "View My Results",
+      ctaUrl: "/student"
+    });
+    queueAdminEmail({
+      subject: "New CROBIC assignment submission",
+      heading: "Assignment Submitted",
+      body: `${req.user.name} (${req.user.email}) submitted assignment: ${assignment.title}.`,
+      ctaText: "Open Gradebook",
+      ctaUrl: "/admin"
+    }).catch((error) => console.error("Admin assignment email failed:", error.message));
+
+    res.status(201).json({ message: "Assignment submitted. Admin will review and grade it.", submission });
+  } catch (error) {
+    res.status(500).json({ message: "Could not submit assignment", error: error.message });
+  }
+});
+
+app.post("/api/student/quizzes/:id/attempt", requireAuth, requireActiveStudent, async (req, res) => {
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: Number(req.params.id) },
+      include: { questions: { orderBy: { questionOrder: "asc" } } }
+    });
+    if (!quiz || quiz.published === false) return res.status(404).json({ message: "Quiz not found." });
+
+    const enrollment = await ensureStudentCanAccessCourse(req.user.id, quiz.courseId);
+    if (!enrollment) return res.status(403).json({ message: "You are not approved for this course." });
+    if (!quiz.questions.length) return res.status(400).json({ message: "This quiz has no questions yet." });
+
+    const answers = req.body?.answers || {};
+    let correct = 0;
+    for (const question of quiz.questions) {
+      const answer = String(answers[question.id] || "").toUpperCase();
+      if (answer && answer === String(question.correctOption || "").toUpperCase()) correct += 1;
+    }
+    const score = Math.round((correct / quiz.questions.length) * 100);
+    const passed = score >= Number(quiz.passScore || 70);
+
+    const attempt = await prisma.quizAttempt.create({
+      data: { quizId: quiz.id, userId: req.user.id, score, passed, answersJson: JSON.stringify(answers) }
+    });
+
+    queueEmailNotification({
+      to: req.user.email,
+      subject: "CROBIC quiz result",
+      heading: passed ? "Quiz Passed" : "Quiz Submitted",
+      body: `Dear ${req.user.name},
+
+You scored ${score}% on "${quiz.title}". Pass mark: ${quiz.passScore || 70}%. ${passed ? "You passed this quiz." : "You did not reach the pass mark yet."}`,
+      ctaText: "View My Results",
+      ctaUrl: "/student"
+    });
+    queueAdminEmail({
+      subject: "CROBIC quiz attempt submitted",
+      heading: "Quiz Attempt Submitted",
+      body: `${req.user.name} (${req.user.email}) scored ${score}% on quiz: ${quiz.title}.`,
+      ctaText: "Open Gradebook",
+      ctaUrl: "/admin"
+    }).catch((error) => console.error("Admin quiz email failed:", error.message));
+
+    res.status(201).json({ message: passed ? "Quiz passed." : "Quiz submitted. You did not reach the pass mark yet.", attempt, correct, total: quiz.questions.length });
+  } catch (error) {
+    res.status(500).json({ message: "Could not submit quiz", error: error.message });
+  }
+});
+
+function sanitizeAssignmentPayload(body = {}) {
+  return {
+    courseId: Number(body.courseId),
+    moduleId: body.moduleId ? Number(body.moduleId) : null,
+    lessonId: body.lessonId ? Number(body.lessonId) : null,
+    title: String(body.title || "").trim(),
+    instructions: String(body.instructions || "").trim(),
+    dueDate: body.dueDate ? new Date(body.dueDate) : null,
+    required: body.required === undefined ? true : body.required === true || body.required === "true" || body.required === "on",
+    published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on",
+    maxScore: Math.max(1, Number(body.maxScore || 100)),
+    passScore: Math.max(1, Math.min(100, Number(body.passScore || 50)))
+  };
+}
+
+function sanitizeQuizPayload(body = {}) {
+  return {
+    courseId: Number(body.courseId),
+    moduleId: body.moduleId ? Number(body.moduleId) : null,
+    lessonId: body.lessonId ? Number(body.lessonId) : null,
+    title: String(body.title || "").trim(),
+    description: body.description ? String(body.description).trim() : null,
+    passScore: Math.max(1, Math.min(100, Number(body.passScore || 70))),
+    required: body.required === undefined ? true : body.required === true || body.required === "true" || body.required === "on",
+    published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on"
+  };
+}
+
+app.get("/api/admin/assessments", requireAuth, requireAdmin, async (req, res) => {
+  const [courses, assignments, quizzes] = await Promise.all([
+    prisma.course.findMany({
+      include: {
+        modules: { orderBy: { moduleOrder: "asc" }, include: { lessons: { orderBy: { lessonOrder: "asc" } } } },
+        lessons: { orderBy: { lessonOrder: "asc" } }
+      },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.assignment.findMany({
+      include: {
+        course: { select: { id: true, title: true } },
+        module: { select: { id: true, title: true } },
+        lesson: { select: { id: true, title: true } },
+        submissions: { include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { submittedAt: "desc" } }
+      },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.quiz.findMany({
+      include: {
+        course: { select: { id: true, title: true } },
+        module: { select: { id: true, title: true } },
+        lesson: { select: { id: true, title: true } },
+        questions: { orderBy: { questionOrder: "asc" } },
+        attempts: { include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "desc" } }
+      },
+      orderBy: { createdAt: "desc" }
+    })
+  ]);
+  res.json({ courses, assignments, quizzes });
+});
+
+app.post("/api/admin/assignments", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const payload = sanitizeAssignmentPayload(req.body);
+    if (!payload.courseId || !payload.title || !payload.instructions) return res.status(400).json({ message: "Course, assignment title and instructions are required." });
+    const created = await prisma.assignment.create({ data: payload });
+    await logAdminActivity(req, { action: "CREATED_ASSIGNMENT", entityType: "Assignment", entityId: created.id, details: { title: created.title, courseId: created.courseId } });
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(400).json({ message: "Could not create assignment", error: error.message });
+  }
+});
+
+app.patch("/api/admin/assignments/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const payload = sanitizeAssignmentPayload(req.body);
+    const updated = await prisma.assignment.update({ where: { id: Number(req.params.id) }, data: payload });
+    await logAdminActivity(req, { action: "UPDATED_ASSIGNMENT", entityType: "Assignment", entityId: updated.id, details: { title: updated.title, courseId: updated.courseId } });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: "Could not update assignment", error: error.message });
+  }
+});
+
+app.delete("/api/admin/assignments/:id", requireAuth, requireAdmin, async (req, res) => {
+  await prisma.assignment.delete({ where: { id: Number(req.params.id) } });
+  await logAdminActivity(req, { action: "DELETED_ASSIGNMENT", entityType: "Assignment", entityId: req.params.id });
+  res.json({ message: "Assignment deleted" });
+});
+
+app.patch("/api/admin/assignment-submissions/:id/grade", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const submission = await prisma.assignmentSubmission.findUnique({
+      where: { id: Number(req.params.id) },
+      include: { assignment: true }
+    });
+    if (!submission) return res.status(404).json({ message: "Submission not found." });
+    const score = Math.max(0, Math.min(Number(submission.assignment.maxScore || 100), Number(req.body?.score || 0)));
+    const passed = score >= Number(submission.assignment.passScore || 50);
+    const updated = await prisma.assignmentSubmission.update({
+      where: { id: submission.id },
+      data: {
+        score,
+        feedback: req.body?.feedback ? String(req.body.feedback) : null,
+        status: req.body?.status ? String(req.body.status) : passed ? "PASSED" : "NEEDS_REVISION",
+        gradedAt: new Date()
+      },
+      include: { user: { select: { id: true, name: true, email: true } }, assignment: true }
+    });
+    await logAdminActivity(req, { action: "GRADED_ASSIGNMENT", entityType: "AssignmentSubmission", entityId: updated.id, details: { student: updated.user?.email, assignment: updated.assignment?.title, score, status: updated.status } });
+    if (updated.user?.email) {
+      queueEmailNotification({
+        to: updated.user.email,
+        subject: "CROBIC assignment graded",
+        heading: passed ? "Assignment Passed" : "Assignment Feedback Available",
+        body: `Dear ${updated.user.name},
+
+Your assignment "${updated.assignment.title}" has been graded. Score: ${score}/${updated.assignment.maxScore || 100}. Status: ${updated.status}.${updated.feedback ? `
+
+Feedback: ${updated.feedback}` : ""}`,
+        ctaText: "View My Results",
+        ctaUrl: "/student"
+      });
+    }
+    res.json({ message: passed ? "Assignment graded as passed." : "Assignment graded. Student needs revision or did not pass yet.", submission: updated });
+  } catch (error) {
+    res.status(400).json({ message: "Could not grade assignment", error: error.message });
+  }
+});
+
+app.post("/api/admin/quizzes", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const payload = sanitizeQuizPayload(req.body);
+    if (!payload.courseId || !payload.title) return res.status(400).json({ message: "Course and quiz title are required." });
+    const created = await prisma.quiz.create({ data: payload });
+    await logAdminActivity(req, { action: "CREATED_QUIZ", entityType: "Quiz", entityId: created.id, details: { title: created.title, courseId: created.courseId } });
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(400).json({ message: "Could not create quiz", error: error.message });
+  }
+});
+
+app.patch("/api/admin/quizzes/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const payload = sanitizeQuizPayload(req.body);
+    const updated = await prisma.quiz.update({ where: { id: Number(req.params.id) }, data: payload });
+    await logAdminActivity(req, { action: "UPDATED_QUIZ", entityType: "Quiz", entityId: updated.id, details: { title: updated.title, courseId: updated.courseId } });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: "Could not update quiz", error: error.message });
+  }
+});
+
+app.delete("/api/admin/quizzes/:id", requireAuth, requireAdmin, async (req, res) => {
+  await prisma.quiz.delete({ where: { id: Number(req.params.id) } });
+  await logAdminActivity(req, { action: "DELETED_QUIZ", entityType: "Quiz", entityId: req.params.id });
+  res.json({ message: "Quiz deleted" });
+});
+
+app.post("/api/admin/quizzes/:id/questions", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const quizId = Number(req.params.id);
+    const payload = {
+      quizId,
+      question: String(req.body?.question || "").trim(),
+      optionA: String(req.body?.optionA || "").trim(),
+      optionB: String(req.body?.optionB || "").trim(),
+      optionC: String(req.body?.optionC || "").trim(),
+      optionD: String(req.body?.optionD || "").trim(),
+      correctOption: String(req.body?.correctOption || "A").toUpperCase(),
+      questionOrder: Number(req.body?.questionOrder || 1)
+    };
+    if (!payload.question || !payload.optionA || !payload.optionB || !payload.optionC || !payload.optionD) return res.status(400).json({ message: "Question and all four options are required." });
+    if (!["A", "B", "C", "D"].includes(payload.correctOption)) return res.status(400).json({ message: "Correct option must be A, B, C or D." });
+    const created = await prisma.quizQuestion.create({ data: payload });
+    await logAdminActivity(req, { action: "ADDED_QUIZ_QUESTION", entityType: "QuizQuestion", entityId: created.id, details: { quizId } });
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(400).json({ message: "Could not add quiz question", error: error.message });
+  }
+});
+
+app.delete("/api/admin/quiz-questions/:id", requireAuth, requireAdmin, async (req, res) => {
+  await prisma.quizQuestion.delete({ where: { id: Number(req.params.id) } });
+  res.json({ message: "Question deleted" });
+});
+
+
+app.get("/api/admin/gradebook", requireAuth, requireAdmin, async (req, res) => {
+  const activeEnrollmentWhere = {
+    OR: [
+      { admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+      { paymentStatus: "PAYMENT_CONFIRMED" },
+      { user: { status: { in: ["ACTIVE", "GRADUATED"] } } }
+    ]
+  };
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: activeEnrollmentWhere,
+    include: {
+      certificate: true,
+      user: { select: { id: true, name: true, email: true, phone: true, country: true, role: true, status: true, createdAt: true } },
+      course: {
+        include: {
+          modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
+          lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
+          assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
+          quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
+        }
+      }
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+
+  res.json(enrollments.map(buildGradebookRow));
+});
+
+app.get("/api/student/results", requireAuth, requireActiveStudent, async (req, res) => {
+  const enrollments = await prisma.enrollment.findMany({
+    where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+    include: {
+      certificate: true,
+      user: { select: { id: true, name: true, email: true, phone: true, country: true, role: true, status: true, createdAt: true } },
+      course: {
+        include: {
+          modules: { where: { published: true }, include: { lessons: { where: { published: true }, include: { progress: { where: { userId: req.user.id } } }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
+          lessons: { where: { published: true }, include: { progress: { where: { userId: req.user.id } } }, orderBy: { lessonOrder: "asc" } },
+          assignments: { where: { published: true }, include: { submissions: { where: { userId: req.user.id } } }, orderBy: { createdAt: "asc" } },
+          quizzes: { where: { published: true }, include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: { where: { userId: req.user.id }, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "asc" } }
+        }
+      }
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+
+  res.json(enrollments.map(buildGradebookRow));
+});
+
+
+app.get("/api/admin/activity-logs", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const logs = await prisma.adminActivityLog.findMany({
+      include: { admin: { select: { id: true, name: true, email: true, role: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 250
+    });
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ message: "Could not load admin activity logs", error: error.message });
+  }
+});
+
+app.get("/api/admin/attendance-records", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const records = await prisma.liveAttendance.findMany({
+      include: {
+        liveSession: true,
+        user: { select: { id: true, name: true, email: true, phone: true, country: true, status: true } }
+      },
+      orderBy: { lastSeenAt: "desc" },
+      take: 500
+    });
+    const grouped = records.reduce((acc, record) => {
+      const key = record.liveSessionId;
+      if (!acc[key]) {
+        acc[key] = {
+          liveSession: record.liveSession,
+          count: 0,
+          students: []
+        };
+      }
+      acc[key].count += 1;
+      acc[key].students.push({
+        id: record.id,
+        student: record.user,
+        joinedAt: record.joinedAt,
+        lastSeenAt: record.lastSeenAt
+      });
+      return acc;
+    }, {});
+    res.json({ records, grouped: Object.values(grouped) });
+  } catch (error) {
+    res.status(500).json({ message: "Could not load attendance records", error: error.message });
+  }
+});
+
+app.get("/api/student/attendance-history", requireAuth, requireActiveStudent, async (req, res) => {
+  try {
+    const records = await prisma.liveAttendance.findMany({
+      where: { userId: req.user.id },
+      include: { liveSession: true },
+      orderBy: { lastSeenAt: "desc" },
+      take: 200
+    });
+    res.json(records);
+  } catch (error) {
+    res.status(500).json({ message: "Could not load attendance history", error: error.message });
+  }
+});
+
+app.get("/api/student/courses/:courseId/discussions", requireAuth, requireActiveStudent, async (req, res) => {
+  try {
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { userId: req.user.id, courseId: Number(req.params.courseId), admissionStatus: { in: ["APPROVED", "GRADUATED"] } }
+    });
+    if (!enrollment) return res.status(403).json({ message: "You are not approved for this course." });
+
+    const discussions = await prisma.courseDiscussion.findMany({
+      where: { courseId: Number(req.params.courseId), status: { not: "DELETED" } },
+      include: {
+        author: { select: { id: true, name: true, role: true } },
+        replies: { include: { author: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: "asc" } }
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 100
+    });
+    res.json(discussions);
+  } catch (error) {
+    res.status(500).json({ message: "Could not load course discussions", error: error.message });
+  }
+});
+
+app.post("/api/student/courses/:courseId/discussions", requireAuth, requireActiveStudent, async (req, res) => {
+  try {
+    const courseId = Number(req.params.courseId);
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { userId: req.user.id, courseId, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+      include: { course: true }
+    });
+    if (!enrollment) return res.status(403).json({ message: "You are not approved for this course." });
+
+    const title = String(req.body?.title || "Course Question").trim();
+    const message = String(req.body?.message || "").trim();
+    if (!message) return res.status(400).json({ message: "Discussion message is required." });
+    if (message.length > 2000) return res.status(400).json({ message: "Message is too long. Keep it under 2000 characters." });
+
+    const created = await prisma.courseDiscussion.create({
+      data: { courseId, userId: req.user.id, title: title || "Course Question", message },
+      include: {
+        author: { select: { id: true, name: true, role: true } },
+        replies: { include: { author: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: "asc" } }
+      }
+    });
+
+    queueAdminEmail({
+      subject: "New CROBIC course discussion",
+      heading: "Student Posted a Course Question",
+      body: `${req.user.name} posted a discussion under ${enrollment.course?.title || "a CROBIC course"}:\n\n${message}`,
+      ctaText: "Open Course Discussions",
+      ctaUrl: "/admin"
+    }).catch((error) => console.error("Admin discussion email failed:", error.message));
+
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ message: "Could not create discussion", error: error.message });
+  }
+});
+
+app.post("/api/student/course-discussions/:id/replies", requireAuth, requireActiveStudent, async (req, res) => {
+  try {
+    const discussion = await prisma.courseDiscussion.findUnique({ where: { id: Number(req.params.id) } });
+    if (!discussion || discussion.status === "DELETED") return res.status(404).json({ message: "Discussion not found." });
+    const enrollment = await prisma.enrollment.findFirst({ where: { userId: req.user.id, courseId: discussion.courseId, admissionStatus: { in: ["APPROVED", "GRADUATED"] } } });
+    if (!enrollment) return res.status(403).json({ message: "You are not approved for this course." });
+
+    const message = String(req.body?.message || "").trim();
+    if (!message) return res.status(400).json({ message: "Reply message is required." });
+    if (message.length > 2000) return res.status(400).json({ message: "Reply is too long. Keep it under 2000 characters." });
+
+    const created = await prisma.courseDiscussionReply.create({
+      data: { discussionId: discussion.id, userId: req.user.id, message },
+      include: { author: { select: { id: true, name: true, role: true } } }
+    });
+    await prisma.courseDiscussion.update({ where: { id: discussion.id }, data: { updatedAt: new Date() } });
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ message: "Could not send discussion reply", error: error.message });
+  }
+});
+
+app.get("/api/admin/course-discussions", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const discussions = await prisma.courseDiscussion.findMany({
+      where: { status: { not: "DELETED" } },
+      include: {
+        course: { select: { id: true, title: true, level: true } },
+        author: { select: { id: true, name: true, email: true, role: true } },
+        replies: { include: { author: { select: { id: true, name: true, email: true, role: true } } }, orderBy: { createdAt: "asc" } }
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 250
+    });
+    res.json(discussions);
+  } catch (error) {
+    res.status(500).json({ message: "Could not load course discussions", error: error.message });
+  }
+});
+
+app.post("/api/admin/course-discussions/:id/replies", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const discussion = await prisma.courseDiscussion.findUnique({
+      where: { id: Number(req.params.id) },
+      include: { author: true, course: true }
+    });
+    if (!discussion || discussion.status === "DELETED") return res.status(404).json({ message: "Discussion not found." });
+    const message = String(req.body?.message || "").trim();
+    if (!message) return res.status(400).json({ message: "Reply message is required." });
+
+    const created = await prisma.courseDiscussionReply.create({
+      data: { discussionId: discussion.id, userId: req.user.id, message },
+      include: { author: { select: { id: true, name: true, email: true, role: true } } }
+    });
+    await prisma.courseDiscussion.update({ where: { id: discussion.id }, data: { status: "ANSWERED", updatedAt: new Date() } });
+    await logAdminActivity(req, { action: "REPLIED_COURSE_DISCUSSION", entityType: "CourseDiscussion", entityId: discussion.id, details: { course: discussion.course?.title, student: discussion.author?.email } });
+
+    if (discussion.author?.email) {
+      queueEmailNotification({
+        to: discussion.author.email,
+        subject: "CROBIC course discussion reply",
+        heading: "Your Course Question Has a Reply",
+        body: `Dear ${discussion.author.name},\n\nCROBIC has replied to your discussion under ${discussion.course?.title || "your course"}.\n\nReply: ${message}`,
+        ctaText: "Open Student Portal",
+        ctaUrl: "/student"
+      });
+    }
+
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ message: "Could not reply to course discussion", error: error.message });
+  }
+});
+
+app.patch("/api/admin/course-discussions/:id/status", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const status = String(req.body?.status || "OPEN").toUpperCase();
+    if (!["OPEN", "ANSWERED", "CLOSED"].includes(status)) return res.status(400).json({ message: "Invalid discussion status." });
+    const updated = await prisma.courseDiscussion.update({ where: { id: Number(req.params.id) }, data: { status } });
+    await logAdminActivity(req, { action: "UPDATED_COURSE_DISCUSSION_STATUS", entityType: "CourseDiscussion", entityId: updated.id, details: { status } });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: "Could not update discussion status", error: error.message });
+  }
+});
+
+app.delete("/api/admin/course-discussions/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const updated = await prisma.courseDiscussion.update({ where: { id: Number(req.params.id) }, data: { status: "DELETED" } });
+    await logAdminActivity(req, { action: "DELETED_COURSE_DISCUSSION", entityType: "CourseDiscussion", entityId: updated.id });
+    res.json({ message: "Discussion removed", discussion: updated });
+  } catch (error) {
+    res.status(400).json({ message: "Could not delete discussion", error: error.message });
+  }
+});
+
+app.get("/api/admin/overview", requireAuth, requireAdmin, async (req, res) => {
+  const [students, books, courses, pendingEnrollments, openSupport, certificates] = await Promise.all([
+    prisma.user.count({ where: { role: "STUDENT" } }),
+    prisma.book.count(),
+    prisma.course.count(),
+    prisma.enrollment.count({ where: { admissionStatus: "AWAITING_ADMIN_APPROVAL" } }),
+    prisma.appeal.count({ where: { status: { in: ["OPEN", "WAITING_ADMIN", "UNDER_REVIEW"] } } }),
+    prisma.certificate.count({ where: { status: "ISSUED" } })
+  ]);
+  res.json({ students, books, courses, pendingEnrollments, openSupport, certificates });
+});
+
+app.get("/api/admin/students", requireAuth, requireAdmin, async (req, res) => {
+  const students = await prisma.user.findMany({
+    where: { role: "STUDENT" },
+    include: { enrollments: { include: { course: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json(students.map((student) => ({ ...publicUser(student), enrollments: student.enrollments })));
+});
+
+
+app.patch("/api/admin/students/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const studentId = Number(req.params.id);
+    const student = await prisma.user.findUnique({ where: { id: studentId } });
+    if (!student || student.role !== "STUDENT") return res.status(404).json({ message: "Student not found." });
+
+    const name = String(req.body?.name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const phone = req.body?.phone === undefined ? undefined : String(req.body.phone || "").trim();
+    const country = req.body?.country === undefined ? undefined : String(req.body.country || "").trim();
+
+    if (!name || name.split(/\s+/).length < 2) {
+      return res.status(400).json({ message: "Please enter the student's full name." });
+    }
+    if (!email) return res.status(400).json({ message: "Email address is required." });
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing && existing.id !== studentId) {
+      return res.status(409).json({ message: "This email address is already used by another account." });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: studentId },
+      data: { name, email, phone, country }
+    });
+
+    res.json({ message: "Student details updated successfully.", student: publicUser(updated) });
+  } catch (error) {
+    res.status(500).json({ message: "Student update failed", error: error.message });
+  }
+});
+
+app.patch("/api/admin/enrollments/:id/status", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { action } = req.body;
+    const enrollment = await prisma.enrollment.findUnique({ where: { id: Number(req.params.id) }, include: { user: true, course: true } });
+    if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
+
+    const now = new Date();
+    const statusMap = {
+      approve: {
+        admissionStatus: "APPROVED",
+        userStatus: "ACTIVE",
+        paymentStatus: "PAYMENT_CONFIRMED",
+        approvedAt: now,
+        message: "Student approved. Payment confirmed and portal access is now active."
+      },
+      reject: {
+        admissionStatus: "REJECTED",
+        userStatus: "REJECTED",
+        approvedAt: null,
+        message: "Admission rejected."
+      },
+      suspend: {
+        admissionStatus: "SUSPENDED",
+        userStatus: "SUSPENDED",
+        approvedAt: null,
+        message: "Student suspended. Portal access has been blocked."
+      },
+      graduate: {
+        admissionStatus: "GRADUATED",
+        userStatus: "GRADUATED",
+        approvedAt: enrollment.approvedAt || now,
+        message: "Student marked as graduated."
+      }
+    };
+
+    const next = statusMap[action];
+    if (!next) return res.status(400).json({ message: "Invalid action" });
+
+    const updateData = {
+      admissionStatus: next.admissionStatus,
+      approvedAt: next.approvedAt
+    };
+
+    if (next.paymentStatus) {
+      updateData.paymentStatus = next.paymentStatus;
+    }
+
+    const updated = await prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: updateData,
+      include: { course: true }
+    });
+
+    await prisma.user.update({ where: { id: enrollment.userId }, data: { status: next.userStatus } });
+    await logAdminActivity(req, { action: `ENROLLMENT_${String(action).toUpperCase()}`, entityType: "Enrollment", entityId: enrollment.id, details: { student: enrollment.user?.email, course: enrollment.course?.title, admissionStatus: next.admissionStatus, userStatus: next.userStatus } });
+    if (enrollment.user?.email) {
+      const statusHeading = action === "approve" ? "Admission Approved" : action === "reject" ? "Admission Decision" : action === "suspend" ? "Account Suspended" : "Programme Status Updated";
+      queueEmailNotification({
+        to: enrollment.user.email,
+        subject: `CROBIC: ${statusHeading}`,
+        heading: statusHeading,
+        body: `Dear ${enrollment.user.name},
+
+${next.message}
+
+Programme: ${enrollment.course?.title || updated.course?.title || "CROBIC programme"}`,
+        ctaText: "Open Student Portal",
+        ctaUrl: "/student"
+      });
+    }
+    res.json({ ...updated, message: next.message });
+  } catch (error) {
+    res.status(500).json({ message: "Status update failed", error: error.message });
+  }
+});
+
+function crudRoutes(modelName, routeName) {
+  app.get(`/api/admin/${routeName}`, requireAuth, requireAdmin, async (req, res) => {
+    const data = await prisma[modelName].findMany({ orderBy: { createdAt: "desc" } });
+    res.json(data);
+  });
+
+  app.post(`/api/admin/${routeName}`, requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const created = await prisma[modelName].create({ data: req.body });
+      await logAdminActivity(req, { action: `CREATED_${routeName.toUpperCase()}`, entityType: routeName, entityId: created.id, details: { title: created.title || created.name || created.key || null } });
+      res.status(201).json(created);
+    } catch (error) {
+      res.status(400).json({ message: `Could not create ${routeName}`, error: error.message });
+    }
+  });
+
+  app.patch(`/api/admin/${routeName}/:id`, requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const updated = await prisma[modelName].update({
+        where: { id: Number(req.params.id) },
+        data: req.body
+      });
+      await logAdminActivity(req, { action: `UPDATED_${routeName.toUpperCase()}`, entityType: routeName, entityId: updated.id, details: { title: updated.title || updated.name || updated.key || null } });
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ message: `Could not update ${routeName}`, error: error.message });
+    }
+  });
+
+  app.delete(`/api/admin/${routeName}/:id`, requireAuth, requireAdmin, async (req, res) => {
+    try {
+      await prisma[modelName].delete({ where: { id: Number(req.params.id) } });
+      await logAdminActivity(req, { action: `DELETED_${routeName.toUpperCase()}`, entityType: routeName, entityId: req.params.id });
+      res.json({ message: "Deleted" });
+    } catch (error) {
+      res.status(400).json({ message: `Could not delete ${routeName}`, error: error.message });
+    }
+  });
+}
+
+crudRoutes("book", "books");
+crudRoutes("course", "courses");
+crudRoutes("slide", "slides");
+crudRoutes("gallery", "gallery");
+crudRoutes("announcement", "announcements");
+crudRoutes("testimonial", "testimonials");
+crudRoutes("faq", "faqs");
+crudRoutes("liveSession", "live-sessions");
+
+app.get("/api/admin/course-builder", requireAuth, requireAdmin, async (req, res) => {
+  const courses = await prisma.course.findMany({
+    include: {
+      modules: { include: { lessons: { orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
+      lessons: { include: { module: true }, orderBy: { lessonOrder: "asc" } }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json(courses);
+});
+
+app.post("/api/admin/modules", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const created = await prisma.courseModule.create({
+      data: {
+        courseId: Number(req.body.courseId),
+        title: String(req.body.title || "").trim(),
+        description: req.body.description ? String(req.body.description) : null,
+        moduleOrder: Number(req.body.moduleOrder || 1),
+        published: req.body.published === undefined ? true : req.body.published === true || req.body.published === "true" || req.body.published === "on"
+      }
+    });
+    await logAdminActivity(req, { action: "CREATED_MODULE", entityType: "CourseModule", entityId: created.id, details: { title: created.title, courseId: created.courseId } });
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(400).json({ message: "Could not create module", error: error.message });
+  }
+});
+
+app.patch("/api/admin/modules/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const updated = await prisma.courseModule.update({
+      where: { id: Number(req.params.id) },
+      data: {
+        courseId: req.body.courseId ? Number(req.body.courseId) : undefined,
+        title: req.body.title === undefined ? undefined : String(req.body.title || "").trim(),
+        description: req.body.description === undefined ? undefined : String(req.body.description || ""),
+        moduleOrder: req.body.moduleOrder === undefined ? undefined : Number(req.body.moduleOrder || 1),
+        published: req.body.published === undefined ? undefined : req.body.published === true || req.body.published === "true" || req.body.published === "on"
+      }
+    });
+    await logAdminActivity(req, { action: "UPDATED_MODULE", entityType: "CourseModule", entityId: updated.id, details: { title: updated.title, courseId: updated.courseId } });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: "Could not update module", error: error.message });
+  }
+});
+
+app.delete("/api/admin/modules/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await prisma.courseModule.delete({ where: { id: Number(req.params.id) } });
+    await logAdminActivity(req, { action: "DELETED_MODULE", entityType: "CourseModule", entityId: req.params.id });
+    res.json({ message: "Module deleted" });
+  } catch (error) {
+    res.status(400).json({ message: "Could not delete module", error: error.message });
+  }
+});
+
+app.get("/api/admin/lessons", requireAuth, requireAdmin, async (req, res) => {
+  const lessons = await prisma.lesson.findMany({ include: { course: true, module: true }, orderBy: { createdAt: "desc" } });
+  res.json(lessons);
+});
+
+app.post("/api/admin/lessons", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const payload = sanitizeLessonPayload(req.body);
+    if (!payload.courseId || !payload.title) return res.status(400).json({ message: "Course and lesson title are required." });
+    const created = await prisma.lesson.create({ data: payload });
+    await logAdminActivity(req, { action: "CREATED_LESSON", entityType: "Lesson", entityId: created.id, details: { title: created.title, courseId: created.courseId } });
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(400).json({ message: "Could not create lesson", error: error.message });
+  }
+});
+
+app.patch("/api/admin/lessons/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const payload = sanitizeLessonPayload(req.body);
+    const updated = await prisma.lesson.update({ where: { id: Number(req.params.id) }, data: payload });
+    await logAdminActivity(req, { action: "UPDATED_LESSON", entityType: "Lesson", entityId: updated.id, details: { title: updated.title, courseId: updated.courseId } });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: "Could not update lesson", error: error.message });
+  }
+});
+
+app.delete("/api/admin/lessons/:id", requireAuth, requireAdmin, async (req, res) => {
+  await prisma.lesson.delete({ where: { id: Number(req.params.id) } });
+  await logAdminActivity(req, { action: "DELETED_LESSON", entityType: "Lesson", entityId: req.params.id });
+  res.json({ message: "Deleted" });
+});
+
+app.get("/api/admin/student-progress", requireAuth, requireAdmin, async (req, res) => {
+  const activeEnrollmentWhere = {
+    OR: [
+      { admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+      { paymentStatus: "PAYMENT_CONFIRMED" },
+      { user: { status: { in: ["ACTIVE", "GRADUATED"] } } }
+    ]
+  };
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: activeEnrollmentWhere,
+    include: {
+      certificate: true,
+      user: { select: { id: true, name: true, email: true, status: true } },
+      course: {
+        include: {
+          modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
+          lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
+          assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
+          quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
+        }
+      }
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+
+  const rows = enrollments.map((enrollment) => {
+    const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
+    return {
+      enrollmentId: enrollment.id,
+      student: enrollment.user,
+      course: { id: enrollment.course.id, title: enrollment.course.title, level: enrollment.course.level },
+      certificate: enrollment.certificate,
+      completedRequired: summary.completedRequirements,
+      totalRequired: summary.totalRequirements,
+      completedLessons: summary.completedRequired,
+      totalLessons: summary.totalRequired,
+      completedAssignments: summary.completedAssignments,
+      totalAssignments: summary.totalAssignments,
+      completedQuizzes: summary.completedQuizzes,
+      totalQuizzes: summary.totalQuizzes,
+      percent: summary.percent
+    };
+  });
+
+  res.json(rows);
+});
+
+app.get("/api/student/certificates", requireAuth, async (req, res) => {
+  if (req.user?.role !== "STUDENT") return res.status(403).json({ message: "Student access required" });
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+    include: {
+      certificate: true,
+      course: {
+        include: {
+          modules: {
+            where: { published: true },
+            include: {
+              lessons: {
+                where: { published: true },
+                include: { progress: { where: { userId: req.user.id } } },
+                orderBy: { lessonOrder: "asc" }
+              }
+            },
+            orderBy: { moduleOrder: "asc" }
+          },
+          lessons: {
+            where: { published: true },
+            include: { progress: { where: { userId: req.user.id } } },
+            orderBy: { lessonOrder: "asc" }
+          },
+          assignments: {
+            where: { published: true },
+            include: { submissions: { where: { userId: req.user.id } } },
+            orderBy: { createdAt: "asc" }
+          },
+          quizzes: {
+            where: { published: true },
+            include: {
+              questions: { orderBy: { questionOrder: "asc" } },
+              attempts: { where: { userId: req.user.id }, orderBy: { createdAt: "desc" } }
+            },
+            orderBy: { createdAt: "asc" }
+          }
+        }
+      }
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+
+  const rows = enrollments.map((enrollment) => {
+    const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
+    return { ...enrollment, student: publicUser(req.user), learningSummary: summary };
+  });
+
+  res.json(rows);
+});
+
+app.get("/api/certificates/verify/:certificateNumber", async (req, res) => {
+  const certificate = await prisma.certificate.findUnique({
+    where: { certificateNumber: req.params.certificateNumber },
+    include: {
+      user: { select: { id: true, name: true, email: true } },
+      course: { select: { id: true, title: true, level: true, duration: true } }
+    }
+  });
+
+  if (!certificate || certificate.status !== "ISSUED") {
+    return res.status(404).json({ valid: false, message: "Certificate not found or no longer valid." });
+  }
+
+  const settings = await getCertificateSettings();
+  res.json({ valid: true, certificate, settings });
+});
+
+app.get("/api/admin/certificates", requireAuth, requireAdmin, async (req, res) => {
+  const activeEnrollmentWhere = {
+    OR: [
+      { admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+      { paymentStatus: "PAYMENT_CONFIRMED" },
+      { user: { status: { in: ["ACTIVE", "GRADUATED"] } } }
+    ]
+  };
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: activeEnrollmentWhere,
+    include: {
+      certificate: true,
+      user: { select: { id: true, name: true, email: true, phone: true, status: true } },
+      course: {
+        include: {
+          modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
+          lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
+          assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
+          quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
+        }
+      }
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+
+  const rows = enrollments.map((enrollment) => {
+    const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
+    return { ...enrollment, learningSummary: summary };
+  });
+
+  res.json(rows);
+});
+
+app.post("/api/admin/enrollments/:id/certificate", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const enrollment = await prisma.enrollment.findUnique({
+      where: { id: Number(req.params.id) },
+      include: {
+        certificate: true,
+        user: true,
+        course: {
+          include: {
+            modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
+            lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
+            assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
+            quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
+          }
+        }
+      }
+    });
+
+    if (!enrollment) return res.status(404).json({ message: "Enrollment not found." });
+    if (enrollment.paymentStatus !== "PAYMENT_CONFIRMED") return res.status(400).json({ message: "Payment must be confirmed before certificate can be issued." });
+    if (!["APPROVED", "GRADUATED"].includes(enrollment.admissionStatus) && !["ACTIVE", "GRADUATED"].includes(enrollment.user?.status)) {
+      return res.status(400).json({ message: "Admission must be approved before certificate can be issued." });
+    }
+
+    const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
+    if (summary.percent < 100) return res.status(400).json({ message: "Student has not completed all required lessons, assignments and quizzes yet." });
+
+    if (enrollment.certificate) {
+      return res.json({ message: "Certificate already exists for this enrollment.", certificate: enrollment.certificate });
+    }
+
+    const certificate = await prisma.certificate.create({
+      data: {
+        userId: enrollment.userId,
+        courseId: enrollment.courseId,
+        enrollmentId: enrollment.id,
+        certificateNumber: makeCertificateNumber(enrollment),
+        notes: req.body?.notes ? String(req.body.notes) : null
+      }
+    });
+
+    await prisma.enrollment.update({ where: { id: enrollment.id }, data: { admissionStatus: "GRADUATED" } });
+    await logAdminActivity(req, { action: "ISSUED_CERTIFICATE", entityType: "Certificate", entityId: certificate.id, details: { certificateNumber: certificate.certificateNumber, student: enrollment.user?.email, course: enrollment.course?.title } });
+
+    queueEmailNotification({
+      to: enrollment.user.email,
+      subject: "CROBIC certificate issued",
+      heading: "Your Certificate Has Been Issued",
+      body: `Dear ${enrollment.user.name},
+
+Your certificate for ${enrollment.course.title} has been issued. Certificate Number: ${certificate.certificateNumber}.`,
+      ctaText: "View Certificate",
+      ctaUrl: "/student"
+    });
+
+    res.status(201).json({ message: "Certificate issued successfully.", certificate });
+  } catch (error) {
+    res.status(500).json({ message: "Could not issue certificate", error: error.message });
+  }
+});
+
+app.patch("/api/admin/certificates/:id/revoke", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const certificate = await prisma.certificate.update({
+      where: { id: Number(req.params.id) },
+      data: { status: "REVOKED", revokedAt: new Date(), notes: req.body?.notes ? String(req.body.notes) : undefined }
+    });
+    await logAdminActivity(req, { action: "REVOKED_CERTIFICATE", entityType: "Certificate", entityId: certificate.id, details: { certificateNumber: certificate.certificateNumber } });
+    res.json({ message: "Certificate revoked.", certificate });
+  } catch (error) {
+    res.status(400).json({ message: "Could not revoke certificate", error: error.message });
+  }
+});
+
+app.get("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  const rows = await prisma.setting.findMany();
+  res.json(Object.fromEntries(rows.map((row) => [row.key, row.value])));
+});
+
+app.patch("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  const entries = Object.entries(req.body || {});
+  for (const [key, value] of entries) {
+    await prisma.setting.upsert({ where: { key }, update: { value: String(value) }, create: { key, value: String(value) } });
+  }
+  await logAdminActivity(req, { action: "UPDATED_SETTINGS", entityType: "Setting", details: { keys: entries.map(([key]) => key) } });
+  const rows = await prisma.setting.findMany();
+  res.json(Object.fromEntries(rows.map((row) => [row.key, row.value])));
+});
+
+
+app.get("/api/admin/live/classroom", requireAuth, requireAdmin, async (req, res) => {
+  const liveSession = await getLiveSessionForClassroom(true);
+  res.json(await buildLiveClassroomPayload(liveSession));
+});
+
+app.patch("/api/admin/live/questions/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { answer, status } = req.body;
+    const updated = await prisma.liveQuestion.update({
+      where: { id: Number(req.params.id) },
+      data: {
+        answer: answer === undefined ? undefined : String(answer),
+        status: status || (answer ? "ANSWERED" : undefined)
+      },
+      include: { user: { select: { id: true, name: true, role: true } } }
+    });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: "Could not update question", error: error.message });
+  }
+});
+
+app.delete("/api/admin/live/chat/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await prisma.liveChatMessage.delete({ where: { id: Number(req.params.id) } });
+    res.json({ message: "Chat message deleted" });
+  } catch (error) {
+    res.status(400).json({ message: "Could not delete chat message", error: error.message });
+  }
+});
+
+app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) => {
+  const { title, description, liveUrl, scheduledAt } = req.body;
+  await prisma.liveSession.updateMany({ data: { active: false } });
+  const live = await prisma.liveSession.create({
+    data: {
+      title,
+      description,
+      liveUrl,
+      active: true,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null
+    }
+  });
+  res.status(201).json(live);
+});
+
+app.post("/api/admin/live/stop", requireAuth, requireAdmin, async (req, res) => {
+  await prisma.liveSession.updateMany({ where: { active: true }, data: { active: false } });
+  res.json({ message: "Live session stopped" });
+});
+
+seedDatabase()
+  .then(() => {
+    app.listen(PORT, () => console.log(`CROBIC API running on http://localhost:${PORT}`));
+  })
+  .catch((error) => {
+    console.error("Failed to start CROBIC API", error);
+    process.exit(1);
+  });

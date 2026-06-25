@@ -1,0 +1,27 @@
+{
+  "name": "crobic-server",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "jsonwebtoken": "latest",
+    "morgan": "latest",
+    "nodemailer": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "latest",
+    "prisma": "^6.19.3"
+  }
+}

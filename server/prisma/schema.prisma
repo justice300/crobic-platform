@@ -1,0 +1,499 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+enum UserStatus {
+  PENDING_PAYMENT
+  PAYMENT_CONFIRMED
+  MANUAL_PAYMENT_PENDING
+  ACTIVE
+  REJECTED
+  SUSPENDED
+  GRADUATED
+}
+
+enum PaymentStatus {
+  PENDING_PAYMENT
+  PAYMENT_CONFIRMED
+  MANUAL_PAYMENT_PENDING
+  FAILED
+  REFUNDED
+}
+
+enum AdmissionStatus {
+  NOT_SUBMITTED
+  AWAITING_PAYMENT
+  AWAITING_ADMIN_APPROVAL
+  APPROVED
+  REJECTED
+  SUSPENDED
+  GRADUATED
+}
+
+enum PaymentMethod {
+  NONE
+  PAYSTACK
+  BANK_TRANSFER
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  name      String
+  email     String     @unique
+  phone     String?
+  country   String?
+  password  String
+  role      Role       @default(STUDENT)
+  status    UserStatus @default(PENDING_PAYMENT)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  enrollments           Enrollment[]
+  lessonProgresses      LessonProgress[]
+  liveChatMessages      LiveChatMessage[]
+  liveQuestions         LiveQuestion[]
+  liveAttendances       LiveAttendance[]
+  appeals               Appeal[]
+  supportMessages       SupportMessage[]
+  certificates          Certificate[]
+  assignmentSubmissions AssignmentSubmission[]
+  quizAttempts          QuizAttempt[]
+  adminActivityLogs     AdminActivityLog[]      @relation("AdminActivityUser")
+  courseDiscussions     CourseDiscussion[]      @relation("DiscussionAuthor")
+  discussionReplies     CourseDiscussionReply[] @relation("DiscussionReplyAuthor")
+}
+
+model Course {
+  id          Int      @id @default(autoincrement())
+  title       String
+  level       String
+  duration    String?
+  description String
+  imageUrl    String?
+  fee         Int      @default(0)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modules      CourseModule[]
+  lessons      Lesson[]
+  enrollments  Enrollment[]
+  certificates Certificate[]
+  assignments  Assignment[]
+  quizzes      Quiz[]
+  discussions  CourseDiscussion[]
+}
+
+model CourseModule {
+  id          Int      @id @default(autoincrement())
+  courseId    Int
+  title       String
+  description String?
+  moduleOrder Int      @default(1)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  assignments Assignment[]
+  quizzes     Quiz[]
+}
+
+model Lesson {
+  id                        Int      @id @default(autoincrement())
+  courseId                  Int
+  moduleId                  Int?
+  title                     String
+  videoUrl                  String?
+  notesUrl                  String?
+  duration                  String?
+  lessonOrder               Int      @default(1)
+  required                  Boolean  @default(true)
+  completionPercentRequired Int      @default(90)
+  published                 Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module      CourseModule?    @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  progress    LessonProgress[]
+  assignments Assignment[]
+  quizzes     Quiz[]
+}
+
+model Enrollment {
+  id                Int             @id @default(autoincrement())
+  userId            Int
+  courseId          Int
+  amount            Int             @default(0)
+  paymentStatus     PaymentStatus   @default(PENDING_PAYMENT)
+  admissionStatus   AdmissionStatus @default(AWAITING_PAYMENT)
+  paymentMethod     PaymentMethod   @default(NONE)
+  paystackReference String?
+  manualReference   String?
+  paymentProofUrl   String?
+  approvedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  appeals     Appeal[]
+  certificate Certificate?
+
+  @@unique([userId, courseId])
+}
+
+model Appeal {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  enrollmentId Int?
+  category     String    @default("GENERAL_SUPPORT")
+  subject      String
+  status       String    @default("OPEN")
+  priority     String    @default("NORMAL")
+  closedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  messages   SupportMessage[]
+}
+
+model SupportMessage {
+  id            Int      @id @default(autoincrement())
+  appealId      Int
+  senderId      Int
+  message       String
+  attachmentUrl String?
+  createdAt     DateTime @default(now())
+
+  appeal Appeal @relation(fields: [appealId], references: [id], onDelete: Cascade)
+  sender User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model Certificate {
+  id                Int       @id @default(autoincrement())
+  userId            Int
+  courseId          Int
+  enrollmentId      Int       @unique
+  certificateNumber String    @unique
+  status            String    @default("ISSUED")
+  issuedAt          DateTime  @default(now())
+  revokedAt         DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([courseId])
+}
+
+model LessonProgress {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  lessonId        Int
+  progressPercent Int       @default(0)
+  completed       Boolean   @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model Assignment {
+  id           Int       @id @default(autoincrement())
+  courseId     Int
+  moduleId     Int?
+  lessonId     Int?
+  title        String
+  instructions String
+  dueDate      DateTime?
+  required     Boolean   @default(true)
+  published    Boolean   @default(true)
+  maxScore     Int       @default(100)
+  passScore    Int       @default(50)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  course      Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module      CourseModule?          @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  lesson      Lesson?                @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  submissions AssignmentSubmission[]
+
+  @@index([courseId])
+  @@index([lessonId])
+}
+
+model AssignmentSubmission {
+  id           Int       @id @default(autoincrement())
+  assignmentId Int
+  userId       Int
+  answer       String?
+  fileUrl      String?
+  score        Int?
+  feedback     String?
+  status       String    @default("SUBMITTED")
+  submittedAt  DateTime  @default(now())
+  gradedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, userId])
+  @@index([userId])
+}
+
+model Quiz {
+  id          Int      @id @default(autoincrement())
+  courseId    Int
+  moduleId    Int?
+  lessonId    Int?
+  title       String
+  description String?
+  passScore   Int      @default(70)
+  required    Boolean  @default(true)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module    CourseModule?  @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  lesson    Lesson?        @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@index([courseId])
+  @@index([lessonId])
+}
+
+model QuizQuestion {
+  id            Int      @id @default(autoincrement())
+  quizId        Int
+  question      String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctOption String
+  questionOrder Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id          Int      @id @default(autoincrement())
+  quizId      Int
+  userId      Int
+  score       Int      @default(0)
+  passed      Boolean  @default(false)
+  answersJson String
+  createdAt   DateTime @default(now())
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+  @@index([userId])
+}
+
+model Book {
+  id          Int      @id @default(autoincrement())
+  title       String
+  author      String   @default("Joshua Iginla")
+  category    String
+  price       String
+  buyLink     String
+  imageUrl    String?
+  description String
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Slide {
+  id          Int      @id @default(autoincrement())
+  eyebrow     String?
+  title       String
+  description String
+  imageUrl    String?
+  ctaText     String?
+  ctaPage     String?
+  active      Boolean  @default(true)
+  slideOrder  Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Gallery {
+  id          Int      @id @default(autoincrement())
+  title       String
+  category    String?
+  imageUrl    String
+  description String?
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  title     String
+  body      String
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LiveSession {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+  liveUrl     String
+  active      Boolean   @default(false)
+  scheduledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  chatMessages LiveChatMessage[]
+  questions    LiveQuestion[]
+  attendances  LiveAttendance[]
+}
+
+model LiveChatMessage {
+  id            Int      @id @default(autoincrement())
+  liveSessionId Int
+  userId        Int
+  message       String
+  createdAt     DateTime @default(now())
+
+  liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LiveQuestion {
+  id            Int      @id @default(autoincrement())
+  liveSessionId Int
+  userId        Int
+  question      String
+  answer        String?
+  status        String   @default("OPEN")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LiveAttendance {
+  id            Int      @id @default(autoincrement())
+  liveSessionId Int
+  userId        Int
+  joinedAt      DateTime @default(now())
+  lastSeenAt    DateTime @updatedAt
+
+  liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([liveSessionId, userId])
+}
+
+model Testimonial {
+  id        Int      @id @default(autoincrement())
+  name      String
+  message   String
+  title     String?
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Faq {
+  id        Int      @id @default(autoincrement())
+  question  String
+  answer    String
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminActivityLog {
+  id         Int      @id @default(autoincrement())
+  adminId    Int?
+  action     String
+  entityType String?
+  entityId   String?
+  details    String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  admin User? @relation("AdminActivityUser", fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model CourseDiscussion {
+  id        Int      @id @default(autoincrement())
+  courseId  Int
+  userId    Int
+  title     String
+  message   String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course  Course                  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  author  User                    @relation("DiscussionAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  replies CourseDiscussionReply[]
+
+  @@index([courseId])
+  @@index([userId])
+  @@index([status])
+}
+
+model CourseDiscussionReply {
+  id           Int      @id @default(autoincrement())
+  discussionId Int
+  userId       Int
+  message      String
+  createdAt    DateTime @default(now())
+
+  discussion CourseDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author     User             @relation("DiscussionReplyAuthor", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([discussionId])
+  @@index([userId])
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+}
