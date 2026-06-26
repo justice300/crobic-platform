@@ -116,20 +116,36 @@ function parseRates(settings = {}) {
     .filter((item) => item.code && item.rate > 0);
 }
 
-function CurrencyConverter({ amountUsd = 0, settings = {} }) {
+function CurrencyConverter({ amountUsd = 0, settings = {}, editableAmount = false }) {
   const rates = parseRates(settings);
   const [currency, setCurrency] = useState(rates[0]?.code || "NGN");
+  const [inputAmount, setInputAmount] = useState(amountUsd ? String(amountUsd) : "");
   const rate = rates.find((item) => item.code === currency)?.rate || 0;
-  const converted = Number(amountUsd || 0) * rate;
-  if (!Number(amountUsd || 0)) return null;
+  const activeAmount = editableAmount ? Number(inputAmount || 0) : Number(amountUsd || 0);
+  const converted = activeAmount * rate;
+  if (!editableAmount && !Number(amountUsd || 0)) return null;
   return (
-    <div className="currency-converter-box">
-      <strong>{formatUsd(amountUsd)}</strong>
+    <div className={`currency-converter-box ${editableAmount ? "currency-converter-input-mode" : ""}`}>
+      {editableAmount ? (
+        <label className="currency-amount-field">
+          <span>Enter amount in USD</span>
+          <input
+            type="number"
+            min="0"
+            inputMode="decimal"
+            placeholder="e.g. 190"
+            value={inputAmount}
+            onChange={(e) => setInputAmount(e.target.value)}
+          />
+        </label>
+      ) : (
+        <strong>{formatUsd(amountUsd)}</strong>
+      )}
       <span>Convert estimate</span>
       <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
         {rates.map((item) => <option key={item.code} value={item.code}>{item.code}</option>)}
       </select>
-      <b>{currency} {converted.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>
+      {activeAmount > 0 ? <b>{currency} {converted.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b> : <b className="converter-placeholder">Enter USD amount</b>}
       <small>{settings.currency_converter_note || "Approximate conversion. Final payment depends on school-approved exchange rate."}</small>
     </div>
   );
@@ -530,8 +546,8 @@ function Home({ data, goTo, openAuth }) {
       <section className="program-section">
         <div className="container">
           <SectionIntro eyebrow={getSetting(s, "home_programs_eyebrow", "Academics")} title={getSetting(s, "home_programs_title", "Our Programs")} text={getSetting(s, "home_programs_text", "Certificate, Diploma and Degree routes for ministers and Bible students.")} />
-          <div className="course-grid program-cards">
-            {(data.courses.length ? data.courses.slice(0, 3) : fallbackCourses()).map((course) => <CourseCard key={course.id || course.title} course={course} openAuth={openAuth} settings={s} />)}
+          <div className="program-showcase-grid home-program-showcase-grid">
+            {mergeProgrammeCourses(data.courses).map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={null} goTo={goTo} settings={s} />)}
           </div>
         </div>
       </section>
@@ -644,16 +660,14 @@ function Programs({ courses, openAuth, user, goTo, settings = {} }) {
 }
 
 function ProgramCurrencyConverterPanel({ courses = [], settings = {} }) {
-  const pricedCourses = courses.filter((course) => usdFee(course) > 0);
-  const defaultAmount = usdFee(pricedCourses[0] || courses[0] || {}) || 59;
   return (
     <div className="program-currency-panel">
       <div>
         <span>Currency Calculator</span>
         <strong>Convert programme fee from USD</strong>
-        <p>All programme fees are displayed in dollars. Students can estimate the equivalent in their local currency before payment.</p>
+        <p>Students can enter any programme fee in dollars and estimate the equivalent in their local currency before payment.</p>
       </div>
-      <CurrencyConverter amountUsd={defaultAmount} settings={settings} />
+      <CurrencyConverter amountUsd={0} settings={settings} editableAmount />
     </div>
   );
 }
@@ -666,7 +680,6 @@ function ProgramCourseCard({ course, openAuth, user, goTo, settings = {} }) {
       <h3>{course.title}</h3>
       <div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Flexible"}{fee > 0 ? ` — ${formatUsd(fee)}` : ""}</small></div>
       <p>{course.description}</p>
-      {fee > 0 && <CurrencyConverter amountUsd={fee} settings={settings} />}
       <button className="program-detail-link" onClick={() => user ? goTo("admissions") : openAuth("register")}>View Details <ArrowRight size={14} /></button>
     </div>
   );
@@ -5401,7 +5414,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
 
 function CourseCard({ course, openAuth, user, goTo, settings = {} }) {
   const fee = usdFee(course);
-  return <div className="course-card"><img src={course.imageUrl || CROBIC_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{fee > 0 && <><strong>{formatUsd(fee)}</strong><CurrencyConverter amountUsd={fee} settings={settings} /></>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
+  return <div className="course-card"><img src={course.imageUrl || CROBIC_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{fee > 0 && <strong>{formatUsd(fee)}</strong>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
 }
 function BookCard({ book }) { return <div className="book-card"><img src={book.imageUrl || CROBIC_IMAGES.logo} alt={book.title} /><div><span>{book.category}</span><h3>{book.title}</h3><p>{book.description}</p><strong>{book.price}</strong><a className="gold-btn full" href={book.buyLink} target="_blank" rel="noreferrer">Buy Book</a></div></div>; }
 function Feature({ icon, title, text }) { return <div className="feature-card"><div className="icon-box">{icon}</div><h3>{title}</h3><p>{text}</p></div>; }

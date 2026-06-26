@@ -5737,3 +5737,124 @@ button:disabled {
     padding: 34px 28px;
   }
 }
+
+/* Owner refinement: manual USD converter input and compact programme cards */
+.currency-converter-input-mode {
+  display: grid;
+  gap: 10px;
+}
+
+.currency-amount-field {
+  display: grid;
+  gap: 6px;
+}
+
+.currency-amount-field span,
+.currency-converter-input-mode > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.currency-amount-field input {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,.12);
+  background: var(--black-2);
+  color: white;
+  padding: 13px 14px;
+  outline: 0;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.currency-amount-field input::placeholder {
+  color: rgba(255,255,255,.35);
+}
+
+.converter-placeholder {
+  color: rgba(196,159,100,.7) !important;
+  font-size: 15px !important;
+}
+
+.program-currency-panel {
+  width: min(760px, 100%);
+  margin: 0 auto 58px;
+  grid-template-columns: 1.15fr 300px;
+}
+
+.program-showcase-grid {
+  align-items: stretch;
+}
+
+.program-showcase-card {
+  min-height: 360px !important;
+  padding: 42px 34px 34px !important;
+}
+
+.program-showcase-card > span {
+  margin-bottom: 34px !important;
+}
+
+.program-showcase-card h3 {
+  font-size: 23px !important;
+  margin-bottom: 16px !important;
+}
+
+.program-showcase-card .meta-line {
+  margin-bottom: 18px !important;
+}
+
+.program-showcase-card p {
+  margin-bottom: 28px !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.program-showcase-card .program-detail-link {
+  margin-top: auto;
+}
+
+.home-program-showcase-grid {
+  margin-top: 22px;
+}
+
+.program-section .program-showcase-card {
+  background: white !important;
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+
+.program-section .program-showcase-card:hover {
+  background: white !important;
+  border-color: rgba(196,159,100,.35) !important;
+}
+
+.program-section .program-showcase-card h3 {
+  color: var(--text) !important;
+}
+
+.program-section .program-showcase-card .meta-line,
+.program-section .program-showcase-card p {
+  color: var(--muted) !important;
+}
+
+.program-section .program-showcase-card > span {
+  background: rgba(196,159,100,.1) !important;
+  border-color: rgba(196,159,100,.18) !important;
+  color: var(--gold) !important;
+}
+
+@media (max-width: 720px) {
+  .program-currency-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .program-showcase-card {
+    min-height: auto !important;
+  }
+}
