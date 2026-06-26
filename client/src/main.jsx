@@ -680,7 +680,6 @@ function ProgramCourseCard({ course, openAuth, user, goTo, settings = {} }) {
       <h3>{course.title}</h3>
       <div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Flexible"}{fee > 0 ? ` — ${formatUsd(fee)}` : ""}</small></div>
       <p>{course.description}</p>
-      <button className="program-detail-link" onClick={() => user ? goTo("admissions") : openAuth("register")}>View Details <ArrowRight size={14} /></button>
     </div>
   );
 }
@@ -2221,14 +2220,14 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 
   return (
     <main className="portal-page">
-      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Users & Roles", "Students", "Books", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Website Content", "Currency Settings", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Students", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
+      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Website Content", "Programs", "Currency Settings", "Users & Roles", "Students", "Books", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Students", "Programs", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
       <div className="portal-main">
         <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CROBIC Management</h1></div></div>
         {tab === "overview" && <Overview overview={overview} />}
         {tab === "users & roles" && <UsersRolesAdmin />}
         {tab === "students" && <StudentsAdmin />}
         {tab === "books" && <CrudAdmin title="Books" path="books" reloadPublic={reloadPublic} fields={bookFields} />}
-        {tab === "courses" && <CrudAdmin title="Courses" path="courses" reloadPublic={reloadPublic} fields={courseFields} />}
+        {["courses", "programs"].includes(tab) && <CrudAdmin title="Programs" path="courses" reloadPublic={reloadPublic} fields={courseFields} />}
         {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} />}
         {tab === "progress" && <ProgressAdmin />}
         {tab === "gradebook" && <GradebookAdmin />}
@@ -4747,6 +4746,120 @@ function LiveAdmin({ reloadPublic }) {
       )}
     </section>
   );
+}
+
+const websiteContentGroups = [
+  {
+    title: "Home Page",
+    fields: [
+      ["home_card_1_title", "Info Card 1 Title"], ["home_card_1_text", "Info Card 1 Text", "textarea"],
+      ["home_card_2_title", "Info Card 2 Title"], ["home_card_2_text", "Info Card 2 Text", "textarea"],
+      ["home_card_3_title", "Info Card 3 Title"], ["home_card_3_text", "Info Card 3 Text", "textarea"],
+      ["home_stat_1_value", "Stat 1 Value"], ["home_stat_1_label", "Stat 1 Label"],
+      ["home_stat_2_value", "Stat 2 Value"], ["home_stat_2_label", "Stat 2 Label"],
+      ["home_stat_3_value", "Stat 3 Value"], ["home_stat_3_label", "Stat 3 Label"],
+      ["home_stat_4_value", "Stat 4 Value"], ["home_stat_4_label", "Stat 4 Label"],
+      ["home_about_kicker", "About Preview Kicker"], ["home_about_title", "About Preview Title"],
+      ["home_about_paragraph_1", "About Preview Paragraph 1", "textarea"], ["home_about_paragraph_2", "About Preview Paragraph 2", "textarea"],
+      ["home_about_image_url", "About Preview Image URL"], ["home_about_caption_name", "Image Caption Name"], ["home_about_caption_title", "Image Caption Title"],
+      ["home_programs_eyebrow", "Programs Section Eyebrow"], ["home_programs_title", "Programs Section Title"], ["home_programs_text", "Programs Section Text", "textarea"],
+      ["home_paths_eyebrow", "Learning Paths Eyebrow"], ["home_paths_title", "Learning Paths Title"], ["home_paths_text", "Learning Paths Text", "textarea"],
+      ["home_regular_class_title", "Regular Class Title"], ["home_regular_class_text", "Regular Class Text", "textarea"], ["home_regular_class_points", "Regular Class Points (separate with |)", "textarea"],
+      ["home_executive_class_title", "Executive Class Title"], ["home_executive_class_text", "Executive Class Text", "textarea"], ["home_executive_class_points", "Executive Class Points (separate with |)", "textarea"],
+      ["home_graduate_kicker", "Graduates Kicker"], ["home_graduate_title", "Graduates Title"], ["home_graduate_quote", "Graduates Quote", "textarea"], ["home_graduate_author", "Quote Author"], ["home_graduate_number", "Graduate Number"], ["home_graduate_number_label", "Graduate Number Label"], ["home_graduate_image_url", "Graduates Background Image URL"],
+      ["home_books_eyebrow", "Book Preview Eyebrow"], ["home_books_title", "Book Preview Title"], ["home_books_text", "Book Preview Text", "textarea"],
+      ["home_cta_kicker", "CTA Kicker"], ["home_cta_title", "CTA Title"], ["home_cta_text", "CTA Text", "textarea"], ["home_cta_primary_button", "CTA Primary Button"], ["home_cta_secondary_button", "CTA Secondary Button"]
+    ]
+  },
+  {
+    title: "About Page",
+    fields: [
+      ["about_hero_eyebrow", "Hero Eyebrow"], ["about_hero_title", "Hero Title"], ["about_hero_text", "Hero Text", "textarea"], ["about_hero_image_url", "Hero Image URL"],
+      ["about_section_kicker", "Section Kicker"], ["about_section_title", "Section Title"], ["about_section_paragraph_1", "Paragraph 1", "textarea"], ["about_section_paragraph_2", "Paragraph 2", "textarea"], ["about_section_image_url", "Section Image URL"],
+      ["about_mission_title", "Mission Title"], ["about_mission_text", "Mission Text", "textarea"], ["about_vision_title", "Vision Title"], ["about_vision_text", "Vision Text", "textarea"]
+    ]
+  },
+  {
+    title: "Programs Page",
+    fields: [
+      ["programs_hero_eyebrow", "Hero Eyebrow"], ["programs_hero_title", "Hero Title"], ["programs_hero_text", "Hero Text", "textarea"], ["programs_hero_image_url", "Hero Image URL"],
+      ["programs_classes_eyebrow", "Class Options Eyebrow"], ["programs_classes_title", "Class Options Title"], ["programs_classes_text", "Class Options Text", "textarea"],
+      ["programs_regular_title", "Regular Classes Title"], ["programs_regular_text", "Regular Classes Text", "textarea"], ["programs_regular_points", "Regular Classes Points (separate with |)", "textarea"],
+      ["programs_executive_title", "Executive Classes Title"], ["programs_executive_text", "Executive Classes Text", "textarea"], ["programs_executive_points", "Executive Classes Points (separate with |)", "textarea"]
+    ]
+  },
+  {
+    title: "Book Library, Gallery and Contact Pages",
+    fields: [
+      ["books_hero_eyebrow", "Book Hero Eyebrow"], ["books_hero_title", "Book Hero Title"], ["books_hero_text", "Book Hero Text", "textarea"], ["books_hero_image_url", "Book Hero Image URL"],
+      ["gallery_hero_eyebrow", "Gallery Hero Eyebrow"], ["gallery_hero_title", "Gallery Hero Title"], ["gallery_hero_text", "Gallery Hero Text", "textarea"], ["gallery_hero_image_url", "Gallery Hero Image URL"],
+      ["contact_hero_eyebrow", "Contact Hero Eyebrow"], ["contact_hero_title", "Contact Hero Title"], ["contact_hero_text", "Contact Hero Text", "textarea"], ["contact_hero_image_url", "Contact Hero Image URL"],
+      ["contact_phone_title", "Phone Card Title"], ["contact_phone", "Phone Number"], ["contact_location_title", "Location Card Title"], ["contact_address", "Address"], ["contact_enquiry_title", "Enquiry Card Title"], ["contact_enquiry_text", "Enquiry Card Text", "textarea"], ["contact_email", "Contact Email"], ["office_hours", "Office Hours"]
+    ]
+  },
+  {
+    title: "Admission Page",
+    fields: [
+      ["admission_hero_eyebrow", "Hero Eyebrow"], ["admission_hero_title", "Hero Title"], ["admission_hero_text", "Hero Text", "textarea"], ["admission_hero_image_url", "Hero Image URL"],
+      ["admission_eligibility_eyebrow", "Eligibility Eyebrow"], ["admission_eligibility_title", "Eligibility Title"], ["admission_eligibility_text", "Eligibility Text", "textarea"], ["admission_roles", "Who Should Apply Items (one per line: Title|Subtitle)", "textarea"],
+      ["admission_requirements_eyebrow", "Requirements Eyebrow"], ["admission_requirements_title", "Requirements Title"], ["admission_requirements_text", "Requirements Text", "textarea"], ["admission_basic_requirements", "Basic Requirements (one per line)", "textarea"], ["admission_additional_requirements", "Additional Requirements (one per line)", "textarea"],
+      ["admission_apply_eyebrow", "Apply Section Eyebrow"], ["admission_apply_title", "Apply Section Title"], ["admission_apply_text", "Apply Section Text", "textarea"], ["admission_start_title", "Start Title"], ["admission_start_text", "Start Text", "textarea"], ["admission_start_box_title", "Start Box Title"], ["admission_start_box_text", "Start Box Text", "textarea"], ["admission_student_payment_title", "Student Payment Title"],
+      ["admission_process_eyebrow", "Process Eyebrow"], ["admission_process_title", "Process Title"], ["admission_process_text", "Process Text", "textarea"], ["admission_application_steps", "Application Steps (one per line: Title|Description)", "textarea"],
+      ["admission_fees_eyebrow", "Fees Eyebrow"], ["admission_fees_title", "Fees Title"], ["admission_fees_text", "Fees Text", "textarea"],
+      ["admission_calendar_eyebrow", "Calendar Eyebrow"], ["admission_calendar_title", "Calendar Title"], ["admission_calendar_text", "Calendar Text", "textarea"], ["admission_calendar", "Calendar Items (one per line: Label|Value)", "textarea"],
+      ["admission_contact_eyebrow", "Admission Contact Eyebrow"], ["admission_contact_title", "Admission Contact Title"], ["admission_contact_text", "Admission Contact Text", "textarea"], ["admission_contact_location", "Admission Contact Location"], ["admission_contact_phone_title", "Admission Phone Title"], ["admission_contact_location_title", "Admission Location Title"], ["admission_contact_hours_title", "Admission Hours Title"]
+    ]
+  },
+  {
+    title: "Footer",
+    fields: [
+      ["footer_brand_title", "Footer Brand Title"], ["footer_brand_text", "Footer Brand Text"], ["footer_brand_small", "Footer Small Text"], ["footer_address", "Footer Address"], ["footer_phone", "Footer Phone"], ["footer_email", "Footer Email"], ["footer_copyright", "Copyright Text"], ["footer_bottom_note", "Footer Bottom Note"]
+    ]
+  }
+];
+
+function getContentSection(key) {
+  if (key.includes("_hero_")) return "Hero Section";
+
+  if (key.startsWith("home_card_")) return "Home Info Cards";
+  if (key.startsWith("home_stat_")) return "Home Statistics";
+  if (key.startsWith("home_about_")) return "Home About Preview";
+  if (key.startsWith("home_programs_")) return "Home Programs Intro";
+  if (key.startsWith("home_paths_") || key.startsWith("home_regular_") || key.startsWith("home_executive_")) return "Home Learning Paths";
+  if (key.startsWith("home_graduate_")) return "Home Graduates Section";
+  if (key.startsWith("home_books_")) return "Home Book Preview";
+  if (key.startsWith("home_cta_")) return "Home Admission CTA";
+
+  if (key.startsWith("about_section_")) return "About Main Section";
+  if (key.startsWith("about_mission_") || key.startsWith("about_vision_")) return "Mission and Vision";
+
+  if (key.startsWith("programs_classes_") || key.startsWith("programs_regular_") || key.startsWith("programs_executive_")) return "Programs Class Options";
+
+  if (key.startsWith("books_")) return "Book Library Page";
+  if (key.startsWith("gallery_")) return "Gallery Page";
+  if (key.startsWith("contact_")) return "Contact Page";
+  if (key.startsWith("office_")) return "Contact Page";
+
+  if (key.startsWith("admission_eligibility_") || key === "admission_roles") return "Who Should Apply";
+  if (key.startsWith("admission_requirements_") || key.includes("_requirements")) return "Admission Requirements";
+  if (key.startsWith("admission_apply_") || key.startsWith("admission_start_") || key.startsWith("admission_student_")) return "Apply Online Section";
+  if (key.startsWith("admission_process_") || key === "admission_application_steps") return "Application Process";
+  if (key.startsWith("admission_fees_")) return "Programme Fees Section";
+  if (key.startsWith("admission_calendar_") || key === "admission_calendar") return "Academic Calendar";
+  if (key.startsWith("admission_contact_")) return "Admission Contact Section";
+
+  if (key.startsWith("footer_")) return "Footer";
+
+  return "General Content";
+}
+
+function groupWebsiteFields(fields) {
+  return fields.reduce((groups, field) => {
+    const section = getContentSection(field[0]);
+    if (!groups[section]) groups[section] = [];
+    groups[section].push(field);
+    return groups;
+  }, {});
 }
 
 function WebsiteContentAdmin({ reloadPublic }) {

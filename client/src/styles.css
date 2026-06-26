@@ -5858,3 +5858,17 @@ button:disabled {
     min-height: auto !important;
   }
 }
+
+
+/* Owner fix: keep programme cards compact and make admin content/program editing easier to find */
+.program-showcase-card .program-detail-link {
+  display: none !important;
+}
+.portal-sidebar {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+}
+.portal-sidebar button.side-active,
+.portal-sidebar .side-active {
+  color: var(--gold) !important;
+}
