@@ -5872,3 +5872,296 @@ button:disabled {
 .portal-sidebar .side-active {
   color: var(--gold) !important;
 }
+
+/* Base44-inspired About page layout */
+.base44-about-page {
+  background: var(--black);
+  color: white;
+}
+.base44-about-page .page-hero {
+  margin-bottom: 0;
+}
+.base44-about-page .page-hero-content {
+  text-align: center;
+  margin: 0 auto;
+}
+.base44-about-page .page-hero-content p {
+  margin-left: auto;
+  margin-right: auto;
+}
+.about-founder-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 90px;
+  align-items: center;
+  padding: 110px 0 120px;
+}
+.about-founder-image-wrap {
+  border: 1px solid rgba(196,159,100,.22);
+  padding: 20px;
+  min-height: 520px;
+}
+.about-founder-image-wrap img {
+  width: 100%;
+  height: min(72vh, 720px);
+  min-height: 500px;
+  object-fit: cover;
+  object-position: top center;
+}
+.about-founder-copy h2,
+.about-church-section h2,
+.about-beliefs-section h2,
+.about-milestones-section h2,
+.about-classroom-content h2 {
+  color: white;
+}
+.about-founder-copy > strong {
+  color: var(--gold);
+  display: block;
+  margin-top: 10px;
+  font-size: 17px;
+}
+.about-founder-copy p {
+  color: rgba(163, 188, 224, .82);
+  font-size: 16px;
+  line-height: 1.85;
+}
+.about-founder-facts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-top: 34px;
+}
+.about-founder-facts div,
+.about-stat-card,
+.about-mission-vision > div,
+.about-belief-card {
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.018);
+}
+.about-founder-facts div {
+  padding: 26px;
+}
+.about-founder-facts span,
+.about-mission-vision span {
+  display: block;
+  color: var(--gold);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .32em;
+  font-size: 10px;
+  margin-bottom: 12px;
+}
+.about-founder-facts p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.about-church-section,
+.about-beliefs-section,
+.about-milestones-section {
+  padding: 110px 0;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.about-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 28px;
+  margin-top: 70px;
+}
+.about-stat-card {
+  text-align: center;
+  padding: 42px 28px;
+}
+.about-stat-card > span {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 1px solid rgba(196,159,100,.35);
+  color: var(--gold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  background: rgba(196,159,100,.04);
+}
+.about-stat-card h3,
+.about-belief-card h3,
+.about-mission-vision h3 {
+  color: white;
+  margin-bottom: 10px;
+}
+.about-stat-card p,
+.about-belief-card p,
+.about-mission-vision p {
+  color: rgba(163,188,224,.82);
+}
+.about-mission-vision {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  padding: 100px 0;
+}
+.about-mission-vision > div {
+  padding: 72px;
+}
+.about-mission-vision > div:first-child {
+  border-right: 0;
+}
+.about-mission-vision h3 {
+  font-size: 32px;
+}
+.about-mission-vision p {
+  font-size: 18px;
+  line-height: 1.85;
+}
+.about-belief-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 70px;
+}
+.about-belief-card {
+  padding: 48px;
+}
+.about-belief-card .short-gold-line {
+  margin: 18px 0 26px;
+}
+.about-timeline {
+  max-width: 760px;
+  margin: 70px auto 0;
+  display: grid;
+  gap: 0;
+}
+.about-timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 26px;
+  min-height: 118px;
+}
+.about-timeline-item:before {
+  content: '';
+  position: absolute;
+  left: 35px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255,255,255,.12);
+}
+.about-timeline-item:last-child:before {
+  bottom: auto;
+  height: 38px;
+}
+.about-timeline-item i {
+  position: relative;
+  z-index: 1;
+  width: 50px;
+  height: 50px;
+  border: 2px solid var(--gold);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin-left: 10px;
+  background: var(--black);
+}
+.about-timeline-item i:after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: var(--gold);
+  border-radius: 50%;
+}
+.about-timeline-item strong {
+  display: block;
+  color: var(--gold);
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+.about-timeline-item p {
+  margin: 0;
+  color: rgba(163,188,224,.86);
+}
+.about-classroom-cta {
+  position: relative;
+  min-height: 520px;
+  display: grid;
+  place-items: center;
+  background-size: cover;
+  background-position: center;
+  border-top: 1px solid rgba(255,255,255,.08);
+  overflow: hidden;
+}
+.about-classroom-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(7,11,24,.86), rgba(7,11,24,.76)), rgba(7,11,24,.48);
+  backdrop-filter: blur(1px);
+}
+.about-classroom-content {
+  position: relative;
+  z-index: 1;
+  max-width: 850px;
+  text-align: center;
+  padding: 80px 24px;
+}
+.about-classroom-content h2 {
+  font-size: clamp(34px, 4vw, 58px);
+  margin: 22px 0 20px;
+}
+.about-classroom-content p:not(.eyebrow) {
+  color: rgba(163,188,224,.88);
+  font-size: 18px;
+  line-height: 1.75;
+  margin-bottom: 36px;
+}
+
+@media (max-width: 1080px) {
+  .about-founder-section,
+  .about-mission-vision {
+    grid-template-columns: 1fr;
+    gap: 46px;
+  }
+  .about-founder-image-wrap img {
+    height: auto;
+    min-height: 0;
+  }
+  .about-stat-grid,
+  .about-belief-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .about-mission-vision > div:first-child {
+    border-right: 1px solid rgba(255,255,255,.08);
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .about-founder-section,
+  .about-church-section,
+  .about-beliefs-section,
+  .about-milestones-section {
+    padding: 76px 0;
+  }
+  .about-stat-grid,
+  .about-belief-grid,
+  .about-founder-facts {
+    grid-template-columns: 1fr;
+  }
+  .about-mission-vision > div,
+  .about-belief-card,
+  .about-stat-card {
+    padding: 32px 24px;
+  }
+  .about-timeline-item {
+    grid-template-columns: 56px 1fr;
+    gap: 18px;
+  }
+  .about-timeline-item:before {
+    left: 27px;
+  }
+  .about-timeline-item i {
+    width: 42px;
+    height: 42px;
+    margin-left: 6px;
+  }
+}

@@ -609,23 +609,135 @@ function mergeProgrammeCourses(courses = []) {
 }
 
 function About({ goTo, settings = {} }) {
+  const founderParagraphs = settingLines(settings, "about_founder_bio", [
+    "Papa Joshua Iginla is the founder of Champions Royal Assembly, a church known for prophetic and deliverance ministry with headquarters in Abuja, Nigeria.",
+    "As President and Lead Lecturer of CROBIC, he personally teaches students and raises ministers as tools for effective ministry."
+  ]);
+
+  const churchStats = settingPipeList(settings, "about_church_stats", [
+    ["80,000-Seater Auditorium", "Megachurch capacity"],
+    ["International Presence", "Branches in Nigeria, Africa, USA"],
+    ["Founded 1996–1997", "Celebrated 29 years in 2025"],
+    ["Prophetic & Deliverance", "Core ministry focus"]
+  ]);
+
+  const beliefs = settingPipeList(settings, "about_beliefs", [
+    ["Strong Word Base", "Solid biblical teaching and doctrine form the foundation of every program."],
+    ["Prophetic Ministry", "Training in prophetic call, operation, and sensitivity to the Holy Spirit."],
+    ["Deliverance Power", "Techniques for freeing people from spiritual oppression and darkness."]
+  ]);
+
+  const milestones = settingPipeList(settings, "about_milestones", [
+    ["2005–2006", "CROBIC Established"],
+    ["2020", "14th Anniversary - Graduated 30 ministerial students after 2 years"],
+    ["2021", "15th Anniversary - Released End Time Kingdom Expanders"],
+    ["2022", "16th Anniversary - Convocation A Fire Generation"],
+    ["2025", "Church celebrates 29 years of ministry"]
+  ]);
+
+  const statIcons = [<Briefcase />, <Users />, <Clock />, <Award />];
+
   return (
-    <main>
-      <PageHero eyebrow={getSetting(settings, "about_hero_eyebrow", "About Us")} title={getSetting(settings, "about_hero_title", "About Champions Royal Bible College")} text={getSetting(settings, "about_hero_text", "The biblical training platform of Champions Royal Assembly, built for ministers, pastors and kingdom leaders.")} image={getSetting(settings, "about_hero_image_url", CROBIC_IMAGES.handshake)} />
-      <section className="split-section container page-split">
-        <div className="image-frame"><img src={getSetting(settings, "about_section_image_url", CROBIC_IMAGES.classroom)} alt="CROBIC classroom" /></div>
-        <div>
-          <Kicker text={getSetting(settings, "about_section_kicker", "Who We Are")} />
-          <h2>{getSetting(settings, "about_section_title", "Raising a Generation of Champions")}</h2>
+    <main className="base44-about-page">
+      <PageHero
+        eyebrow={getSetting(settings, "about_hero_eyebrow", "CROBIC")}
+        title={getSetting(settings, "about_hero_title", "About Champions Royal Bible College")}
+        text={getSetting(settings, "about_hero_text", "The Biblical Arm of Champions Royal Assembly")}
+        image={getSetting(settings, "about_hero_image_url", CROBIC_IMAGES.classroom)}
+      />
+
+      <section className="about-founder-section container">
+        <div className="about-founder-image-wrap">
+          <img src={getSetting(settings, "about_founder_image_url", getSetting(settings, "about_section_image_url", CROBIC_IMAGES.handshake))} alt={getSetting(settings, "about_founder_name", "Papa Joshua Iginla")} />
+        </div>
+        <div className="about-founder-copy">
+          <p className="eyebrow dark">{getSetting(settings, "about_founder_kicker", "The Founder")}</p>
+          <h2>{getSetting(settings, "about_founder_name", "Papa Joshua Iginla")}</h2>
+          <strong>{getSetting(settings, "about_founder_role", "Founder, President, and Lead Lecturer")}</strong>
           <div className="short-gold-line" />
-          <p>{getSetting(settings, "about_section_paragraph_1", "CROBIC is structured to train students in biblical doctrine, spiritual growth, leadership, practical ministry and kingdom service.")}</p>
-          <p>{getSetting(settings, "about_section_paragraph_2", "The platform combines a public website, admission process, payment flow, protected student portal, live classes, recorded lessons and a book library.")}</p>
-          <button className="gold-btn" onClick={() => goTo("admissions")}>Start Admission</button>
+          {founderParagraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+          <div className="about-founder-facts">
+            <div><span>{getSetting(settings, "about_founder_fact_1_label", "Education")}</span><p>{getSetting(settings, "about_founder_fact_1_text", "B.Sc. Political Science, Masters and Doctorate in Political Science")}</p></div>
+            <div><span>{getSetting(settings, "about_founder_fact_2_label", "CROBIC Role")}</span><p>{getSetting(settings, "about_founder_fact_2_text", "President & Lead Lecturer")}</p></div>
+          </div>
         </div>
       </section>
-      <section className="mission-grid container">
-        <div className="content-card"><h3>{getSetting(settings, "about_mission_title", "Mission")}</h3><p>{getSetting(settings, "about_mission_text", "To provide sound biblical teaching, ministry training and spiritual development through a structured, accessible and world-class learning platform.")}</p></div>
-        <div className="content-card"><h3>{getSetting(settings, "about_vision_title", "Vision")}</h3><p>{getSetting(settings, "about_vision_text", "To raise equipped leaders who understand scripture, walk in wisdom and serve effectively in ministry and society.")}</p></div>
+
+      <section className="about-church-section">
+        <div className="container">
+          <SectionIntro
+            eyebrow={getSetting(settings, "about_church_kicker", "The Church")}
+            title={getSetting(settings, "about_church_title", "About Champions Royal Assembly")}
+            text={getSetting(settings, "about_church_text", "A global ministry with presence across continents")}
+          />
+          <div className="about-stat-grid">
+            {churchStats.map((item, index) => (
+              <div className="about-stat-card" key={`${item.title}-${index}`}>
+                <span>{statIcons[index % statIcons.length]}</span>
+                <h3>{item.title}</h3>
+                <p>{item.sub}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="about-mission-vision container">
+        <div>
+          <span>{getSetting(settings, "about_mission_kicker", "Our Purpose")}</span>
+          <h3>{getSetting(settings, "about_mission_title", "Our Mission")}</h3>
+          <div className="short-gold-line" />
+          <p>{getSetting(settings, "about_mission_text", "To raise a generation of champions equipped for effective end-time ministry through intensive biblical training, prophetic instruction, and deliverance ministry.")}</p>
+        </div>
+        <div>
+          <span>{getSetting(settings, "about_vision_kicker", "Our Direction")}</span>
+          <h3>{getSetting(settings, "about_vision_title", "Our Vision")}</h3>
+          <div className="short-gold-line" />
+          <p>{getSetting(settings, "about_vision_text", "To depopulate hell and populate heaven by releasing people from powers of darkness, turning nobody into somebody, and raising end-time financial apostles.")}</p>
+        </div>
+      </section>
+
+      <section className="about-beliefs-section container">
+        <SectionIntro
+          eyebrow={getSetting(settings, "about_beliefs_kicker", "Our Foundation")}
+          title={getSetting(settings, "about_beliefs_title", "What We Believe")}
+          text={getSetting(settings, "about_beliefs_text", "")}
+        />
+        <div className="about-belief-grid">
+          {beliefs.map((item, index) => (
+            <div className="about-belief-card" key={`${item.title}-${index}`}>
+              <h3>{item.title}</h3>
+              <div className="short-gold-line" />
+              <p>{item.sub}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="about-milestones-section container">
+        <SectionIntro
+          eyebrow={getSetting(settings, "about_milestones_kicker", "Our History")}
+          title={getSetting(settings, "about_milestones_title", "CROBIC Milestones")}
+          text={getSetting(settings, "about_milestones_text", "")}
+        />
+        <div className="about-timeline">
+          {milestones.map((item, index) => (
+            <div className="about-timeline-item" key={`${item.title}-${index}`}>
+              <i />
+              <div><strong>{item.title}</strong><p>{item.sub}</p></div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="about-classroom-cta" style={{ backgroundImage: `url(${getSetting(settings, "about_classroom_image_url", CROBIC_IMAGES.classroom)})` }}>
+        <div className="about-classroom-overlay" />
+        <div className="about-classroom-content">
+          <p className="eyebrow framed">{getSetting(settings, "about_classroom_kicker", "In The Classroom")}</p>
+          <h2>{getSetting(settings, "about_classroom_title", "Learning Directly from the Prophet")}</h2>
+          <p>{getSetting(settings, "about_classroom_text", "At CROBIC, students receive firsthand instruction from Prophet Joshua Iginla himself, gaining unique insights into prophetic ministry, deliverance, and kingdom administration that cannot be found in any textbook.")}</p>
+          <button className="gold-btn big" onClick={() => goTo("admissions")}>{getSetting(settings, "about_classroom_button", "Begin Your Journey")}</button>
+        </div>
       </section>
     </main>
   );
@@ -4775,8 +4887,12 @@ const websiteContentGroups = [
     title: "About Page",
     fields: [
       ["about_hero_eyebrow", "Hero Eyebrow"], ["about_hero_title", "Hero Title"], ["about_hero_text", "Hero Text", "textarea"], ["about_hero_image_url", "Hero Image URL"],
-      ["about_section_kicker", "Section Kicker"], ["about_section_title", "Section Title"], ["about_section_paragraph_1", "Paragraph 1", "textarea"], ["about_section_paragraph_2", "Paragraph 2", "textarea"], ["about_section_image_url", "Section Image URL"],
-      ["about_mission_title", "Mission Title"], ["about_mission_text", "Mission Text", "textarea"], ["about_vision_title", "Vision Title"], ["about_vision_text", "Vision Text", "textarea"]
+      ["about_founder_kicker", "Founder Kicker"], ["about_founder_name", "Founder Name"], ["about_founder_role", "Founder Role"], ["about_founder_bio", "Founder Biography (one paragraph per line)", "textarea"], ["about_founder_image_url", "Founder Image URL"], ["about_founder_fact_1_label", "Founder Fact 1 Label"], ["about_founder_fact_1_text", "Founder Fact 1 Text", "textarea"], ["about_founder_fact_2_label", "Founder Fact 2 Label"], ["about_founder_fact_2_text", "Founder Fact 2 Text", "textarea"],
+      ["about_church_kicker", "Church Section Kicker"], ["about_church_title", "Church Section Title"], ["about_church_text", "Church Section Text", "textarea"], ["about_church_stats", "Church Stat Cards (one per line: Title|Subtitle)", "textarea"],
+      ["about_mission_kicker", "Mission Kicker"], ["about_mission_title", "Mission Title"], ["about_mission_text", "Mission Text", "textarea"], ["about_vision_kicker", "Vision Kicker"], ["about_vision_title", "Vision Title"], ["about_vision_text", "Vision Text", "textarea"],
+      ["about_beliefs_kicker", "Beliefs Kicker"], ["about_beliefs_title", "Beliefs Title"], ["about_beliefs_text", "Beliefs Intro Text", "textarea"], ["about_beliefs", "Belief Cards (one per line: Title|Description)", "textarea"],
+      ["about_milestones_kicker", "Milestones Kicker"], ["about_milestones_title", "Milestones Title"], ["about_milestones_text", "Milestones Intro Text", "textarea"], ["about_milestones", "Milestones (one per line: Year|Description)", "textarea"],
+      ["about_classroom_kicker", "Classroom CTA Kicker"], ["about_classroom_title", "Classroom CTA Title"], ["about_classroom_text", "Classroom CTA Text", "textarea"], ["about_classroom_image_url", "Classroom CTA Background Image URL"], ["about_classroom_button", "Classroom CTA Button Text"]
     ]
   },
   {
@@ -4830,8 +4946,13 @@ function getContentSection(key) {
   if (key.startsWith("home_books_")) return "Home Book Preview";
   if (key.startsWith("home_cta_")) return "Home Admission CTA";
 
-  if (key.startsWith("about_section_")) return "About Main Section";
+  if (key.startsWith("about_founder_")) return "Founder Section";
+  if (key.startsWith("about_church_")) return "Church Overview";
   if (key.startsWith("about_mission_") || key.startsWith("about_vision_")) return "Mission and Vision";
+  if (key.startsWith("about_beliefs")) return "Beliefs Section";
+  if (key.startsWith("about_milestones")) return "Milestones Section";
+  if (key.startsWith("about_classroom_")) return "Classroom CTA";
+  if (key.startsWith("about_section_")) return "Legacy About Section";
 
   if (key.startsWith("programs_classes_") || key.startsWith("programs_regular_") || key.startsWith("programs_executive_")) return "Programs Class Options";
 
