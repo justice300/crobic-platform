@@ -85,6 +85,57 @@ const DEFAULT_GALLERY = [
   { title: "Classroom Training", imageUrl: CROBIC_IMAGES.classroom, category: "Training" }
 ];
 
+const ADMIN_ROLES = ["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"];
+const POWER_ADMIN_ROLES = ["SUPER_ADMIN", "RECTOR"];
+
+function isStaffUser(user) {
+  return ADMIN_ROLES.includes(user?.role);
+}
+
+function isPowerAdmin(user) {
+  return POWER_ADMIN_ROLES.includes(user?.role);
+}
+
+function usdFee(course) {
+  return Number(course?.feeUsd || 0) > 0 ? Number(course.feeUsd || 0) : Number(course?.fee || 0);
+}
+
+function formatUsd(amount) {
+  return `$${Number(amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function parseRates(settings = {}) {
+  return String(settings.currency_rates || "NGN|1500\nGHS|12\nKES|130\nZAR|18\nEUR|0.92\nGBP|0.78")
+    .split(/\n|,/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [code = "", rate = ""] = line.split("|").map((item) => item.trim());
+      return { code: code.toUpperCase(), rate: Number(rate || 0) };
+    })
+    .filter((item) => item.code && item.rate > 0);
+}
+
+function CurrencyConverter({ amountUsd = 0, settings = {} }) {
+  const rates = parseRates(settings);
+  const [currency, setCurrency] = useState(rates[0]?.code || "NGN");
+  const rate = rates.find((item) => item.code === currency)?.rate || 0;
+  const converted = Number(amountUsd || 0) * rate;
+  if (!Number(amountUsd || 0)) return null;
+  return (
+    <div className="currency-converter-box">
+      <strong>{formatUsd(amountUsd)}</strong>
+      <span>Convert estimate</span>
+      <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+        {rates.map((item) => <option key={item.code} value={item.code}>{item.code}</option>)}
+      </select>
+      <b>{currency} {converted.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>
+      <small>{settings.currency_converter_note || "Approximate conversion. Final payment depends on school-approved exchange rate."}</small>
+    </div>
+  );
+}
+
+
 function getSetting(settings, key, fallback = "") {
   const value = settings?.[key];
   return value === undefined || value === null || value === "" ? fallback : value;
@@ -288,8 +339,8 @@ function App() {
       )}
 
       {page === "admin" && (
-        user?.role === "ADMIN" ? (
-          <AdminDashboard reloadPublic={loadPublicData} />
+        isStaffUser(user) ? (
+          <AdminDashboard reloadPublic={loadPublicData} currentUser={user} />
         ) : (
           <AccessGate title="Admin Dashboard" openAuth={() => openAuth("login")} />
         )
@@ -344,7 +395,7 @@ function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen 
         <div className="nav-actions">
           {user ? (
             <>
-              <button className="ghost-btn" onClick={() => goTo(user.role === "ADMIN" ? "admin" : "student")}>Portal</button>
+              <button className="ghost-btn" onClick={() => goTo(isStaffUser(user) ? "admin" : "student")}>Portal</button>
               <button className="dark-btn" onClick={logout}>Logout</button>
             </>
           ) : (
@@ -480,7 +531,7 @@ function Home({ data, goTo, openAuth }) {
         <div className="container">
           <SectionIntro eyebrow={getSetting(s, "home_programs_eyebrow", "Academics")} title={getSetting(s, "home_programs_title", "Our Programs")} text={getSetting(s, "home_programs_text", "Certificate, Diploma and Degree routes for ministers and Bible students.")} />
           <div className="course-grid program-cards">
-            {(data.courses.length ? data.courses.slice(0, 3) : fallbackCourses()).map((course) => <CourseCard key={course.id || course.title} course={course} openAuth={openAuth} />)}
+            {(data.courses.length ? data.courses.slice(0, 3) : fallbackCourses()).map((course) => <CourseCard key={course.id || course.title} course={course} openAuth={openAuth} settings={s} />)}
           </div>
         </div>
       </section>
@@ -563,7 +614,7 @@ function Programs({ courses, openAuth, user, goTo, settings = {} }) {
       <PageHero eyebrow={getSetting(settings, "programs_hero_eyebrow", "Academics")} title={getSetting(settings, "programs_hero_title", "CROBIC Programs")} text={getSetting(settings, "programs_hero_text", "Certificate, Diploma and Degree routes for students preparing for ministry and leadership.")} image={getSetting(settings, "programs_hero_image_url", CROBIC_IMAGES.classroom)} />
       <section className="page container">
         <div className="course-grid program-cards">
-          {list.map((course) => <CourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={user} goTo={goTo} />)}
+          {list.map((course) => <CourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={user} goTo={goTo} settings={settings} />)}
         </div>
       </section>
       <section className="learning-paths container compact-paths">
@@ -735,7 +786,7 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
               <span>{course.level || "Programme"}</span>
               <h3>{course.title}</h3>
               <p>{course.duration || `${course.lessons?.length || course.lessons || 0} lessons`}</p>
-              <strong>₦{Number(course.fee || 0).toLocaleString()}</strong>
+              <strong>{formatUsd(usdFee(course))}</strong><CurrencyConverter amountUsd={usdFee(course)} settings={settings} />
             </div>
           ))}
         </div>
@@ -962,7 +1013,10 @@ function LiveClassroom({ initialLiveSession }) {
           <div className="portal-video-shell">
             <PortalVideoPlayer url={liveSession.liveUrl} title={liveSession.title} />
           </div>
-          <p className="portal-video-note">This class plays inside the CROBIC student portal. Use chat for discussion and questions for lecturer attention.</p>
+          <p className="portal-video-note">This class plays inside the CROBIC student portal. {liveSession.chatEnabled === false ? "The lecturer has turned off live chat for this class." : "Use chat for discussion and questions for lecturer attention."}</p>
+          {liveSession.replayUrl && <p><a className="receipt-preview-link" href={liveSession.replayUrl} target="_blank" rel="noreferrer">Replay will remain available here</a></p>}
+          {liveSession.subtitleUrl && <p><a className="receipt-preview-link" href={liveSession.subtitleUrl} target="_blank" rel="noreferrer">Subtitle / translation file: {liveSession.subtitleLanguage || "available"}</a></p>}
+          {liveSession.voiceEnabled && <div className="voice-response-note">Voice response is enabled as a planned classroom feature. Full microphone control requires the advanced live-room integration.</div>}
           {message && <p className="success-message">{message}</p>}
         </div>
 
@@ -978,10 +1032,14 @@ function LiveClassroom({ initialLiveSession }) {
               ))}
               {!(classroom?.chatMessages || []).length && <p className="empty-small">No chat messages yet.</p>}
             </div>
-            <form className="chat-form" onSubmit={sendChat}>
-              <input placeholder="Type class message..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} />
-              <button className="gold-btn" type="submit">Send</button>
-            </form>
+            {liveSession.chatEnabled === false ? (
+              <div className="quiet-banner small-quiet">Live chat is turned off by the lecturer.</div>
+            ) : (
+              <form className="chat-form" onSubmit={sendChat}>
+                <input placeholder="Type class message..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} />
+                <button className="gold-btn" type="submit">Send</button>
+              </form>
+            )}
           </div>
 
           <div className="classroom-box">
@@ -1825,6 +1883,7 @@ function StudentAssignmentCard({ assignment, reloadCourse }) {
   const submission = getAssignmentSubmission(assignment);
   const [answer, setAnswer] = useState(submission?.answer || "");
   const [fileUrl, setFileUrl] = useState(submission?.fileUrl || "");
+  const [videoUrl, setVideoUrl] = useState(submission?.videoUrl || "");
   const [fileName, setFileName] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -1850,13 +1909,13 @@ function StudentAssignmentCard({ assignment, reloadCourse }) {
 
   async function submitAssignment(e) {
     e.preventDefault();
-    if (!answer.trim() && !fileUrl) {
-      showToast("Type an answer or upload your assignment file.", "error");
+    if (!answer.trim() && !fileUrl && !videoUrl.trim()) {
+      showToast("Type an answer, upload your assignment file, or paste a video assignment link.", "error");
       return;
     }
     try {
       setSaving(true);
-      const result = await api(`/student/assignments/${assignment.id}/submit`, { method: "POST", body: { answer, fileUrl } });
+      const result = await api(`/student/assignments/${assignment.id}/submit`, { method: "POST", body: { answer, fileUrl, videoUrl } });
       showToast(result.message || "Assignment submitted.", "success");
       await reloadCourse();
     } catch (error) {
@@ -1881,6 +1940,8 @@ function StudentAssignmentCard({ assignment, reloadCourse }) {
       {submission?.feedback && <div className="answer-box"><b>Admin Feedback:</b> {submission.feedback}</div>}
       <form className="assessment-submit-form" onSubmit={submitAssignment}>
         <textarea placeholder="Type your assignment answer..." value={answer} onChange={(e) => setAnswer(e.target.value)} />
+        <input placeholder="Video assignment link (YouTube, Vimeo, Loom, Google Drive, etc.)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+        {submission?.videoUrl && <a className="receipt-preview-link" href={submission.videoUrl} target="_blank" rel="noreferrer">View submitted video link</a>}
         <label className="receipt-upload-box assessment-upload-box">
           <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx" onChange={(e) => uploadFile(e.target.files?.[0])} />
           <span>{fileUrl ? "File uploaded" : "Upload assignment file"}</span>
@@ -2033,10 +2094,10 @@ function PaymentPanel({ courses, settings }) {
       </div>
 
       <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-        {courses.map((course) => <option value={course.id} key={course.id}>{course.title} — ₦{Number(course.fee).toLocaleString()}</option>)}
+        {courses.map((course) => <option value={course.id} key={course.id}>{course.title} — {formatUsd(usdFee(course))}</option>)}
       </select>
 
-      {selectedCourse && <p className="payment-fee-line"><strong>Fee:</strong> ₦{Number(selectedCourse.fee).toLocaleString()}</p>}
+      {selectedCourse && <div className="payment-fee-line"><strong>Fee:</strong> {formatUsd(usdFee(selectedCourse))}<CurrencyConverter amountUsd={usdFee(selectedCourse)} settings={settings} /></div>}
 
       <button className="gold-btn full" type="button" onClick={payWithPaystack}>Pay Now with Paystack</button>
 
@@ -2085,7 +2146,7 @@ function PaymentCallback({ goTo }) {
   return <main className="page container gate"><CheckCircle size={56} /><h1>Payment Status</h1><p>{message}</p><button className="gold-btn big" onClick={() => goTo("student")}>Go to Student Portal</button></main>;
 }
 
-function AdminDashboard({ reloadPublic }) {
+function AdminDashboard({ reloadPublic, currentUser }) {
   const [tab, setTab] = useState("overview");
   const [overview, setOverview] = useState(null);
 
@@ -2103,16 +2164,18 @@ function AdminDashboard({ reloadPublic }) {
 
   return (
     <main className="portal-page">
-      <PortalSidebar title="Admin Dashboard" items={["Overview", "Students", "Books", "Courses", "Course Builder", "Progress", "Gradebook", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Website Content", "Email Settings", "Settings"]} tab={tab} setTab={switchAdminTab} admin />
+      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Users & Roles", "Students", "Books", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Website Content", "Currency Settings", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Students", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
       <div className="portal-main">
         <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CROBIC Management</h1></div></div>
         {tab === "overview" && <Overview overview={overview} />}
+        {tab === "users & roles" && <UsersRolesAdmin />}
         {tab === "students" && <StudentsAdmin />}
         {tab === "books" && <CrudAdmin title="Books" path="books" reloadPublic={reloadPublic} fields={bookFields} />}
         {tab === "courses" && <CrudAdmin title="Courses" path="courses" reloadPublic={reloadPublic} fields={courseFields} />}
         {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} />}
         {tab === "progress" && <ProgressAdmin />}
         {tab === "gradebook" && <GradebookAdmin />}
+        {tab === "student groups" && <StudentGroupsAdmin />}
         {tab === "activity log" && <ActivityLogAdmin />}
         {tab === "attendance records" && <AttendanceRecordsAdmin />}
         {tab === "course discussions" && <CourseDiscussionsAdmin />}
@@ -2124,6 +2187,7 @@ function AdminDashboard({ reloadPublic }) {
         {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}
         {tab === "appeals & support" && <SupportAdmin />}
         {tab === "website content" && <WebsiteContentAdmin reloadPublic={reloadPublic} />}
+        {tab === "currency settings" && <CurrencySettingsAdmin />}
         {tab === "email settings" && <EmailSettingsAdmin />}
         {tab === "settings" && <SettingsAdmin reloadPublic={reloadPublic} />}
       </div>
@@ -2132,6 +2196,208 @@ function AdminDashboard({ reloadPublic }) {
 }
 
 
+
+
+
+
+function UsersRolesAdmin() {
+  const [data, setData] = useState({ rawUsers: [], courses: [] });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "LECTURER" });
+  const [accessForm, setAccessForm] = useState({ lecturerId: "", courseId: "" });
+
+  async function load() {
+    const result = await api("/admin/users-roles");
+    setData(result);
+    const firstLecturer = (result.rawUsers || []).find((user) => ["LECTURER", "ADMIN", "RECTOR", "SUPER_ADMIN"].includes(user.role));
+    setAccessForm((current) => ({ ...current, lecturerId: current.lecturerId || firstLecturer?.id || "", courseId: current.courseId || result.courses?.[0]?.id || "" }));
+  }
+
+  useEffect(() => { load().catch((error) => showToast(error.message, "error")); }, []);
+
+  async function createUser(e) {
+    e.preventDefault();
+    try {
+      await api("/admin/users-roles", { method: "POST", body: form });
+      setForm({ name: "", email: "", password: "", role: "LECTURER" });
+      await load();
+      showToast("Staff account created.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not create staff account", "error");
+    }
+  }
+
+  async function assignCourse(e) {
+    e.preventDefault();
+    try {
+      await api("/admin/lecturer-course-access", { method: "POST", body: accessForm });
+      await load();
+      showToast("Course access assigned.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not assign course access", "error");
+    }
+  }
+
+  async function removeAccess(id) {
+    if (!(await showConfirm({ title: "Remove course access?", message: "This staff member will no longer see that course.", confirmText: "Remove", danger: true }))) return;
+    await api(`/admin/lecturer-course-access/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  const staff = data.rawUsers || [];
+  return (
+    <section className="admin-section phase2-panel">
+      <h2>Users & Roles</h2>
+      <p>Super Admin can create Rector, Admin and Lecturer accounts, then assign courses to lecturers.</p>
+
+      <div className="phase2-grid">
+        <form className="admin-form phase2-card" onSubmit={createUser}>
+          <h3>Create Staff Account</h3>
+          <input placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <input placeholder="Email address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <input placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <option value="LECTURER">Lecturer</option>
+            <option value="ADMIN">Admin</option>
+            <option value="RECTOR">Rector / Senior Admin</option>
+            <option value="SUPER_ADMIN">Super Admin</option>
+          </select>
+          <button className="gold-btn" type="submit">Create Account</button>
+        </form>
+
+        <form className="admin-form phase2-card" onSubmit={assignCourse}>
+          <h3>Assign Course to Lecturer</h3>
+          <select value={accessForm.lecturerId} onChange={(e) => setAccessForm({ ...accessForm, lecturerId: e.target.value })}>
+            {staff.map((user) => <option key={user.id} value={user.id}>{user.name} — {formatPortalStatus(user.role)}</option>)}
+          </select>
+          <select value={accessForm.courseId} onChange={(e) => setAccessForm({ ...accessForm, courseId: e.target.value })}>
+            {(data.courses || []).map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+          </select>
+          <button className="dark-btn" type="submit">Grant Course Access</button>
+        </form>
+      </div>
+
+      <div className="admin-list">
+        {staff.map((user) => (
+          <div className="admin-item phase2-staff-row" key={user.id}>
+            <div>
+              <strong>{user.name}</strong>
+              <p>{user.email} · {formatPortalStatus(user.role)}</p>
+              <div className="mini-chip-row">
+                {(user.lecturerCourseAccesses || []).map((access) => (
+                  <span className="mini-chip" key={access.id}>{access.course?.title}<button type="button" onClick={() => removeAccess(access.id)}>×</button></span>
+                ))}
+                {!(user.lecturerCourseAccesses || []).length && <small>No assigned course yet.</small>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CurrencySettingsAdmin() {
+  const [settings, setSettings] = useState({ base_currency: "USD", currency_rates: "NGN|1500\nGHS|12\nKES|130\nZAR|18", currency_converter_note: "" });
+  async function load() {
+    setSettings({ ...settings, ...(await api("/admin/currency-settings")) });
+  }
+  useEffect(() => { load().catch((error) => showToast(error.message, "error")); }, []);
+
+  async function save(e) {
+    e.preventDefault();
+    await api("/admin/currency-settings", { method: "PATCH", body: settings });
+    showToast("Currency settings saved.", "success");
+  }
+
+  return (
+    <section className="admin-section phase2-panel">
+      <h2>USD Pricing & Currency Converter</h2>
+      <p>Course prices display in USD. Students can estimate their local currency using the rates below.</p>
+      <form className="admin-form" onSubmit={save}>
+        <label className="content-field">
+          <span>Base Currency</span>
+          <input value={settings.base_currency || "USD"} onChange={(e) => setSettings({ ...settings, base_currency: e.target.value })} />
+        </label>
+        <label className="content-field">
+          <span>Currency Rates, one per line: CODE|RATE_PER_USD</span>
+          <textarea value={settings.currency_rates || ""} onChange={(e) => setSettings({ ...settings, currency_rates: e.target.value })} />
+        </label>
+        <label className="content-field">
+          <span>Converter Note</span>
+          <input value={settings.currency_converter_note || ""} onChange={(e) => setSettings({ ...settings, currency_converter_note: e.target.value })} />
+        </label>
+        <button className="gold-btn" type="submit">Save Currency Settings</button>
+      </form>
+    </section>
+  );
+}
+
+function StudentGroupsAdmin() {
+  const [data, setData] = useState({ courses: [], groups: [], students: [] });
+  const [courseId, setCourseId] = useState("");
+  const [form, setForm] = useState({ groupSize: 10, taskTitle: "", instructions: "" });
+
+  async function load(nextCourseId = courseId) {
+    const result = await api(`/admin/student-groups${nextCourseId ? `?courseId=${nextCourseId}` : ""}`);
+    setData(result);
+    if (!nextCourseId && result.courses?.[0]?.id) setCourseId(result.courses[0].id);
+  }
+
+  useEffect(() => { load().catch((error) => showToast(error.message, "error")); }, []);
+  useEffect(() => { if (courseId) load(courseId).catch(() => null); }, [courseId]);
+
+  async function createGroups(e) {
+    e.preventDefault();
+    try {
+      const result = await api("/admin/student-groups/auto", { method: "POST", body: { courseId, ...form } });
+      showToast(result.message || "Student groups created.", "success");
+      await load(courseId);
+    } catch (error) {
+      showToast(error.message || "Could not create groups", "error");
+    }
+  }
+
+  async function removeGroup(id) {
+    if (!(await showConfirm({ title: "Delete group?", message: "This will remove the group and its members.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/student-groups/${id}`, { method: "DELETE" });
+    await load(courseId);
+  }
+
+  return (
+    <section className="admin-section phase2-panel">
+      <h2>Student Groups</h2>
+      <p>Group students under a lecturer course. Example: 300 students can be split into 30 groups of 10 students each.</p>
+
+      <form className="admin-form phase2-card" onSubmit={createGroups}>
+        <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+          <option value="">Select course</option>
+          {(data.courses || []).map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+        </select>
+        <input type="number" min="1" placeholder="Students per group" value={form.groupSize} onChange={(e) => setForm({ ...form, groupSize: Number(e.target.value || 10) })} />
+        <input placeholder="Group task title" value={form.taskTitle} onChange={(e) => setForm({ ...form, taskTitle: e.target.value })} />
+        <textarea placeholder="Task / assignment instruction for groups" value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+        <button className="gold-btn" type="submit" disabled={!courseId}>Auto Create Groups</button>
+      </form>
+
+      <p className="muted-note">{(data.students || []).length} approved students found for the selected course.</p>
+      <div className="student-group-grid">
+        {(data.groups || []).map((group) => (
+          <div className="student-group-card" key={group.id}>
+            <div className="student-group-head">
+              <div><strong>{group.name}</strong><small>{group.course?.title}</small></div>
+              <button className="delete-btn" type="button" onClick={() => removeGroup(group.id)}><Trash2 size={15} /></button>
+            </div>
+            {group.taskTitle && <h3>{group.taskTitle}</h3>}
+            {group.instructions && <p>{group.instructions}</p>}
+            <div className="mini-member-list">
+              {(group.members || []).map((member) => <span key={member.id}>{member.student?.name || "Student"}</span>)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 
 const EMPTY_OBJECTIVE_QUESTION = { question: "", optionA: "", optionB: "", optionC: "", optionD: "", correctOption: "A" };
@@ -2425,6 +2691,7 @@ function AssessmentsAdmin() {
                   <div><strong>{submission.user?.name}</strong><small>{submission.user?.email} · {formatPortalStatus(submission.status)}</small></div>
                   {submission.answer && <p>{submission.answer}</p>}
                   {submission.fileUrl && <a href={submission.fileUrl} target="_blank" rel="noreferrer">View submitted file</a>}
+                  {submission.videoUrl && <a href={submission.videoUrl} target="_blank" rel="noreferrer">View submitted video link</a>}
                   <div className="form-row">
                     <input type="number" placeholder="Score" value={gradeForms[submission.id]?.score ?? submission.score ?? ""} onChange={(e) => setGradeForms((current) => ({ ...current, [submission.id]: { ...(current[submission.id] || {}), score: e.target.value } }))} />
                     <input placeholder="Feedback" value={gradeForms[submission.id]?.feedback ?? submission.feedback ?? ""} onChange={(e) => setGradeForms((current) => ({ ...current, [submission.id]: { ...(current[submission.id] || {}), feedback: e.target.value } }))} />
@@ -2908,7 +3175,7 @@ const bookFields = [
   ["title", "Book title"], ["author", "Author"], ["category", "Category"], ["price", "Price e.g ₦8,500"], ["buyLink", "Stellar purchase link"], ["imageUrl", "Book cover image URL"], ["description", "Description", "textarea"]
 ];
 const courseFields = [
-  ["title", "Course title"], ["level", "Level"], ["duration", "Duration e.g 12 Months"], ["fee", "Fee e.g 50000", "number"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]
+  ["title", "Course title"], ["level", "Level"], ["duration", "Duration e.g 12 Months"], ["feeUsd", "Fee in USD e.g 50", "number"], ["currency", "Currency e.g USD"], ["fee", "Local payment backup e.g 75000", "number"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]
 ];
 const slideFields = [
   ["eyebrow", "Small heading"], ["title", "Slide title"], ["description", "Description", "textarea"], ["imageUrl", "Image URL"], ["ctaText", "CTA text"], ["ctaPage", "CTA page e.g admissions"], ["slideOrder", "Order", "number"]
@@ -4272,9 +4539,16 @@ function LessonsAdmin() {
 }
 
 function LiveAdmin({ reloadPublic }) {
-  const [form, setForm] = useState({ title: "", description: "", liveUrl: "" });
+  const [form, setForm] = useState({ courseId: "", title: "", description: "", liveUrl: "", replayUrl: "", subtitleUrl: "", subtitleLanguage: "", chatEnabled: true, voiceEnabled: false });
   const [classroom, setClassroom] = useState(null);
+  const [courses, setCourses] = useState([]);
   const [answers, setAnswers] = useState({});
+
+  async function loadCourses() {
+    const result = await api("/admin/course-builder");
+    setCourses(result || []);
+    setForm((current) => ({ ...current, courseId: current.courseId || result?.[0]?.id || "" }));
+  }
 
   async function loadClassroom() {
     const result = await api("/admin/live/classroom");
@@ -4282,6 +4556,7 @@ function LiveAdmin({ reloadPublic }) {
   }
 
   useEffect(() => {
+    loadCourses().catch(() => null);
     loadClassroom().catch(() => null);
     const interval = setInterval(() => loadClassroom().catch(() => null), 7000);
     return () => clearInterval(interval);
@@ -4290,7 +4565,7 @@ function LiveAdmin({ reloadPublic }) {
   async function start(e) {
     e.preventDefault();
     await api("/admin/live/start", { method: "POST", body: form });
-    setForm({ title: "", description: "", liveUrl: "" });
+    setForm((current) => ({ ...current, title: "", description: "", liveUrl: "", replayUrl: "", subtitleUrl: "", subtitleLanguage: "" }));
     await reloadPublic();
     await loadClassroom();
     showToast("Live class started inside the student portal", "success");
@@ -4328,15 +4603,28 @@ function LiveAdmin({ reloadPublic }) {
       <div className="live-admin-header">
         <div>
           <h2>Live Classroom Control</h2>
-          <p className="admin-help-text">Start a live class that students watch inside their portal. Chat, questions and attendance are also handled inside CROBIC.</p>
+          <p className="admin-help-text">Students watch live classes inside CROBIC. The external platform link stays hidden inside the embedded player.</p>
         </div>
         {liveSession && <span className={liveSession.active ? "live-status active-live-status" : "live-status"}>{liveSession.active ? "Live Active" : "Last Class"}</span>}
       </div>
 
       <form className="admin-form live-start-form" onSubmit={start}>
+        <select value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value })}>
+          <option value="">General live class for all students</option>
+          {courses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+        </select>
         <input placeholder="Live class title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <input placeholder="Embeddable live/video link or iframe code" value={form.liveUrl} onChange={(e) => setForm({ ...form, liveUrl: e.target.value })} required />
+        <input placeholder="Replay link after class ends (optional)" value={form.replayUrl} onChange={(e) => setForm({ ...form, replayUrl: e.target.value })} />
+        <div className="two-columns">
+          <input placeholder="Subtitle file/link (optional)" value={form.subtitleUrl} onChange={(e) => setForm({ ...form, subtitleUrl: e.target.value })} />
+          <input placeholder="Subtitle language e.g English / French" value={form.subtitleLanguage} onChange={(e) => setForm({ ...form, subtitleLanguage: e.target.value })} />
+        </div>
         <textarea placeholder="Description for students" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        <div className="phase2-toggle-row">
+          <label><input type="checkbox" checked={form.chatEnabled} onChange={(e) => setForm({ ...form, chatEnabled: e.target.checked })} /> Student live chat enabled</label>
+          <label><input type="checkbox" checked={form.voiceEnabled} onChange={(e) => setForm({ ...form, voiceEnabled: e.target.checked })} /> Voice response planned/enabled flag</label>
+        </div>
         {form.liveUrl && <div className="admin-video-preview"><PortalVideoPlayer url={form.liveUrl} title={form.title || "Live class preview"} /></div>}
         <div className="form-row">
           <button className="gold-btn" type="submit">Start Live Class</button>
@@ -4346,51 +4634,49 @@ function LiveAdmin({ reloadPublic }) {
       </form>
 
       {liveSession ? (
-        <div className="admin-classroom-monitor">
-          <div className="admin-live-preview-card">
-            <div className="classroom-box-title"><h3>{liveSession.title}</h3><span>{classroom?.attendanceCount || 0} present</span></div>
-            <div className="portal-video-shell small-admin-video"><PortalVideoPlayer url={liveSession.liveUrl} title={liveSession.title} /></div>
+        <div className="admin-live-current">
+          <div className="live-current-grid">
+            <div>
+              <h3>{liveSession.title}</h3>
+              <p>{liveSession.description || "No description added."}</p>
+              <p><strong>Course:</strong> {liveSession.course?.title || "General"}</p>
+              <p><strong>Chat:</strong> {liveSession.chatEnabled === false ? "Off" : "On"} · <strong>Voice:</strong> {liveSession.voiceEnabled ? "Flagged Enabled" : "Off"}</p>
+              {liveSession.replayUrl && <p><a className="receipt-preview-link" href={liveSession.replayUrl} target="_blank" rel="noreferrer">Open replay link</a></p>}
+              {liveSession.subtitleUrl && <p><a className="receipt-preview-link" href={liveSession.subtitleUrl} target="_blank" rel="noreferrer">Open subtitle file ({liveSession.subtitleLanguage || "language"})</a></p>}
+            </div>
+            <div className="attendance-card-small">
+              <strong>{classroom?.attendanceCount || 0}</strong>
+              <span>Students Present</span>
+            </div>
           </div>
 
-          <div className="admin-monitor-grid">
-            <div className="classroom-box">
-              <div className="classroom-box-title"><h3>Attendance</h3><span>{classroom?.attendanceCount || 0}</span></div>
-              <div className="attendance-list">
-                {(classroom?.attendances || []).map((item) => (
-                  <div key={item.id}><strong>{item.user?.name}</strong><small>{item.user?.email}</small></div>
-                ))}
-                {!(classroom?.attendances || []).length && <p className="empty-small">No student has joined yet.</p>}
-              </div>
-            </div>
-
+          <div className="classroom-grid admin-classroom-grid">
             <div className="classroom-box">
               <div className="classroom-box-title"><h3>Live Chat</h3><span>{classroom?.chatMessages?.length || 0}</span></div>
-              <div className="chat-thread admin-chat-thread">
+              <div className="chat-thread">
                 {(classroom?.chatMessages || []).map((chat) => (
                   <div className="chat-bubble" key={chat.id}>
                     <strong>{chat.user?.name || "Student"}</strong>
                     <p>{chat.message}</p>
-                    <button type="button" onClick={() => deleteChat(chat.id)}>Delete</button>
+                    <button className="delete-mini-btn" type="button" onClick={() => deleteChat(chat.id)}>Delete</button>
                   </div>
                 ))}
-                {!(classroom?.chatMessages || []).length && <p className="empty-small">No chat yet.</p>}
+                {!(classroom?.chatMessages || []).length && <p className="empty-small">No chat messages yet.</p>}
               </div>
             </div>
 
-            <div className="classroom-box admin-question-box">
-              <div className="classroom-box-title"><h3>Student Questions</h3><span>{classroom?.questions?.length || 0}</span></div>
-              <div className="admin-question-list">
+            <div className="classroom-box">
+              <div className="classroom-box-title"><h3>Questions</h3><span>{classroom?.questions?.length || 0}</span></div>
+              <div className="question-list admin-question-list">
                 {(classroom?.questions || []).map((item) => (
                   <div className="question-item" key={item.id}>
                     <strong>{item.user?.name || "Student"}</strong>
                     <p>{item.question}</p>
                     {item.answer && <div className="answer-box"><b>Answer:</b> {item.answer}</div>}
-                    <small>{item.status || "OPEN"}</small>
-                    <textarea placeholder="Type lecturer/admin answer..." value={answers[item.id] || ""} onChange={(e) => setAnswers({ ...answers, [item.id]: e.target.value })} />
+                    <textarea placeholder="Type lecturer answer..." value={answers[item.id] || ""} onChange={(e) => setAnswers({ ...answers, [item.id]: e.target.value })} />
                     <div className="form-row">
-                      <button type="button" className="gold-btn" onClick={() => answerQuestion(item.id)}>Send Answer</button>
-                      <button type="button" className="ghost-btn admin-cancel-btn" onClick={() => markQuestionStatus(item.id, "ANSWERED")}>Mark Answered</button>
-                      <button type="button" className="dark-btn" onClick={() => markQuestionStatus(item.id, "OPEN")}>Reopen</button>
+                      <button className="gold-btn" type="button" onClick={() => answerQuestion(item.id)}>Answer</button>
+                      <button className="dark-btn" type="button" onClick={() => markQuestionStatus(item.id, "CLOSED")}>Close</button>
                     </div>
                   </div>
                 ))}
@@ -4400,124 +4686,10 @@ function LiveAdmin({ reloadPublic }) {
           </div>
         </div>
       ) : (
-        <div className="quiet-banner"><strong>No live classroom record yet.</strong><p>Start a live class to activate video, attendance, chat and questions.</p></div>
+        <div className="quiet-banner"><strong>No live class yet.</strong><p>Start a class above to open the student classroom.</p></div>
       )}
     </section>
   );
-}
-
-const websiteContentGroups = [
-  {
-    title: "Home Page",
-    fields: [
-      ["home_card_1_title", "Info Card 1 Title"], ["home_card_1_text", "Info Card 1 Text", "textarea"],
-      ["home_card_2_title", "Info Card 2 Title"], ["home_card_2_text", "Info Card 2 Text", "textarea"],
-      ["home_card_3_title", "Info Card 3 Title"], ["home_card_3_text", "Info Card 3 Text", "textarea"],
-      ["home_stat_1_value", "Stat 1 Value"], ["home_stat_1_label", "Stat 1 Label"],
-      ["home_stat_2_value", "Stat 2 Value"], ["home_stat_2_label", "Stat 2 Label"],
-      ["home_stat_3_value", "Stat 3 Value"], ["home_stat_3_label", "Stat 3 Label"],
-      ["home_stat_4_value", "Stat 4 Value"], ["home_stat_4_label", "Stat 4 Label"],
-      ["home_about_kicker", "About Preview Kicker"], ["home_about_title", "About Preview Title"],
-      ["home_about_paragraph_1", "About Preview Paragraph 1", "textarea"], ["home_about_paragraph_2", "About Preview Paragraph 2", "textarea"],
-      ["home_about_image_url", "About Preview Image URL"], ["home_about_caption_name", "Image Caption Name"], ["home_about_caption_title", "Image Caption Title"],
-      ["home_programs_eyebrow", "Programs Section Eyebrow"], ["home_programs_title", "Programs Section Title"], ["home_programs_text", "Programs Section Text", "textarea"],
-      ["home_paths_eyebrow", "Learning Paths Eyebrow"], ["home_paths_title", "Learning Paths Title"], ["home_paths_text", "Learning Paths Text", "textarea"],
-      ["home_regular_class_title", "Regular Class Title"], ["home_regular_class_text", "Regular Class Text", "textarea"], ["home_regular_class_points", "Regular Class Points (separate with |)", "textarea"],
-      ["home_executive_class_title", "Executive Class Title"], ["home_executive_class_text", "Executive Class Text", "textarea"], ["home_executive_class_points", "Executive Class Points (separate with |)", "textarea"],
-      ["home_graduate_kicker", "Graduates Kicker"], ["home_graduate_title", "Graduates Title"], ["home_graduate_quote", "Graduates Quote", "textarea"], ["home_graduate_author", "Quote Author"], ["home_graduate_number", "Graduate Number"], ["home_graduate_number_label", "Graduate Number Label"], ["home_graduate_image_url", "Graduates Background Image URL"],
-      ["home_books_eyebrow", "Book Preview Eyebrow"], ["home_books_title", "Book Preview Title"], ["home_books_text", "Book Preview Text", "textarea"],
-      ["home_cta_kicker", "CTA Kicker"], ["home_cta_title", "CTA Title"], ["home_cta_text", "CTA Text", "textarea"], ["home_cta_primary_button", "CTA Primary Button"], ["home_cta_secondary_button", "CTA Secondary Button"]
-    ]
-  },
-  {
-    title: "About Page",
-    fields: [
-      ["about_hero_eyebrow", "Hero Eyebrow"], ["about_hero_title", "Hero Title"], ["about_hero_text", "Hero Text", "textarea"], ["about_hero_image_url", "Hero Image URL"],
-      ["about_section_kicker", "Section Kicker"], ["about_section_title", "Section Title"], ["about_section_paragraph_1", "Paragraph 1", "textarea"], ["about_section_paragraph_2", "Paragraph 2", "textarea"], ["about_section_image_url", "Section Image URL"],
-      ["about_mission_title", "Mission Title"], ["about_mission_text", "Mission Text", "textarea"], ["about_vision_title", "Vision Title"], ["about_vision_text", "Vision Text", "textarea"]
-    ]
-  },
-  {
-    title: "Programs Page",
-    fields: [
-      ["programs_hero_eyebrow", "Hero Eyebrow"], ["programs_hero_title", "Hero Title"], ["programs_hero_text", "Hero Text", "textarea"], ["programs_hero_image_url", "Hero Image URL"],
-      ["programs_classes_eyebrow", "Class Options Eyebrow"], ["programs_classes_title", "Class Options Title"], ["programs_classes_text", "Class Options Text", "textarea"],
-      ["programs_regular_title", "Regular Classes Title"], ["programs_regular_text", "Regular Classes Text", "textarea"], ["programs_regular_points", "Regular Classes Points (separate with |)", "textarea"],
-      ["programs_executive_title", "Executive Classes Title"], ["programs_executive_text", "Executive Classes Text", "textarea"], ["programs_executive_points", "Executive Classes Points (separate with |)", "textarea"]
-    ]
-  },
-  {
-    title: "Book Library, Gallery and Contact Pages",
-    fields: [
-      ["books_hero_eyebrow", "Book Hero Eyebrow"], ["books_hero_title", "Book Hero Title"], ["books_hero_text", "Book Hero Text", "textarea"], ["books_hero_image_url", "Book Hero Image URL"],
-      ["gallery_hero_eyebrow", "Gallery Hero Eyebrow"], ["gallery_hero_title", "Gallery Hero Title"], ["gallery_hero_text", "Gallery Hero Text", "textarea"], ["gallery_hero_image_url", "Gallery Hero Image URL"],
-      ["contact_hero_eyebrow", "Contact Hero Eyebrow"], ["contact_hero_title", "Contact Hero Title"], ["contact_hero_text", "Contact Hero Text", "textarea"], ["contact_hero_image_url", "Contact Hero Image URL"],
-      ["contact_phone_title", "Phone Card Title"], ["contact_phone", "Phone Number"], ["contact_location_title", "Location Card Title"], ["contact_address", "Address"], ["contact_enquiry_title", "Enquiry Card Title"], ["contact_enquiry_text", "Enquiry Card Text", "textarea"], ["contact_email", "Contact Email"], ["office_hours", "Office Hours"]
-    ]
-  },
-  {
-    title: "Admission Page",
-    fields: [
-      ["admission_hero_eyebrow", "Hero Eyebrow"], ["admission_hero_title", "Hero Title"], ["admission_hero_text", "Hero Text", "textarea"], ["admission_hero_image_url", "Hero Image URL"],
-      ["admission_eligibility_eyebrow", "Eligibility Eyebrow"], ["admission_eligibility_title", "Eligibility Title"], ["admission_eligibility_text", "Eligibility Text", "textarea"], ["admission_roles", "Who Should Apply Items (one per line: Title|Subtitle)", "textarea"],
-      ["admission_requirements_eyebrow", "Requirements Eyebrow"], ["admission_requirements_title", "Requirements Title"], ["admission_requirements_text", "Requirements Text", "textarea"], ["admission_basic_requirements", "Basic Requirements (one per line)", "textarea"], ["admission_additional_requirements", "Additional Requirements (one per line)", "textarea"],
-      ["admission_apply_eyebrow", "Apply Section Eyebrow"], ["admission_apply_title", "Apply Section Title"], ["admission_apply_text", "Apply Section Text", "textarea"], ["admission_start_title", "Start Title"], ["admission_start_text", "Start Text", "textarea"], ["admission_start_box_title", "Start Box Title"], ["admission_start_box_text", "Start Box Text", "textarea"], ["admission_student_payment_title", "Student Payment Title"],
-      ["admission_process_eyebrow", "Process Eyebrow"], ["admission_process_title", "Process Title"], ["admission_process_text", "Process Text", "textarea"], ["admission_application_steps", "Application Steps (one per line: Title|Description)", "textarea"],
-      ["admission_fees_eyebrow", "Fees Eyebrow"], ["admission_fees_title", "Fees Title"], ["admission_fees_text", "Fees Text", "textarea"],
-      ["admission_calendar_eyebrow", "Calendar Eyebrow"], ["admission_calendar_title", "Calendar Title"], ["admission_calendar_text", "Calendar Text", "textarea"], ["admission_calendar", "Calendar Items (one per line: Label|Value)", "textarea"],
-      ["admission_contact_eyebrow", "Admission Contact Eyebrow"], ["admission_contact_title", "Admission Contact Title"], ["admission_contact_text", "Admission Contact Text", "textarea"], ["admission_contact_location", "Admission Contact Location"], ["admission_contact_phone_title", "Admission Phone Title"], ["admission_contact_location_title", "Admission Location Title"], ["admission_contact_hours_title", "Admission Hours Title"]
-    ]
-  },
-  {
-    title: "Footer",
-    fields: [
-      ["footer_brand_title", "Footer Brand Title"], ["footer_brand_text", "Footer Brand Text"], ["footer_brand_small", "Footer Small Text"], ["footer_address", "Footer Address"], ["footer_phone", "Footer Phone"], ["footer_email", "Footer Email"], ["footer_copyright", "Copyright Text"], ["footer_bottom_note", "Footer Bottom Note"]
-    ]
-  }
-];
-
-function getContentSection(key) {
-  if (key.includes("_hero_")) return "Hero Section";
-
-  if (key.startsWith("home_card_")) return "Home Info Cards";
-  if (key.startsWith("home_stat_")) return "Home Statistics";
-  if (key.startsWith("home_about_")) return "Home About Preview";
-  if (key.startsWith("home_programs_")) return "Home Programs Intro";
-  if (key.startsWith("home_paths_") || key.startsWith("home_regular_") || key.startsWith("home_executive_")) return "Home Learning Paths";
-  if (key.startsWith("home_graduate_")) return "Home Graduates Section";
-  if (key.startsWith("home_books_")) return "Home Book Preview";
-  if (key.startsWith("home_cta_")) return "Home Admission CTA";
-
-  if (key.startsWith("about_section_")) return "About Main Section";
-  if (key.startsWith("about_mission_") || key.startsWith("about_vision_")) return "Mission and Vision";
-
-  if (key.startsWith("programs_classes_") || key.startsWith("programs_regular_") || key.startsWith("programs_executive_")) return "Programs Class Options";
-
-  if (key.startsWith("books_")) return "Book Library Page";
-  if (key.startsWith("gallery_")) return "Gallery Page";
-  if (key.startsWith("contact_")) return "Contact Page";
-  if (key.startsWith("office_")) return "Contact Page";
-
-  if (key.startsWith("admission_eligibility_") || key === "admission_roles") return "Who Should Apply";
-  if (key.startsWith("admission_requirements_") || key.includes("_requirements")) return "Admission Requirements";
-  if (key.startsWith("admission_apply_") || key.startsWith("admission_start_") || key.startsWith("admission_student_")) return "Apply Online Section";
-  if (key.startsWith("admission_process_") || key === "admission_application_steps") return "Application Process";
-  if (key.startsWith("admission_fees_")) return "Programme Fees Section";
-  if (key.startsWith("admission_calendar_") || key === "admission_calendar") return "Academic Calendar";
-  if (key.startsWith("admission_contact_")) return "Admission Contact Section";
-
-  if (key.startsWith("footer_")) return "Footer";
-
-  return "General Content";
-}
-
-function groupWebsiteFields(fields) {
-  return fields.reduce((groups, field) => {
-    const section = getContentSection(field[0]);
-    if (!groups[section]) groups[section] = [];
-    groups[section].push(field);
-    return groups;
-  }, {});
 }
 
 function WebsiteContentAdmin({ reloadPublic }) {
@@ -5183,8 +5355,9 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
   );
 }
 
-function CourseCard({ course, openAuth, user, goTo }) {
-  return <div className="course-card"><img src={course.imageUrl || CROBIC_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{Number(course.fee) > 0 && <strong>₦{Number(course.fee).toLocaleString()}</strong>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
+function CourseCard({ course, openAuth, user, goTo, settings = {} }) {
+  const fee = usdFee(course);
+  return <div className="course-card"><img src={course.imageUrl || CROBIC_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{fee > 0 && <><strong>{formatUsd(fee)}</strong><CurrencyConverter amountUsd={fee} settings={settings} /></>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
 }
 function BookCard({ book }) { return <div className="book-card"><img src={book.imageUrl || CROBIC_IMAGES.logo} alt={book.title} /><div><span>{book.category}</span><h3>{book.title}</h3><p>{book.description}</p><strong>{book.price}</strong><a className="gold-btn full" href={book.buyLink} target="_blank" rel="noreferrer">Buy Book</a></div></div>; }
 function Feature({ icon, title, text }) { return <div className="feature-card"><div className="icon-box">{icon}</div><h3>{title}</h3><p>{text}</p></div>; }
