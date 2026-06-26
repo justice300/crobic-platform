@@ -8,6 +8,9 @@ const defaultSettings = [
   ["bank_name", process.env.CROBIC_BANK_NAME || "PUT BANK NAME HERE"],
   ["account_name", process.env.CROBIC_ACCOUNT_NAME || "Champions Royal Bible College"],
   ["account_number", process.env.CROBIC_ACCOUNT_NUMBER || "0000000000"],
+  ["base_currency", "USD"],
+  ["currency_rates", "NGN|1500\nGHS|12\nKES|130\nZAR|18\nEUR|0.92\nGBP|0.78"],
+  ["currency_converter_note", "Rates are approximate and can be updated by Super Admin."],
 
   ["home_card_1_title", "Programs Available"],
   ["home_card_1_text", "Certificate, Diploma, Degree and executive learning options."],
@@ -170,10 +173,12 @@ export async function seedDatabase() {
         name: adminName,
         email: adminEmail,
         password,
-        role: "ADMIN",
+        role: "SUPER_ADMIN",
         status: "ACTIVE"
       }
     });
+  } else if (existingAdmin.role === "ADMIN" && existingAdmin.email === adminEmail) {
+    await prisma.user.update({ where: { id: existingAdmin.id }, data: { role: "SUPER_ADMIN", status: "ACTIVE" } });
   }
 
   const bookCount = await prisma.book.count();
@@ -184,7 +189,7 @@ export async function seedDatabase() {
           title: "The Spirit of Excellence",
           author: "Joshua Iginla",
           category: "Leadership",
-          price: "₦8,500",
+          price: "$8.50",
           buyLink: "https://your-stellar-link.com/book-1",
           imageUrl: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=600&auto=format&fit=crop",
           description: "A transformational book on discipline, purpose and excellence."
@@ -193,7 +198,7 @@ export async function seedDatabase() {
           title: "Power for Destiny Fulfilment",
           author: "Joshua Iginla",
           category: "Destiny",
-          price: "₦7,000",
+          price: "$7.00",
           buyLink: "https://your-stellar-link.com/book-2",
           imageUrl: "https://images.unsplash.com/photo-1519682337058-a94d519337bc?q=80&w=600&auto=format&fit=crop",
           description: "Discover the spiritual keys for walking in divine purpose."
@@ -209,7 +214,9 @@ export async function seedDatabase() {
         title: "Foundation of Christian Doctrine",
         level: "Beginner",
         duration: "12 Months",
-        fee: 50000,
+        fee: 75000,
+        feeUsd: 50,
+        currency: "USD",
         imageUrl: "https://images.unsplash.com/photo-1504052434569-70ad5836ab65?q=80&w=900&auto=format&fit=crop",
         description: "Learn the core doctrines of the Christian faith with structure and clarity."
       }

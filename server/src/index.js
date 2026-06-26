@@ -7,7 +7,7 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { prisma, seedDatabase } from "./db.js";
-import { createToken, requireAuth, requireAdmin, requireActiveStudent } from "./middleware.js";
+import { createToken, requireAuth, requireAdmin, requireSuperAdmin, requireActiveStudent, isAdminRole, isSuperAdminRole } from "./middleware.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -212,6 +212,53 @@ async function logAdminActivity(req, { action, entityType = "SYSTEM", entityId =
   }
 }
 
+
+
+
+function isLecturerOnly(user) {
+  return user?.role === "LECTURER";
+}
+
+function staffCanSeeAllCourses(user) {
+  return isAdminRole(user?.role);
+}
+
+function courseAccessWhereForUser(user) {
+  if (staffCanSeeAllCourses(user)) return {};
+  if (isLecturerOnly(user)) return { lecturerAccesses: { some: { lecturerId: user.id } } };
+  return { id: -1 };
+}
+
+async function canManageCourse(req, courseId) {
+  if (!courseId) return false;
+  if (staffCanSeeAllCourses(req.user)) return true;
+  if (!isLecturerOnly(req.user)) return false;
+  const access = await prisma.courseLecturerAccess.findUnique({
+    where: { courseId_lecturerId: { courseId: Number(courseId), lecturerId: req.user.id } }
+  });
+  return Boolean(access);
+}
+
+async function requireCourseAccess(req, res, courseId) {
+  const allowed = await canManageCourse(req, Number(courseId));
+  if (!allowed) {
+    res.status(403).json({ message: "You do not have access to this course." });
+    return false;
+  }
+  return true;
+}
+
+function parseCurrencyRates(value = "") {
+  return String(value || "")
+    .split(/\n|,/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [code = "", rate = ""] = line.split("|").map((item) => item.trim());
+      return { code: code.toUpperCase(), rate: Number(rate || 0) };
+    })
+    .filter((item) => item.code && item.rate > 0);
+}
 
 
 function safeUploadExtension(fileName = "", contentType = "") {
@@ -427,6 +474,7 @@ function buildGradebookRow(enrollment) {
       feedback: submission?.feedback || "",
       answer: submission?.answer || "",
       fileUrl: submission?.fileUrl || "",
+      videoUrl: submission?.videoUrl || "",
       studentSubmittedAt: submission?.submittedAt || null,
       gradedAt: submission?.gradedAt || null
     };
@@ -892,10 +940,18 @@ app.get("/api/student/payment-status", requireAuth, async (req, res) => {
 });
 
 
-async function getLiveSessionForClassroom(includeInactiveLatest = false) {
-  const active = await prisma.liveSession.findFirst({ where: { active: true }, orderBy: { updatedAt: "desc" } });
+async function getLiveSessionForClassroom(includeInactiveLatest = false, viewerUserId = null) {
+  const baseWhere = viewerUserId
+    ? {
+        OR: [
+          { courseId: null },
+          { course: { enrollments: { some: { userId: viewerUserId, admissionStatus: { in: ["APPROVED", "GRADUATED"] } } } } }
+        ]
+      }
+    : {};
+  const active = await prisma.liveSession.findFirst({ where: { ...baseWhere, active: true }, include: { course: { select: { id: true, title: true } } }, orderBy: { updatedAt: "desc" } });
   if (active || !includeInactiveLatest) return active;
-  return prisma.liveSession.findFirst({ orderBy: { updatedAt: "desc" } });
+  return prisma.liveSession.findFirst({ where: baseWhere, include: { course: { select: { id: true, title: true } } }, orderBy: { updatedAt: "desc" } });
 }
 
 async function buildLiveClassroomPayload(liveSession, viewerUserId = null) {
@@ -930,7 +986,7 @@ async function buildLiveClassroomPayload(liveSession, viewerUserId = null) {
 }
 
 app.get("/api/student/live/classroom", requireAuth, requireActiveStudent, async (req, res) => {
-  const liveSession = await getLiveSessionForClassroom(false);
+  const liveSession = await getLiveSessionForClassroom(false, req.user.id);
   if (!liveSession) return res.json(await buildLiveClassroomPayload(null, req.user.id));
 
   await prisma.liveAttendance.upsert({
@@ -943,7 +999,7 @@ app.get("/api/student/live/classroom", requireAuth, requireActiveStudent, async 
 });
 
 app.post("/api/student/live/attendance", requireAuth, requireActiveStudent, async (req, res) => {
-  const liveSession = await getLiveSessionForClassroom(false);
+  const liveSession = await getLiveSessionForClassroom(false, req.user.id);
   if (!liveSession) return res.status(404).json({ message: "No active live class currently." });
 
   const attendance = await prisma.liveAttendance.upsert({
@@ -956,8 +1012,9 @@ app.post("/api/student/live/attendance", requireAuth, requireActiveStudent, asyn
 });
 
 app.post("/api/student/live/chat", requireAuth, requireActiveStudent, async (req, res) => {
-  const liveSession = await getLiveSessionForClassroom(false);
+  const liveSession = await getLiveSessionForClassroom(false, req.user.id);
   if (!liveSession) return res.status(404).json({ message: "No active live class currently." });
+  if (liveSession.chatEnabled === false) return res.status(403).json({ message: "Live chat is currently turned off by the lecturer." });
 
   const message = String(req.body?.message || "").trim();
   if (!message) return res.status(400).json({ message: "Chat message is required." });
@@ -978,7 +1035,7 @@ app.post("/api/student/live/chat", requireAuth, requireActiveStudent, async (req
 });
 
 app.post("/api/student/live/questions", requireAuth, requireActiveStudent, async (req, res) => {
-  const liveSession = await getLiveSessionForClassroom(false);
+  const liveSession = await getLiveSessionForClassroom(false, req.user.id);
   if (!liveSession) return res.status(404).json({ message: "No active live class currently." });
 
   const question = String(req.body?.question || "").trim();
@@ -1461,12 +1518,13 @@ app.post("/api/student/assignments/:id/submit", requireAuth, requireActiveStuden
 
     const answer = String(req.body?.answer || "").trim();
     const fileUrl = req.body?.fileUrl ? String(req.body.fileUrl).trim() : null;
-    if (!answer && !fileUrl) return res.status(400).json({ message: "Please type an answer or upload an assignment file." });
+    const videoUrl = req.body?.videoUrl ? String(req.body.videoUrl).trim() : null;
+    if (!answer && !fileUrl && !videoUrl) return res.status(400).json({ message: "Please type an answer, upload a file, or paste a video assignment link." });
 
     const submission = await prisma.assignmentSubmission.upsert({
       where: { assignmentId_userId: { assignmentId: assignment.id, userId: req.user.id } },
-      update: { answer, fileUrl, status: "SUBMITTED", score: null, feedback: null, submittedAt: new Date(), gradedAt: null },
-      create: { assignmentId: assignment.id, userId: req.user.id, answer, fileUrl, status: "SUBMITTED" }
+      update: { answer, fileUrl, videoUrl, status: "SUBMITTED", score: null, feedback: null, submittedAt: new Date(), gradedAt: null },
+      create: { assignmentId: assignment.id, userId: req.user.id, answer, fileUrl, videoUrl, status: "SUBMITTED" }
     });
 
     queueEmailNotification({
@@ -1571,15 +1629,20 @@ function sanitizeQuizPayload(body = {}) {
 }
 
 app.get("/api/admin/assessments", requireAuth, requireAdmin, async (req, res) => {
-  const [courses, assignments, quizzes] = await Promise.all([
-    prisma.course.findMany({
-      include: {
-        modules: { orderBy: { moduleOrder: "asc" }, include: { lessons: { orderBy: { lessonOrder: "asc" } } } },
-        lessons: { orderBy: { lessonOrder: "asc" } }
-      },
-      orderBy: { createdAt: "desc" }
-    }),
+  const courseWhere = courseAccessWhereForUser(req.user);
+  const courses = await prisma.course.findMany({
+    where: courseWhere,
+    include: {
+      modules: { orderBy: { moduleOrder: "asc" }, include: { lessons: { orderBy: { lessonOrder: "asc" } } } },
+      lessons: { orderBy: { lessonOrder: "asc" } }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  const courseIds = courses.map((course) => course.id);
+  const whereByCourse = staffCanSeeAllCourses(req.user) ? {} : { courseId: { in: courseIds } };
+  const [assignments, quizzes] = await Promise.all([
     prisma.assignment.findMany({
+      where: whereByCourse,
       include: {
         course: { select: { id: true, title: true } },
         module: { select: { id: true, title: true } },
@@ -1589,6 +1652,7 @@ app.get("/api/admin/assessments", requireAuth, requireAdmin, async (req, res) =>
       orderBy: { createdAt: "desc" }
     }),
     prisma.quiz.findMany({
+      where: whereByCourse,
       include: {
         course: { select: { id: true, title: true } },
         module: { select: { id: true, title: true } },
@@ -1606,6 +1670,7 @@ app.post("/api/admin/assignments", requireAuth, requireAdmin, async (req, res) =
   try {
     const payload = sanitizeAssignmentPayload(req.body);
     if (!payload.courseId || !payload.title || !payload.instructions) return res.status(400).json({ message: "Course, assignment title and instructions are required." });
+    if (!(await canManageCourse(req, payload.courseId))) return res.status(403).json({ message: "You do not have access to this course." });
     const created = await prisma.assignment.create({ data: payload });
     await logAdminActivity(req, { action: "CREATED_ASSIGNMENT", entityType: "Assignment", entityId: created.id, details: { title: created.title, courseId: created.courseId } });
     res.status(201).json(created);
@@ -1617,6 +1682,9 @@ app.post("/api/admin/assignments", requireAuth, requireAdmin, async (req, res) =
 app.patch("/api/admin/assignments/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     const payload = sanitizeAssignmentPayload(req.body);
+    const existing = await prisma.assignment.findUnique({ where: { id: Number(req.params.id) } });
+    if (!existing) return res.status(404).json({ message: "Assignment not found." });
+    if (!(await canManageCourse(req, existing.courseId))) return res.status(403).json({ message: "You do not have access to this course." });
     const updated = await prisma.assignment.update({ where: { id: Number(req.params.id) }, data: payload });
     await logAdminActivity(req, { action: "UPDATED_ASSIGNMENT", entityType: "Assignment", entityId: updated.id, details: { title: updated.title, courseId: updated.courseId } });
     res.json(updated);
@@ -1626,6 +1694,9 @@ app.patch("/api/admin/assignments/:id", requireAuth, requireAdmin, async (req, r
 });
 
 app.delete("/api/admin/assignments/:id", requireAuth, requireAdmin, async (req, res) => {
+  const existing = await prisma.assignment.findUnique({ where: { id: Number(req.params.id) } });
+  if (!existing) return res.status(404).json({ message: "Assignment not found." });
+  if (!(await canManageCourse(req, existing.courseId))) return res.status(403).json({ message: "You do not have access to this course." });
   await prisma.assignment.delete({ where: { id: Number(req.params.id) } });
   await logAdminActivity(req, { action: "DELETED_ASSIGNMENT", entityType: "Assignment", entityId: req.params.id });
   res.json({ message: "Assignment deleted" });
@@ -1686,6 +1757,9 @@ app.post("/api/admin/quizzes", requireAuth, requireAdmin, async (req, res) => {
 app.patch("/api/admin/quizzes/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     const payload = sanitizeQuizPayload(req.body);
+    const existing = await prisma.quiz.findUnique({ where: { id: Number(req.params.id) } });
+    if (!existing) return res.status(404).json({ message: "Quiz not found." });
+    if (!(await canManageCourse(req, existing.courseId))) return res.status(403).json({ message: "You do not have access to this course." });
     const updated = await prisma.quiz.update({ where: { id: Number(req.params.id) }, data: payload });
     await logAdminActivity(req, { action: "UPDATED_QUIZ", entityType: "Quiz", entityId: updated.id, details: { title: updated.title, courseId: updated.courseId } });
     res.json(updated);
@@ -1695,6 +1769,9 @@ app.patch("/api/admin/quizzes/:id", requireAuth, requireAdmin, async (req, res) 
 });
 
 app.delete("/api/admin/quizzes/:id", requireAuth, requireAdmin, async (req, res) => {
+  const existing = await prisma.quiz.findUnique({ where: { id: Number(req.params.id) } });
+  if (!existing) return res.status(404).json({ message: "Quiz not found." });
+  if (!(await canManageCourse(req, existing.courseId))) return res.status(403).json({ message: "You do not have access to this course." });
   await prisma.quiz.delete({ where: { id: Number(req.params.id) } });
   await logAdminActivity(req, { action: "DELETED_QUIZ", entityType: "Quiz", entityId: req.params.id });
   res.json({ message: "Quiz deleted" });
@@ -1995,27 +2072,222 @@ app.delete("/api/admin/course-discussions/:id", requireAuth, requireAdmin, async
   }
 });
 
+
+app.get("/api/admin/users-roles", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!isSuperAdminRole(req.user.role)) return res.status(403).json({ message: "Super Admin access required" });
+    const users = await prisma.user.findMany({
+      where: { role: { in: ["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"] } },
+      include: {
+        lecturerCourseAccesses: { include: { course: { select: { id: true, title: true, level: true } } } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const courses = await prisma.course.findMany({ orderBy: { title: "asc" } });
+    res.json({ users: users.map(publicUser), rawUsers: users, courses });
+  } catch (error) {
+    res.status(500).json({ message: "Could not load users and roles", error: error.message });
+  }
+});
+
+app.post("/api/admin/users-roles", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "").trim();
+    const role = String(req.body?.role || "LECTURER").toUpperCase();
+    if (!name || !email || !password) return res.status(400).json({ message: "Name, email and password are required." });
+    if (!["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"].includes(role)) return res.status(400).json({ message: "Invalid staff role." });
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return res.status(409).json({ message: "Email already exists." });
+    const hashed = await bcrypt.hash(password, 10);
+    const created = await prisma.user.create({
+      data: { name, email, password: hashed, role, status: "ACTIVE" }
+    });
+    await logAdminActivity(req, { action: "CREATED_STAFF_ACCOUNT", entityType: "User", entityId: created.id, details: { email, role } });
+    res.status(201).json({ message: "Staff account created.", user: publicUser(created) });
+  } catch (error) {
+    res.status(400).json({ message: "Could not create staff account", error: error.message });
+  }
+});
+
+app.patch("/api/admin/users-roles/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    if (userId === req.user.id && req.body?.role && String(req.body.role).toUpperCase() !== req.user.role) {
+      return res.status(400).json({ message: "You cannot downgrade your own role." });
+    }
+    const data = {};
+    if (req.body?.name !== undefined) data.name = String(req.body.name || "").trim();
+    if (req.body?.email !== undefined) data.email = String(req.body.email || "").trim().toLowerCase();
+    if (req.body?.role !== undefined) {
+      const role = String(req.body.role || "").toUpperCase();
+      if (!["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"].includes(role)) return res.status(400).json({ message: "Invalid staff role." });
+      data.role = role;
+    }
+    if (req.body?.password) data.password = await bcrypt.hash(String(req.body.password), 10);
+    const updated = await prisma.user.update({ where: { id: userId }, data });
+    await logAdminActivity(req, { action: "UPDATED_STAFF_ACCOUNT", entityType: "User", entityId: updated.id, details: { email: updated.email, role: updated.role } });
+    res.json({ message: "Staff account updated.", user: publicUser(updated) });
+  } catch (error) {
+    res.status(400).json({ message: "Could not update staff account", error: error.message });
+  }
+});
+
+app.post("/api/admin/lecturer-course-access", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const lecturerId = Number(req.body?.lecturerId);
+    const courseId = Number(req.body?.courseId);
+    if (!lecturerId || !courseId) return res.status(400).json({ message: "Lecturer and course are required." });
+    const lecturer = await prisma.user.findUnique({ where: { id: lecturerId } });
+    if (!lecturer || !["LECTURER", "ADMIN", "RECTOR", "SUPER_ADMIN"].includes(lecturer.role)) return res.status(404).json({ message: "Lecturer/staff user not found." });
+    const created = await prisma.courseLecturerAccess.upsert({
+      where: { courseId_lecturerId: { courseId, lecturerId } },
+      update: { accessLevel: String(req.body?.accessLevel || "LECTURER"), grantedById: req.user.id },
+      create: { courseId, lecturerId, accessLevel: String(req.body?.accessLevel || "LECTURER"), grantedById: req.user.id },
+      include: { lecturer: { select: { id: true, name: true, email: true, role: true } }, course: { select: { id: true, title: true } } }
+    });
+    await logAdminActivity(req, { action: "ASSIGNED_COURSE_ACCESS", entityType: "CourseLecturerAccess", entityId: created.id, details: { lecturerId, courseId } });
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(400).json({ message: "Could not assign course access", error: error.message });
+  }
+});
+
+app.delete("/api/admin/lecturer-course-access/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    await prisma.courseLecturerAccess.delete({ where: { id: Number(req.params.id) } });
+    await logAdminActivity(req, { action: "REMOVED_COURSE_ACCESS", entityType: "CourseLecturerAccess", entityId: req.params.id });
+    res.json({ message: "Course access removed." });
+  } catch (error) {
+    res.status(400).json({ message: "Could not remove course access", error: error.message });
+  }
+});
+
+app.get("/api/admin/currency-settings", requireAuth, requireAdmin, async (req, res) => {
+  const settings = await prisma.setting.findMany({ where: { key: { in: ["base_currency", "currency_rates", "currency_converter_note"] } } });
+  res.json(Object.fromEntries(settings.map((row) => [row.key, row.value])));
+});
+
+app.patch("/api/admin/currency-settings", requireAuth, requireSuperAdmin, async (req, res) => {
+  const allowed = ["base_currency", "currency_rates", "currency_converter_note"];
+  for (const key of allowed) {
+    if (req.body?.[key] !== undefined) {
+      await prisma.setting.upsert({ where: { key }, update: { value: String(req.body[key]) }, create: { key, value: String(req.body[key]) } });
+    }
+  }
+  await logAdminActivity(req, { action: "UPDATED_CURRENCY_SETTINGS", entityType: "Setting", details: req.body });
+  const rows = await prisma.setting.findMany({ where: { key: { in: allowed } } });
+  res.json(Object.fromEntries(rows.map((row) => [row.key, row.value])));
+});
+
+app.get("/api/admin/student-groups", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const courseId = req.query.courseId ? Number(req.query.courseId) : null;
+    const courseWhere = courseAccessWhereForUser(req.user);
+    const courses = await prisma.course.findMany({ where: courseWhere, orderBy: { title: "asc" } });
+    const accessibleCourseIds = courses.map((course) => course.id);
+    const where = courseId ? { courseId } : { courseId: { in: accessibleCourseIds } };
+    if (courseId && !(await canManageCourse(req, courseId))) return res.status(403).json({ message: "You do not have access to this course." });
+    const groups = await prisma.studentGroup.findMany({
+      where,
+      include: {
+        course: { select: { id: true, title: true } },
+        lecturer: { select: { id: true, name: true, email: true, role: true } },
+        members: { include: { student: { select: { id: true, name: true, email: true, phone: true, country: true } } } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const enrollments = courseId ? await prisma.enrollment.findMany({
+      where: { courseId, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+      include: { user: { select: { id: true, name: true, email: true, phone: true, country: true } } },
+      orderBy: { createdAt: "asc" }
+    }) : [];
+    res.json({ courses, groups, students: enrollments.map((item) => item.user) });
+  } catch (error) {
+    res.status(500).json({ message: "Could not load student groups", error: error.message });
+  }
+});
+
+app.post("/api/admin/student-groups/auto", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const courseId = Number(req.body?.courseId);
+    const groupSize = Math.max(1, Number(req.body?.groupSize || 10));
+    const taskTitle = String(req.body?.taskTitle || "").trim();
+    const instructions = String(req.body?.instructions || "").trim();
+    if (!courseId) return res.status(400).json({ message: "Course is required." });
+    if (!(await canManageCourse(req, courseId))) return res.status(403).json({ message: "You do not have access to this course." });
+
+    const enrollments = await prisma.enrollment.findMany({
+      where: { courseId, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+      include: { user: true },
+      orderBy: { createdAt: "asc" }
+    });
+    if (!enrollments.length) return res.status(400).json({ message: "No approved students found for this course." });
+
+    await prisma.studentGroup.deleteMany({ where: { courseId } });
+    const groups = [];
+    for (let i = 0; i < enrollments.length; i += groupSize) {
+      const chunk = enrollments.slice(i, i + groupSize);
+      const group = await prisma.studentGroup.create({
+        data: {
+          courseId,
+          lecturerId: req.user.id,
+          name: `Group ${groups.length + 1}`,
+          taskTitle,
+          instructions,
+          members: { create: chunk.map((item) => ({ userId: item.userId })) }
+        },
+        include: { members: { include: { student: { select: { id: true, name: true, email: true } } } } }
+      });
+      groups.push(group);
+    }
+    await logAdminActivity(req, { action: "AUTO_CREATED_STUDENT_GROUPS", entityType: "StudentGroup", details: { courseId, groupSize, groups: groups.length } });
+    res.status(201).json({ message: `${groups.length} groups created.`, groups });
+  } catch (error) {
+    res.status(400).json({ message: "Could not create groups", error: error.message });
+  }
+});
+
+app.delete("/api/admin/student-groups/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const group = await prisma.studentGroup.findUnique({ where: { id: Number(req.params.id) } });
+    if (!group) return res.status(404).json({ message: "Group not found." });
+    if (!(await canManageCourse(req, group.courseId))) return res.status(403).json({ message: "You do not have access to this group." });
+    await prisma.studentGroup.delete({ where: { id: group.id } });
+    await logAdminActivity(req, { action: "DELETED_STUDENT_GROUP", entityType: "StudentGroup", entityId: group.id });
+    res.json({ message: "Group deleted." });
+  } catch (error) {
+    res.status(400).json({ message: "Could not delete group", error: error.message });
+  }
+});
+
+
 app.get("/api/admin/overview", requireAuth, requireAdmin, async (req, res) => {
-  const [students, books, courses, pendingEnrollments, openSupport, certificates] = await Promise.all([
-    prisma.user.count({ where: { role: "STUDENT" } }),
+  const courseWhere = courseAccessWhereForUser(req.user);
+  const courseRows = await prisma.course.findMany({ where: courseWhere, select: { id: true } });
+  const courseIds = courseRows.map((course) => course.id);
+  const enrollmentWhere = staffCanSeeAllCourses(req.user) ? {} : { courseId: { in: courseIds } };
+  const [students, books, pendingEnrollments, openSupport, certificates] = await Promise.all([
+    prisma.user.count({ where: { role: "STUDENT", enrollments: staffCanSeeAllCourses(req.user) ? undefined : { some: { courseId: { in: courseIds } } } } }),
     prisma.book.count(),
-    prisma.course.count(),
-    prisma.enrollment.count({ where: { admissionStatus: "AWAITING_ADMIN_APPROVAL" } }),
+    prisma.enrollment.count({ where: { ...enrollmentWhere, admissionStatus: "AWAITING_ADMIN_APPROVAL" } }),
     prisma.appeal.count({ where: { status: { in: ["OPEN", "WAITING_ADMIN", "UNDER_REVIEW"] } } }),
-    prisma.certificate.count({ where: { status: "ISSUED" } })
+    prisma.certificate.count({ where: staffCanSeeAllCourses(req.user) ? { status: "ISSUED" } : { status: "ISSUED", courseId: { in: courseIds } } })
   ]);
-  res.json({ students, books, courses, pendingEnrollments, openSupport, certificates });
+  res.json({ students, books, courses: courseRows.length, pendingEnrollments, openSupport, certificates });
 });
 
 app.get("/api/admin/students", requireAuth, requireAdmin, async (req, res) => {
+  const courseRows = await prisma.course.findMany({ where: courseAccessWhereForUser(req.user), select: { id: true } });
+  const courseIds = courseRows.map((course) => course.id);
   const students = await prisma.user.findMany({
-    where: { role: "STUDENT" },
-    include: { enrollments: { include: { course: true } } },
+    where: staffCanSeeAllCourses(req.user) ? { role: "STUDENT" } : { role: "STUDENT", enrollments: { some: { courseId: { in: courseIds } } } },
+    include: { enrollments: { where: staffCanSeeAllCourses(req.user) ? {} : { courseId: { in: courseIds } }, include: { course: true } } },
     orderBy: { createdAt: "desc" }
   });
   res.json(students.map((student) => ({ ...publicUser(student), enrollments: student.enrollments })));
 });
-
 
 app.patch("/api/admin/students/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
@@ -2127,12 +2399,14 @@ Programme: ${enrollment.course?.title || updated.course?.title || "CROBIC progra
 
 function crudRoutes(modelName, routeName) {
   app.get(`/api/admin/${routeName}`, requireAuth, requireAdmin, async (req, res) => {
-    const data = await prisma[modelName].findMany({ orderBy: { createdAt: "desc" } });
+    const where = routeName === "courses" ? courseAccessWhereForUser(req.user) : {};
+    const data = await prisma[modelName].findMany({ where, orderBy: { createdAt: "desc" } });
     res.json(data);
   });
 
   app.post(`/api/admin/${routeName}`, requireAuth, requireAdmin, async (req, res) => {
     try {
+      if (routeName === "courses" && !staffCanSeeAllCourses(req.user)) return res.status(403).json({ message: "Only Super Admin/Admin can create courses." });
       const created = await prisma[modelName].create({ data: req.body });
       await logAdminActivity(req, { action: `CREATED_${routeName.toUpperCase()}`, entityType: routeName, entityId: created.id, details: { title: created.title || created.name || created.key || null } });
       res.status(201).json(created);
@@ -2143,6 +2417,7 @@ function crudRoutes(modelName, routeName) {
 
   app.patch(`/api/admin/${routeName}/:id`, requireAuth, requireAdmin, async (req, res) => {
     try {
+      if (routeName === "courses" && !(await canManageCourse(req, Number(req.params.id)))) return res.status(403).json({ message: "You do not have access to this course." });
       const updated = await prisma[modelName].update({
         where: { id: Number(req.params.id) },
         data: req.body
@@ -2156,6 +2431,7 @@ function crudRoutes(modelName, routeName) {
 
   app.delete(`/api/admin/${routeName}/:id`, requireAuth, requireAdmin, async (req, res) => {
     try {
+      if (routeName === "courses" && !staffCanSeeAllCourses(req.user)) return res.status(403).json({ message: "Only Super Admin/Admin can delete courses." });
       await prisma[modelName].delete({ where: { id: Number(req.params.id) } });
       await logAdminActivity(req, { action: `DELETED_${routeName.toUpperCase()}`, entityType: routeName, entityId: req.params.id });
       res.json({ message: "Deleted" });
@@ -2176,9 +2452,11 @@ crudRoutes("liveSession", "live-sessions");
 
 app.get("/api/admin/course-builder", requireAuth, requireAdmin, async (req, res) => {
   const courses = await prisma.course.findMany({
+    where: courseAccessWhereForUser(req.user),
     include: {
       modules: { include: { lessons: { orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
-      lessons: { include: { module: true }, orderBy: { lessonOrder: "asc" } }
+      lessons: { include: { module: true }, orderBy: { lessonOrder: "asc" } },
+      lecturerAccesses: { include: { lecturer: { select: { id: true, name: true, email: true, role: true } } } }
     },
     orderBy: { createdAt: "desc" }
   });
@@ -2187,6 +2465,7 @@ app.get("/api/admin/course-builder", requireAuth, requireAdmin, async (req, res)
 
 app.post("/api/admin/modules", requireAuth, requireAdmin, async (req, res) => {
   try {
+    if (!(await canManageCourse(req, Number(req.body.courseId)))) return res.status(403).json({ message: "You do not have access to this course." });
     const created = await prisma.courseModule.create({
       data: {
         courseId: Number(req.body.courseId),
@@ -2241,6 +2520,7 @@ app.post("/api/admin/lessons", requireAuth, requireAdmin, async (req, res) => {
   try {
     const payload = sanitizeLessonPayload(req.body);
     if (!payload.courseId || !payload.title) return res.status(400).json({ message: "Course and lesson title are required." });
+    if (!(await canManageCourse(req, payload.courseId))) return res.status(403).json({ message: "You do not have access to this course." });
     const created = await prisma.lesson.create({ data: payload });
     await logAdminActivity(req, { action: "CREATED_LESSON", entityType: "Lesson", entityId: created.id, details: { title: created.title, courseId: created.courseId } });
     res.status(201).json(created);
@@ -2510,7 +2790,8 @@ app.patch("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => 
 
 
 app.get("/api/admin/live/classroom", requireAuth, requireAdmin, async (req, res) => {
-  const liveSession = await getLiveSessionForClassroom(true);
+  let liveSession = await getLiveSessionForClassroom(true);
+  if (liveSession?.courseId && !(await canManageCourse(req, liveSession.courseId))) liveSession = null;
   res.json(await buildLiveClassroomPayload(liveSession));
 });
 
@@ -2541,17 +2822,26 @@ app.delete("/api/admin/live/chat/:id", requireAuth, requireAdmin, async (req, re
 });
 
 app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) => {
-  const { title, description, liveUrl, scheduledAt } = req.body;
+  const { title, description, liveUrl, scheduledAt, courseId, replayUrl, subtitleUrl, subtitleLanguage, chatEnabled, voiceEnabled } = req.body;
+  const finalCourseId = courseId ? Number(courseId) : null;
+  if (finalCourseId && !(await canManageCourse(req, finalCourseId))) return res.status(403).json({ message: "You do not have access to this course." });
   await prisma.liveSession.updateMany({ data: { active: false } });
   const live = await prisma.liveSession.create({
     data: {
+      courseId: finalCourseId,
       title,
       description,
       liveUrl,
+      replayUrl: replayUrl ? String(replayUrl) : null,
+      subtitleUrl: subtitleUrl ? String(subtitleUrl) : null,
+      subtitleLanguage: subtitleLanguage ? String(subtitleLanguage) : null,
+      chatEnabled: chatEnabled === undefined ? true : chatEnabled === true || chatEnabled === "true" || chatEnabled === "on",
+      voiceEnabled: voiceEnabled === true || voiceEnabled === "true" || voiceEnabled === "on",
       active: true,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null
     }
   });
+  await logAdminActivity(req, { action: "STARTED_LIVE_CLASS", entityType: "LiveSession", entityId: live.id, details: { title: live.title, courseId: live.courseId } });
   res.status(201).json(live);
 });
 

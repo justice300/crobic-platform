@@ -8,7 +8,10 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
+  RECTOR
   ADMIN
+  LECTURER
   STUDENT
 }
 
@@ -58,19 +61,23 @@ model User {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  enrollments           Enrollment[]
-  lessonProgresses      LessonProgress[]
-  liveChatMessages      LiveChatMessage[]
-  liveQuestions         LiveQuestion[]
-  liveAttendances       LiveAttendance[]
-  appeals               Appeal[]
-  supportMessages       SupportMessage[]
-  certificates          Certificate[]
-  assignmentSubmissions AssignmentSubmission[]
-  quizAttempts          QuizAttempt[]
-  adminActivityLogs     AdminActivityLog[]      @relation("AdminActivityUser")
-  courseDiscussions     CourseDiscussion[]      @relation("DiscussionAuthor")
-  discussionReplies     CourseDiscussionReply[] @relation("DiscussionReplyAuthor")
+  enrollments             Enrollment[]
+  lessonProgresses        LessonProgress[]
+  liveChatMessages        LiveChatMessage[]
+  liveQuestions           LiveQuestion[]
+  liveAttendances         LiveAttendance[]
+  appeals                 Appeal[]
+  supportMessages         SupportMessage[]
+  certificates            Certificate[]
+  assignmentSubmissions   AssignmentSubmission[]
+  quizAttempts            QuizAttempt[]
+  adminActivityLogs       AdminActivityLog[]      @relation("AdminActivityUser")
+  courseDiscussions       CourseDiscussion[]      @relation("DiscussionAuthor")
+  discussionReplies       CourseDiscussionReply[] @relation("DiscussionReplyAuthor")
+  lecturerCourseAccesses  CourseLecturerAccess[]  @relation("LecturerCourseAccess")
+  grantedCourseAccesses   CourseLecturerAccess[]  @relation("CourseAccessGrantedBy")
+  createdStudentGroups    StudentGroup[]          @relation("StudentGroupCreator")
+  studentGroupMemberships StudentGroupMember[]
 }
 
 model Course {
@@ -81,17 +88,22 @@ model Course {
   description String
   imageUrl    String?
   fee         Int      @default(0)
+  feeUsd      Float    @default(0)
+  currency    String   @default("USD")
   published   Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  modules      CourseModule[]
-  lessons      Lesson[]
-  enrollments  Enrollment[]
-  certificates Certificate[]
-  assignments  Assignment[]
-  quizzes      Quiz[]
-  discussions  CourseDiscussion[]
+  modules          CourseModule[]
+  lessons          Lesson[]
+  enrollments      Enrollment[]
+  certificates     Certificate[]
+  assignments      Assignment[]
+  quizzes          Quiz[]
+  discussions      CourseDiscussion[]
+  lecturerAccesses CourseLecturerAccess[]
+  studentGroups    StudentGroup[]
+  liveSessions     LiveSession[]
 }
 
 model CourseModule {
@@ -117,6 +129,8 @@ model Lesson {
   title                     String
   videoUrl                  String?
   notesUrl                  String?
+  subtitleUrl               String?
+  subtitleLanguage          String?
   duration                  String?
   lessonOrder               Int      @default(1)
   required                  Boolean  @default(true)
@@ -251,6 +265,7 @@ model AssignmentSubmission {
   userId       Int
   answer       String?
   fileUrl      String?
+  videoUrl     String?
   score        Int?
   feedback     String?
   status       String    @default("SUBMITTED")
@@ -370,18 +385,27 @@ model Announcement {
 }
 
 model LiveSession {
-  id          Int       @id @default(autoincrement())
-  title       String
-  description String?
-  liveUrl     String
-  active      Boolean   @default(false)
-  scheduledAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id               Int       @id @default(autoincrement())
+  courseId         Int?
+  title            String
+  description      String?
+  liveUrl          String
+  replayUrl        String?
+  subtitleUrl      String?
+  subtitleLanguage String?
+  active           Boolean   @default(false)
+  chatEnabled      Boolean   @default(true)
+  voiceEnabled     Boolean   @default(false)
+  scheduledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
+  course       Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
   chatMessages LiveChatMessage[]
   questions    LiveQuestion[]
   attendances  LiveAttendance[]
+
+  @@index([courseId])
 }
 
 model LiveChatMessage {
@@ -489,6 +513,55 @@ model CourseDiscussionReply {
   author     User             @relation("DiscussionReplyAuthor", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([discussionId])
+  @@index([userId])
+}
+
+model CourseLecturerAccess {
+  id          Int      @id @default(autoincrement())
+  courseId    Int
+  lecturerId  Int
+  grantedById Int?
+  accessLevel String   @default("LECTURER")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecturer  User   @relation("LecturerCourseAccess", fields: [lecturerId], references: [id], onDelete: Cascade)
+  grantedBy User?  @relation("CourseAccessGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  @@unique([courseId, lecturerId])
+  @@index([courseId])
+  @@index([lecturerId])
+}
+
+model StudentGroup {
+  id           Int      @id @default(autoincrement())
+  courseId     Int
+  lecturerId   Int?
+  name         String
+  taskTitle    String?
+  instructions String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  course   Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecturer User?                @relation("StudentGroupCreator", fields: [lecturerId], references: [id], onDelete: SetNull)
+  members  StudentGroupMember[]
+
+  @@index([courseId])
+  @@index([lecturerId])
+}
+
+model StudentGroupMember {
+  id        Int      @id @default(autoincrement())
+  groupId   Int
+  userId    Int
+  createdAt DateTime @default(now())
+
+  group   StudentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
   @@index([userId])
 }
 

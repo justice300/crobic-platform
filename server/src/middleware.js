@@ -1,6 +1,21 @@
 import jwt from "jsonwebtoken";
 import { prisma } from "./db.js";
 
+export const ADMIN_ROLES = ["SUPER_ADMIN", "RECTOR", "ADMIN"];
+export const STAFF_ROLES = ["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"];
+
+export function isAdminRole(role) {
+  return ADMIN_ROLES.includes(role);
+}
+
+export function isStaffRole(role) {
+  return STAFF_ROLES.includes(role);
+}
+
+export function isSuperAdminRole(role) {
+  return ["SUPER_ADMIN", "RECTOR"].includes(role);
+}
+
 export function createToken(user) {
   return jwt.sign(
     { id: user.id, role: user.role, email: user.email },
@@ -27,8 +42,15 @@ export async function requireAuth(req, res, next) {
 }
 
 export function requireAdmin(req, res, next) {
-  if (req.user?.role !== "ADMIN") {
-    return res.status(403).json({ message: "Admin access required" });
+  if (!isStaffRole(req.user?.role)) {
+    return res.status(403).json({ message: "Staff access required" });
+  }
+  next();
+}
+
+export function requireSuperAdmin(req, res, next) {
+  if (!isSuperAdminRole(req.user?.role)) {
+    return res.status(403).json({ message: "Super Admin access required" });
   }
   next();
 }
