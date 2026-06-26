@@ -5549,3 +5549,191 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* Program page owner layout update - 4-card placement like approved reference, keeps existing colours editable */
+.programs-showcase-page {
+  padding: 150px 0 105px;
+  background: var(--black);
+  color: white;
+  min-height: 92vh;
+}
+
+.programs-showcase-page .section-intro {
+  margin-bottom: 54px;
+}
+
+.programs-showcase-page .section-intro h2 {
+  color: white;
+}
+
+.programs-showcase-page .section-intro p {
+  color: rgba(255,255,255,.62);
+  font-size: 18px;
+  max-width: 720px;
+}
+
+.program-currency-panel {
+  width: min(760px, 100%);
+  margin: 0 auto 48px;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 22px;
+  align-items: center;
+  padding: 22px;
+  border: 1px solid rgba(196,159,100,.25);
+  background: rgba(255,255,255,.035);
+}
+
+.program-currency-panel > div:first-child span {
+  display: inline-block;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: .22em;
+  font-size: 10px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.program-currency-panel > div:first-child strong {
+  display: block;
+  color: white;
+  font-family: var(--font-display);
+  font-size: 24px;
+  margin-bottom: 5px;
+}
+
+.program-currency-panel > div:first-child p {
+  margin: 0;
+  color: rgba(255,255,255,.6);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.program-currency-panel .currency-converter-box {
+  margin: 0;
+  background: rgba(196,159,100,.08);
+  border-color: rgba(196,159,100,.28);
+}
+
+.program-currency-panel .currency-converter-box strong {
+  color: white !important;
+}
+
+.program-currency-panel .currency-converter-box select {
+  background: var(--black-2);
+  color: white;
+  border-color: rgba(255,255,255,.12);
+}
+
+.program-showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.program-showcase-card {
+  min-height: 430px;
+  padding: 44px 36px 36px;
+  background: rgba(255,255,255,.018);
+  border: 1px solid rgba(255,255,255,.09);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  transition: .35s ease;
+}
+
+.program-showcase-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(196,159,100,.42);
+  background: rgba(255,255,255,.035);
+}
+
+.program-showcase-card > span {
+  display: inline-flex;
+  background: rgba(255,255,255,.035);
+  color: var(--gold);
+  border: 1px solid rgba(255,255,255,.08);
+  padding: 10px 18px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .32em;
+  text-transform: uppercase;
+  margin-bottom: 40px;
+}
+
+.program-showcase-card h3 {
+  color: white;
+  font-size: 24px;
+  line-height: 1.15;
+  margin-bottom: 18px;
+}
+
+.program-showcase-card .meta-line {
+  color: rgba(255,255,255,.56);
+  margin-bottom: 20px;
+}
+
+.program-showcase-card p {
+  color: rgba(255,255,255,.58);
+  font-size: 15px;
+  line-height: 1.75;
+  margin-bottom: 28px;
+}
+
+.program-showcase-card .currency-converter-box {
+  width: 100%;
+  margin-top: auto;
+  margin-bottom: 18px;
+  background: rgba(196,159,100,.06);
+  border-color: rgba(196,159,100,.2);
+}
+
+.program-showcase-card .currency-converter-box strong {
+  color: white !important;
+}
+
+.program-showcase-card .currency-converter-box select {
+  background: var(--black-2);
+  color: white;
+  border-color: rgba(255,255,255,.12);
+}
+
+.program-detail-link {
+  margin-top: auto;
+  border: 0;
+  background: transparent;
+  color: var(--gold);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-transform: uppercase;
+  letter-spacing: .28em;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+@media (max-width: 1180px) {
+  .program-showcase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .programs-showcase-page {
+    padding: 120px 0 78px;
+  }
+
+  .program-currency-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .program-showcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .program-showcase-card {
+    min-height: auto;
+    padding: 34px 28px;
+  }
+}

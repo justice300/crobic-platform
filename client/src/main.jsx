@@ -578,10 +578,18 @@ function Home({ data, goTo, openAuth }) {
 
 function fallbackCourses() {
   return [
-    { id: "fallback-1", title: "Certificate in Biblical Studies", level: "Certificate", duration: "12 Months", fee: 0, description: "Foundational biblical training for new ministers and church workers.", imageUrl: CROBIC_IMAGES.classroom },
-    { id: "fallback-2", title: "Diploma in Theology", level: "Diploma", duration: "24 Months", fee: 0, description: "Comprehensive theological training for pastors, evangelists and Bible teachers.", imageUrl: CROBIC_IMAGES.graduation },
-    { id: "fallback-3", title: "Degree in Theology", level: "Degree", duration: "3-4 Years", fee: 0, description: "Advanced theological education for senior pastors and ministry leaders.", imageUrl: CROBIC_IMAGES.handshake }
+    { id: "fallback-1", title: "Foundation Certificate Program", level: "Foundation", duration: "6 Months", feeUsd: 59, fee: 0, description: "Foundational biblical training covering prophetic ministry, evangelism, digital literacy, and minister character development.", imageUrl: CROBIC_IMAGES.classroom },
+    { id: "fallback-2", title: "Diploma Certificate Program in Theology and Leadership", level: "Diploma", duration: "24 Months", feeUsd: 190, fee: 0, description: "Comprehensive theological training for pastors, evangelists, prophets, and Bible teachers.", imageUrl: CROBIC_IMAGES.graduation },
+    { id: "fallback-3", title: "Advanced Diploma Certificate in Theology and Leadership", level: "Advanced", duration: "12 Months", feeUsd: 198, fee: 0, description: "Advanced study in deliverance, prophetic ministry, biblical business, and principles of raising leaders.", imageUrl: CROBIC_IMAGES.handshake },
+    { id: "fallback-4", title: "Workers and Leadership Training Program", level: "Corporate", duration: "Flexible", feeUsd: 0, fee: 0, description: "For churches and organizations that want their workers and leaders professionally trained in theology and ministry principles.", imageUrl: CROBIC_IMAGES.classroom }
   ];
+}
+
+function mergeProgrammeCourses(courses = []) {
+  const published = Array.isArray(courses) ? courses : [];
+  const seen = new Set(published.map((course) => String(course.title || "").trim().toLowerCase()).filter(Boolean));
+  const fillers = fallbackCourses().filter((course) => !seen.has(String(course.title || "").trim().toLowerCase()));
+  return [...published, ...fillers].slice(0, 4);
 }
 
 function About({ goTo, settings = {} }) {
@@ -608,13 +616,20 @@ function About({ goTo, settings = {} }) {
 }
 
 function Programs({ courses, openAuth, user, goTo, settings = {} }) {
-  const list = courses.length ? courses : fallbackCourses();
+  const list = mergeProgrammeCourses(courses);
   return (
     <main>
-      <PageHero eyebrow={getSetting(settings, "programs_hero_eyebrow", "Academics")} title={getSetting(settings, "programs_hero_title", "CROBIC Programs")} text={getSetting(settings, "programs_hero_text", "Certificate, Diploma and Degree routes for students preparing for ministry and leadership.")} image={getSetting(settings, "programs_hero_image_url", CROBIC_IMAGES.classroom)} />
-      <section className="page container">
-        <div className="course-grid program-cards">
-          {list.map((course) => <CourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={user} goTo={goTo} settings={settings} />)}
+      <section className="programs-showcase-page">
+        <div className="container">
+          <SectionIntro
+            eyebrow={getSetting(settings, "programs_hero_eyebrow", "Our Programs")}
+            title={getSetting(settings, "programs_hero_title", "Our Programs")}
+            text={getSetting(settings, "programs_hero_text", "Foundation Certificate, Diploma, Advanced Certificate, and Leadership and Business Management")}
+          />
+          <ProgramCurrencyConverterPanel courses={list} settings={settings} />
+          <div className="program-showcase-grid">
+            {list.map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={user} goTo={goTo} settings={settings} />)}
+          </div>
         </div>
       </section>
       <section className="learning-paths container compact-paths">
@@ -625,6 +640,35 @@ function Programs({ courses, openAuth, user, goTo, settings = {} }) {
         </div>
       </section>
     </main>
+  );
+}
+
+function ProgramCurrencyConverterPanel({ courses = [], settings = {} }) {
+  const pricedCourses = courses.filter((course) => usdFee(course) > 0);
+  const defaultAmount = usdFee(pricedCourses[0] || courses[0] || {}) || 59;
+  return (
+    <div className="program-currency-panel">
+      <div>
+        <span>Currency Calculator</span>
+        <strong>Convert programme fee from USD</strong>
+        <p>All programme fees are displayed in dollars. Students can estimate the equivalent in their local currency before payment.</p>
+      </div>
+      <CurrencyConverter amountUsd={defaultAmount} settings={settings} />
+    </div>
+  );
+}
+
+function ProgramCourseCard({ course, openAuth, user, goTo, settings = {} }) {
+  const fee = usdFee(course);
+  return (
+    <div className="program-showcase-card">
+      <span>{course.level || "Programme"}</span>
+      <h3>{course.title}</h3>
+      <div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Flexible"}{fee > 0 ? ` — ${formatUsd(fee)}` : ""}</small></div>
+      <p>{course.description}</p>
+      {fee > 0 && <CurrencyConverter amountUsd={fee} settings={settings} />}
+      <button className="program-detail-link" onClick={() => user ? goTo("admissions") : openAuth("register")}>View Details <ArrowRight size={14} /></button>
+    </div>
   );
 }
 
