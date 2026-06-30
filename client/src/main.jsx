@@ -549,7 +549,7 @@ function Home({ data, goTo, openAuth }) {
         <div className="container">
           <SectionIntro eyebrow={getSetting(s, "home_programs_eyebrow", "Academics")} title={getSetting(s, "home_programs_title", "Our Programs")} text={getSetting(s, "home_programs_text", "Certificate, Diploma and Degree routes for ministers and Bible students.")} />
           <div className="program-showcase-grid home-program-showcase-grid">
-            {mergeProgrammeCourses(data.courses).map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={null} goTo={goTo} settings={s} />)}
+            {mergeProgrammeCourses(data.courses, s).map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={null} goTo={goTo} settings={s} />)}
           </div>
         </div>
       </section>
@@ -594,20 +594,91 @@ function Home({ data, goTo, openAuth }) {
   );
 }
 
-function fallbackCourses() {
+function defaultProgrammeCards(settings = {}) {
   return [
-    { id: "fallback-1", title: "Foundation Certificate Program", level: "Foundation", duration: "6 Months", feeUsd: 59, fee: 0, description: "Foundational biblical training covering prophetic ministry, evangelism, digital literacy, and minister character development.", imageUrl: CROBIC_IMAGES.classroom },
-    { id: "fallback-2", title: "Diploma Certificate Program in Theology and Leadership", level: "Diploma", duration: "24 Months", feeUsd: 190, fee: 0, description: "Comprehensive theological training for pastors, evangelists, prophets, and Bible teachers.", imageUrl: CROBIC_IMAGES.graduation },
-    { id: "fallback-3", title: "Advanced Diploma Certificate in Theology and Leadership", level: "Advanced", duration: "12 Months", feeUsd: 198, fee: 0, description: "Advanced study in deliverance, prophetic ministry, biblical business, and principles of raising leaders.", imageUrl: CROBIC_IMAGES.handshake },
-    { id: "fallback-4", title: "Workers and Leadership Training Program", level: "Corporate", duration: "Flexible", feeUsd: 0, fee: 0, description: "For churches and organizations that want their workers and leaders professionally trained in theology and ministry principles.", imageUrl: CROBIC_IMAGES.classroom }
+    {
+      id: "programme-foundation",
+      slot: "foundation",
+      title: getSetting(settings, "program_card_1_title", "Foundation Certificate Program"),
+      level: getSetting(settings, "program_card_1_level", "Foundation"),
+      duration: getSetting(settings, "program_card_1_duration", "6 Months"),
+      feeUsd: Number(getSetting(settings, "program_card_1_fee", "59")) || 0,
+      fee: 0,
+      audience: getSetting(settings, "program_card_1_audience", "Ministers, leaders, academics & professionals"),
+      description: getSetting(settings, "program_card_1_description", "Foundational biblical training covering prophetic ministry, evangelism, digital literacy, and minister character development."),
+      certification: getSetting(settings, "program_card_1_certification", "Foundation Certificate")
+    },
+    {
+      id: "programme-diploma",
+      slot: "diploma",
+      title: getSetting(settings, "program_card_2_title", "Diploma Certificate Program in Theology and Leadership"),
+      level: getSetting(settings, "program_card_2_level", "Diploma"),
+      duration: getSetting(settings, "program_card_2_duration", "24 Months"),
+      feeUsd: Number(getSetting(settings, "program_card_2_fee", "190")) || 0,
+      fee: 0,
+      audience: getSetting(settings, "program_card_2_audience", "Pastors, evangelists, prophets & Bible teachers"),
+      description: getSetting(settings, "program_card_2_description", "Comprehensive theological training for pastors, evangelists, prophets, and Bible teachers."),
+      certification: getSetting(settings, "program_card_2_certification", "Diploma Certificate in Theology and Leadership")
+    },
+    {
+      id: "programme-advanced",
+      slot: "advanced",
+      title: getSetting(settings, "program_card_3_title", "Advanced Diploma Certificate Program in Theology and Leadership"),
+      level: getSetting(settings, "program_card_3_level", "Advanced"),
+      duration: getSetting(settings, "program_card_3_duration", "12 Months"),
+      feeUsd: Number(getSetting(settings, "program_card_3_fee", "198")) || 0,
+      fee: 0,
+      audience: getSetting(settings, "program_card_3_audience", "Ministers seeking advanced theological training"),
+      description: getSetting(settings, "program_card_3_description", "Advanced study in deliverance, prophetic ministry, biblical business, and principles of raising leaders."),
+      certification: getSetting(settings, "program_card_3_certification", "Advanced Diploma Certificate in Theology and Leadership")
+    },
+    {
+      id: "programme-corporate",
+      slot: "corporate",
+      title: getSetting(settings, "program_card_4_title", "Workers and Leadership Training Program"),
+      level: getSetting(settings, "program_card_4_level", "Corporate"),
+      duration: getSetting(settings, "program_card_4_duration", "Flexible"),
+      feeUsd: Number(getSetting(settings, "program_card_4_fee", "0")) || 0,
+      fee: 0,
+      audience: getSetting(settings, "program_card_4_audience", "Churches and organizations training their workers and leaders"),
+      description: getSetting(settings, "program_card_4_description", "Churches and organizations training their workers and leaders."),
+      certification: getSetting(settings, "program_card_4_certification", "Workers and Leadership Training Certificate")
+    }
   ];
 }
 
-function mergeProgrammeCourses(courses = []) {
-  const published = Array.isArray(courses) ? courses : [];
-  const seen = new Set(published.map((course) => String(course.title || "").trim().toLowerCase()).filter(Boolean));
-  const fillers = fallbackCourses().filter((course) => !seen.has(String(course.title || "").trim().toLowerCase()));
-  return [...published, ...fillers].slice(0, 4);
+function programSlotForCourse(course = {}) {
+  const haystack = `${course.level || ""} ${course.title || ""}`.toLowerCase();
+  if (/worker|corporate|leadership training/.test(haystack)) return "corporate";
+  if (/advanced/.test(haystack)) return "advanced";
+  if (/diploma/.test(haystack)) return "diploma";
+  if (/foundation certificate|foundation program|certificate program|foundation/.test(haystack) && !/christian doctrine/.test(haystack)) return "foundation";
+  return "";
+}
+
+function mergeProgrammeCourses(courses = [], settings = {}) {
+  const defaults = defaultProgrammeCards(settings);
+  const published = Array.isArray(courses) ? courses.filter((course) => course?.published !== false) : [];
+  const bySlot = Object.fromEntries(defaults.map((item) => [item.slot, item]));
+
+  for (const course of published) {
+    const slot = programSlotForCourse(course);
+    if (!slot || !bySlot[slot]) continue;
+    bySlot[slot] = {
+      ...bySlot[slot],
+      ...course,
+      slot,
+      title: course.title || bySlot[slot].title,
+      level: course.level || bySlot[slot].level,
+      duration: course.duration || bySlot[slot].duration,
+      description: course.description || bySlot[slot].description,
+      audience: course.audience || bySlot[slot].audience,
+      certification: course.certification || bySlot[slot].certification,
+      feeUsd: Number(course.feeUsd || course.fee || bySlot[slot].feeUsd || 0)
+    };
+  }
+
+  return defaults.map((item) => bySlot[item.slot]);
 }
 
 function About({ goTo, settings = {} }) {
@@ -746,7 +817,7 @@ function About({ goTo, settings = {} }) {
 }
 
 function Programs({ courses, openAuth, user, goTo, settings = {} }) {
-  const list = mergeProgrammeCourses(courses);
+  const list = mergeProgrammeCourses(courses, settings);
   const curriculumGroups = parseProgramCurriculum(settings);
   const graduationRequirements = settingLines(settings, "programs_graduation_requirements", [
     "Complete all required courses for your program level",
@@ -856,13 +927,13 @@ function ProgramCurrencyConverterPanel({ settings = {} }) {
 function ProgramCourseCard({ course, openAuth, user, goTo, settings = {} }) {
   const fee = usdFee(course);
   return (
-    <div className="program-showcase-card base44-program-card">
+    <div className="program-showcase-card base44-program-card compact-program-card">
       <span>{course.level || "Programme"}</span>
       <h3>{course.title}</h3>
       <div className="program-card-info"><Clock size={15} /> <small>Duration: {course.duration || course.level || "Flexible"}</small></div>
       <div className="program-card-info"><CreditCard size={15} /> <small>Fee: {fee > 0 ? formatUsd(fee) : "Contact Us"}</small></div>
-      <p>{course.description}</p>
-      <div className="program-card-cert"><strong>Certification:</strong> <span>{course.title}</span></div>
+      <p>{course.audience || course.description}</p>
+      <div className="program-card-cert"><strong>Certification:</strong> <span>{course.certification || course.title}</span></div>
     </div>
   );
 }
@@ -5012,6 +5083,10 @@ const websiteContentGroups = [
     fields: [
       ["programs_hero_eyebrow", "Hero Eyebrow"], ["programs_hero_title", "Hero Title"], ["programs_hero_text", "Hero Text", "textarea"], ["programs_hero_image_url", "Hero Image URL"],
       ["programs_overview_eyebrow", "Program Overview Eyebrow"], ["programs_overview_title", "Program Overview Title"], ["programs_overview_text", "Program Overview Text", "textarea"],
+      ["program_card_1_title", "Program Card 1 Title"], ["program_card_1_level", "Program Card 1 Level"], ["program_card_1_duration", "Program Card 1 Duration"], ["program_card_1_fee", "Program Card 1 USD Fee"], ["program_card_1_audience", "Program Card 1 Audience Text", "textarea"], ["program_card_1_description", "Program Card 1 Description", "textarea"], ["program_card_1_certification", "Program Card 1 Certification"],
+      ["program_card_2_title", "Program Card 2 Title"], ["program_card_2_level", "Program Card 2 Level"], ["program_card_2_duration", "Program Card 2 Duration"], ["program_card_2_fee", "Program Card 2 USD Fee"], ["program_card_2_audience", "Program Card 2 Audience Text", "textarea"], ["program_card_2_description", "Program Card 2 Description", "textarea"], ["program_card_2_certification", "Program Card 2 Certification"],
+      ["program_card_3_title", "Program Card 3 Title"], ["program_card_3_level", "Program Card 3 Level"], ["program_card_3_duration", "Program Card 3 Duration"], ["program_card_3_fee", "Program Card 3 USD Fee"], ["program_card_3_audience", "Program Card 3 Audience Text", "textarea"], ["program_card_3_description", "Program Card 3 Description", "textarea"], ["program_card_3_certification", "Program Card 3 Certification"],
+      ["program_card_4_title", "Program Card 4 Title"], ["program_card_4_level", "Program Card 4 Level"], ["program_card_4_duration", "Program Card 4 Duration"], ["program_card_4_fee", "Program Card 4 USD Fee (0 shows Contact Us)"], ["program_card_4_audience", "Program Card 4 Audience Text", "textarea"], ["program_card_4_description", "Program Card 4 Description", "textarea"], ["program_card_4_certification", "Program Card 4 Certification"],
       ["currency_converter_kicker", "Currency Converter Kicker"], ["currency_converter_title", "Currency Converter Title"], ["currency_converter_text", "Currency Converter Text", "textarea"], ["currency_rates", "Currency Rates (one per line: CODE|RATE)", "textarea"], ["currency_converter_note", "Currency Converter Note", "textarea"],
       ["programs_core_title", "Core Foundational Course Title"], ["programs_core_text", "Core Foundational Course Text", "textarea"],
       ["programs_curriculum_eyebrow", "Curriculum Eyebrow"], ["programs_curriculum_title", "Curriculum Title"], ["programs_curriculum_text", "Curriculum Intro Text", "textarea"], ["programs_curriculum_items", "Curriculum Accordions (one per line: Title|Subtitle|Course 1;Course 2;Course 3)", "textarea"],
