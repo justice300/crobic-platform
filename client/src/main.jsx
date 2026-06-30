@@ -549,7 +549,7 @@ function Home({ data, goTo, openAuth }) {
         <div className="container">
           <SectionIntro eyebrow={getSetting(s, "home_programs_eyebrow", "Academics")} title={getSetting(s, "home_programs_title", "Our Programs")} text={getSetting(s, "home_programs_text", "Certificate, Diploma and Degree routes for ministers and Bible students.")} />
           <div className="program-showcase-grid home-program-showcase-grid">
-            {mergeProgrammeCourses(data.courses, s).map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={null} goTo={goTo} settings={s} />)}
+            {mergeProgrammeCourses(data.courses, s).map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={null} goTo={goTo} settings={s} showDetails />)}
           </div>
         </div>
       </section>
@@ -924,7 +924,7 @@ function ProgramCurrencyConverterPanel({ settings = {} }) {
   );
 }
 
-function ProgramCourseCard({ course, openAuth, user, goTo, settings = {} }) {
+function ProgramCourseCard({ course, openAuth, user, goTo, settings = {}, showDetails = false }) {
   const fee = usdFee(course);
   return (
     <div className="program-showcase-card base44-program-card compact-program-card">
@@ -933,6 +933,9 @@ function ProgramCourseCard({ course, openAuth, user, goTo, settings = {} }) {
       <div className="program-card-info"><Clock size={15} /> <small>Duration: {course.duration || course.level || "Flexible"}</small></div>
       <div className="program-card-info"><CreditCard size={15} /> <small>Fee: {fee > 0 ? formatUsd(fee) : "Contact Us"}</small></div>
       <p>{course.audience || course.description}</p>
+      {showDetails ? (
+        <button type="button" className="program-detail-link" onClick={() => goTo("programs")}>View Details <ArrowRight size={14} /></button>
+      ) : null}
       <div className="program-card-cert"><strong>Certification:</strong> <span>{course.certification || course.title}</span></div>
     </div>
   );

@@ -6316,3 +6316,83 @@ button:disabled {
     min-height: auto !important;
   }
 }
+
+
+/* Home programme cards should match the official CROBIC programme cards without making fonts too large */
+.home-program-showcase-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 28px !important;
+  align-items: stretch !important;
+  margin-top: 56px !important;
+}
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card {
+  background: rgba(8, 13, 24, .94) !important;
+  color: var(--white) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+  min-height: 380px !important;
+  padding: 34px 28px 30px !important;
+}
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card > span {
+  background: rgba(255,255,255,.055) !important;
+  color: #e0ad61 !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+  padding: 11px 18px !important;
+  font-size: 10.5px !important;
+  letter-spacing: .32em !important;
+}
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card h3 {
+  color: var(--white) !important;
+  font-size: clamp(21px, 1.45vw, 27px) !important;
+  line-height: 1.12 !important;
+  min-height: 70px !important;
+  margin-top: 28px !important;
+  margin-bottom: 18px !important;
+}
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card .program-card-info {
+  margin-top: 8px !important;
+}
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card .program-card-info small,
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card p {
+  color: #87a5cf !important;
+}
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card p {
+  font-size: 15px !important;
+  line-height: 1.55 !important;
+  margin: 20px 0 24px !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 4 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+.program-section .home-program-showcase-grid .program-card-cert {
+  display: none !important;
+}
+.program-section .home-program-showcase-grid .program-detail-link {
+  margin-top: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  color: var(--gold) !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .32em !important;
+  text-transform: uppercase !important;
+  cursor: pointer !important;
+}
+.program-section .home-program-showcase-grid .program-detail-link:hover {
+  gap: 16px !important;
+}
+
+@media (max-width: 1180px) {
+  .home-program-showcase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 720px) {
+  .home-program-showcase-grid { grid-template-columns: 1fr !important; gap: 18px !important; }
+  .program-section .home-program-showcase-grid .base44-program-card.compact-program-card { min-height: auto !important; }
+  .program-section .home-program-showcase-grid .base44-program-card.compact-program-card h3 { min-height: auto !important; }
+}
