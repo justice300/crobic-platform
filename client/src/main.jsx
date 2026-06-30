@@ -829,10 +829,7 @@ function Programs({ courses, openAuth, user, goTo, settings = {} }) {
   ]);
 
   return (
-    <main
-      className="programs-page premium-fixed-program-bg"
-      style={{ "--programs-fixed-bg": `url(${getSetting(settings, "programs_fixed_background_image_url", getSetting(settings, "programs_hero_image_url", CROBIC_IMAGES.classroom))})` }}
-    >
+    <main className="programs-page">
       <PageHero
         eyebrow={getSetting(settings, "programs_hero_eyebrow", "CROBIC")}
         title={getSetting(settings, "programs_hero_title", "Our Programs")}
@@ -5087,7 +5084,7 @@ const websiteContentGroups = [
   {
     title: "Programs Page",
     fields: [
-      ["programs_hero_eyebrow", "Hero Eyebrow"], ["programs_hero_title", "Hero Title"], ["programs_hero_text", "Hero Text", "textarea"], ["programs_hero_image_url", "Hero Image URL"], ["programs_fixed_background_image_url", "Fixed Page Background Image URL"],
+      ["programs_hero_eyebrow", "Hero Eyebrow"], ["programs_hero_title", "Hero Title"], ["programs_hero_text", "Hero Text", "textarea"], ["programs_hero_image_url", "Hero Image URL"],
       ["programs_overview_eyebrow", "Program Overview Eyebrow"], ["programs_overview_title", "Program Overview Title"], ["programs_overview_text", "Program Overview Text", "textarea"],
       ["program_card_1_title", "Program Card 1 Title"], ["program_card_1_level", "Program Card 1 Level"], ["program_card_1_duration", "Program Card 1 Duration"], ["program_card_1_fee", "Program Card 1 USD Fee"], ["program_card_1_audience", "Program Card 1 Audience Text", "textarea"], ["program_card_1_description", "Program Card 1 Description", "textarea"], ["program_card_1_certification", "Program Card 1 Certification"],
       ["program_card_2_title", "Program Card 2 Title"], ["program_card_2_level", "Program Card 2 Level"], ["program_card_2_duration", "Program Card 2 Duration"], ["program_card_2_fee", "Program Card 2 USD Fee"], ["program_card_2_audience", "Program Card 2 Audience Text", "textarea"], ["program_card_2_description", "Program Card 2 Description", "textarea"], ["program_card_2_certification", "Program Card 2 Certification"],
