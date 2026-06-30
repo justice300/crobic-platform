@@ -381,6 +381,15 @@ function App() {
 }
 
 function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen }) {
+  const [scrolled, setScrolled] = useState(() => typeof window !== "undefined" && window.scrollY > 18);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 18);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const links = [
     ["home", "Home"],
     ["about", "About"],
@@ -392,7 +401,7 @@ function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen 
   ];
 
   return (
-    <header className="navbar">
+    <header className={`navbar ${scrolled ? "nav-scrolled" : "nav-transparent"}`}>
       <div className="nav-inner">
         <button className="brand" onClick={() => goTo("home")}> 
           <span className="logo-glow"><img src={LOGO} alt="CROBIC Logo" /></span>
@@ -818,93 +827,32 @@ function About({ goTo, settings = {} }) {
 
 function Programs({ courses, openAuth, user, goTo, settings = {} }) {
   const list = mergeProgrammeCourses(courses, settings);
-  const curriculumGroups = parseProgramCurriculum(settings);
-  const graduationRequirements = settingLines(settings, "programs_graduation_requirements", [
-    "Complete all required courses for your program level",
-    "Core Foundational Course is compulsory for all programs",
-    "Maintain minimum attendance requirement",
-    "Pass all examinations with satisfactory grades",
-    "Complete ministry practicum, project or seminar",
-    "Demonstrate proficiency in prophetic and deliverance ministry"
-  ]);
 
   return (
-    <main className="programs-page">
+    <main className="programs-page programs-page-clean">
       <PageHero
-        eyebrow={getSetting(settings, "programs_hero_eyebrow", "CROBIC")}
-        title={getSetting(settings, "programs_hero_title", "Our Programs")}
-        text={getSetting(settings, "programs_hero_text", "Foundation Certificate, Diploma, Advanced Diploma Certificate, and Workers and Leadership Training Program")}
-        image={getSetting(settings, "programs_hero_image_url", CROBIC_IMAGES.graduation)}
+        eyebrow={getSetting(settings, "programs_hero_eyebrow", "Academics")}
+        title={getSetting(settings, "programs_hero_title", "CROBIC Programs")}
+        text={getSetting(settings, "programs_hero_text", "Certificate, Diploma and Degree routes for students preparing for ministry and leadership.")}
+        image={getSetting(settings, "programs_hero_image_url", CROBIC_IMAGES.classroom)}
       />
 
-      <section className="program-overview-section">
+      <section className="program-overview-section clean-program-overview">
         <div className="container">
           <SectionIntro
             eyebrow={getSetting(settings, "programs_overview_eyebrow", "Academics")}
             title={getSetting(settings, "programs_overview_title", "Program Overview")}
             text={getSetting(settings, "programs_overview_text", "Four pathways to deepen your theological knowledge, ministry effectiveness, and organizational leadership")}
           />
-          <div className="program-showcase-grid base44-program-grid">
+          <div className="program-showcase-grid base44-program-grid official-program-grid">
             {list.map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={user} goTo={goTo} settings={settings} />)}
           </div>
-
-          <div className="program-core-note">
-            <h3>{getSetting(settings, "programs_core_title", "Core Foundational Course")}</h3>
-            <p>{getSetting(settings, "programs_core_text", "Compulsory for all programs — covers what CROBIC stands for and believes in. All students must complete this course regardless of their chosen program.")}</p>
-          </div>
         </div>
       </section>
 
-      <section className="program-converter-section">
+      <section className="program-converter-section clean-program-converter-section">
         <div className="container">
           <ProgramCurrencyConverterPanel settings={settings} />
-        </div>
-      </section>
-
-      <section className="program-curriculum-section">
-        <div className="container narrow-container">
-          <SectionIntro
-            eyebrow={getSetting(settings, "programs_curriculum_eyebrow", "Curriculum")}
-            title={getSetting(settings, "programs_curriculum_title", "What You Will Study")}
-            text={getSetting(settings, "programs_curriculum_text", "Comprehensive courses covering theology, prophetic ministry, deliverance, and practical ministry skills")}
-          />
-          <ProgramCurriculumAccordion groups={curriculumGroups} />
-        </div>
-      </section>
-
-      <section className="program-learning-section">
-        <div className="container">
-          <SectionIntro
-            eyebrow={getSetting(settings, "programs_classes_eyebrow", "Learning Streams")}
-            title={getSetting(settings, "programs_classes_title", "Learning Options")}
-            text={getSetting(settings, "programs_classes_text", "All programs are available in both Regular and Executive Classes")}
-          />
-          <div className="path-grid program-learning-grid">
-            <PathCard icon={<Users />} title={getSetting(settings, "programs_regular_title", "Regular Classes")} text={getSetting(settings, "programs_regular_text", "For students who want a fuller classroom learning experience.")} points={settingPoints(settings, "programs_regular_points", ["Full-time daytime classes", "Immersive learning experience", "Ideal for full-time students and new ministers", "All programs available"])} />
-            <PathCard icon={<Briefcase />} title={getSetting(settings, "programs_executive_title", "Executive Classes")} text={getSetting(settings, "programs_executive_text", "For pastors, ministers and professionals with active schedules.")} points={settingPoints(settings, "programs_executive_points", ["Intensive block scheduling", "Designed for working pastors and professionals", "Flexible for active ministry leaders", "All programs available"])} />
-          </div>
-        </div>
-      </section>
-
-      <section className="program-requirements-section">
-        <div className="container narrow-container">
-          <SectionIntro
-            eyebrow={getSetting(settings, "programs_graduation_eyebrow", "Requirements")}
-            title={getSetting(settings, "programs_graduation_title", "Graduation Requirements")}
-            text={getSetting(settings, "programs_graduation_text", "")}
-          />
-          <div className="program-requirements-box">
-            {graduationRequirements.map((item) => <p key={item}><CheckCircle size={17} /> <span>{item}</span></p>)}
-          </div>
-        </div>
-      </section>
-
-      <section className="program-final-cta">
-        <div className="container">
-          <p className="eyebrow framed">{getSetting(settings, "programs_cta_kicker", "Start Today")}</p>
-          <h2>{getSetting(settings, "programs_cta_title", "Ready to Begin Your Theological Journey")}</h2>
-          <p>{getSetting(settings, "programs_cta_text", "Applications are now open. Take the first step toward deeper ministry and theological excellence.")}</p>
-          <button className="gold-btn big" onClick={() => user ? goTo("admissions") : openAuth("register")}>{getSetting(settings, "programs_cta_button", "Apply Now")}</button>
         </div>
       </section>
     </main>
@@ -926,33 +874,18 @@ function ProgramCurrencyConverterPanel({ settings = {} }) {
 
 function ProgramCourseCard({ course, openAuth, user, goTo, settings = {} }) {
   const fee = usdFee(course);
+  const description = String(course.audience || course.description || "").trim();
   return (
-    <div className="program-showcase-card base44-program-card compact-program-card">
+    <div className="program-showcase-card base44-program-card compact-program-card short-official-card">
       <span>{course.level || "Programme"}</span>
       <h3>{course.title}</h3>
-      <div className="program-card-info"><Clock size={15} /> <small>Duration: {course.duration || course.level || "Flexible"}</small></div>
-      <div className="program-card-info"><CreditCard size={15} /> <small>Fee: {fee > 0 ? formatUsd(fee) : "Contact Us"}</small></div>
-      <p>{course.audience || course.description}</p>
-      <div className="program-card-cert"><strong>Certification:</strong> <span>{course.certification || course.title}</span></div>
+      <div className="program-card-meta-line">
+        <small><Clock size={14} /> {course.duration || "Flexible"}</small>
+        <small><CreditCard size={14} /> {fee > 0 ? formatUsd(fee) : "Contact Us"}</small>
+      </div>
+      {description && <p>{description}</p>}
     </div>
   );
-}
-
-function parseProgramCurriculum(settings = {}) {
-  const fallback = [
-    "Foundation Certificate Program Courses|Available in Regular and Executive Classes|Core Foundational Course (What We Stand For and Believe In) — Compulsory;Use of English;Deliverance and Prophetic Ministry;Evangelism and Church Planting;Minister Character Development and Ethics;Social Media and Digital Literacy;Project / Seminar",
-    "Advanced Certificate — First Semester Courses|Available in Regular and Executive Classes|Social Media and Digital Literacy;Mind and Capacity Building;Core Foundational Course;Deliverance and Prophetic Ministry;Evangelism and Church Growth;Biblical Business Concepts;Excellence in Ministry, Leadership and Stewardship;Seminar / Project",
-    "Advanced Certificate — Second Semester Courses|Available in Regular and Executive Classes|Deliverance and Prophetic Ministry;Principles of Raising Leaders and Mentorship;Evangelism and Church Growth;Use of English;Project;Seminar / Defence",
-    "Diploma — First Semester 100 Level Courses|Taught by Papa, Rector and faculty lecturers|Prophetic and Deliverance Ministry;Soteriology;Biblical Hermeneutics;Homiletics;Pneumatology;Minister Character Development and Ethics;Leadership Strategy & Principles Ministry;Biblical Business Concept & Management;Use of English Language;Extra Curriculum Activities",
-    "Diploma — First Semester 200 Level Courses|Taught by Papa, Rector and faculty lecturers|Prophetic and Deliverance Ministry;Soteriology;Biblical Hermeneutics;Principles of Raising Leaders & Mentoring;Homiletics;Pneumatology;Index of Excellence in Ministry & Applied Stewardship;Church Planting and Church Growth;Principles of Women in Ministry;Vision Analysis & Goal Setting;Extra Curriculum Activities",
-    "Diploma — Second Semester 100 Level Courses|Taught by faculty lecturers|Prophetic and Deliverance Ministry;Soteriology;Pneumatology;Homiletics;Hermeneutics;Evangelism and Excellent in Ministry;Biblical Business Concept and Financial Integrity & Management;Dynamics of Faith & Mental Exploit and Prayer & Spiritual Warfare;Use of English Language;Extra Curriculum Activities",
-    "Executive Class 200 Level — Second Semester Courses|Timetable: Mon–Sat intensive block format|Homiletics;Pneumatology;Biblical Hermeneutics;Soteriology;Prophetic and Deliverance Ministry;Ministry in Purpose & Biblical Management;Evangelism and Church Planting & Growth;Excellence in Ministry, Raising Leaders & Ministry Family;Practical Leadership Analysis & Mentoring;Principles of Vision Analysis & Goals Setting;Use of English Language;Evangelism, Faith and Prayer"
-  ];
-  const lines = settingLines(settings, "programs_curriculum_items", fallback);
-  return lines.map((line) => {
-    const [title = "", sub = "", items = ""] = line.split("|").map((item) => item.trim());
-    return { title, sub, items: items.split(";").map((item) => item.trim()).filter(Boolean) };
-  }).filter((group) => group.title);
 }
 
 function ProgramCurriculumAccordion({ groups = [] }) {
