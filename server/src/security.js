@@ -1,5 +1,4 @@
 import cookieParser from "cookie-parser";
-import mongoSanitize from "express-mongo-sanitize";
 import rateLimit from "express-rate-limit";
 import slowDown from "express-slow-down";
 import helmet from "helmet";
@@ -154,7 +153,6 @@ export function applySecurity(app) {
   app.use(httpsRedirect);
   app.use(cookieParser());
   app.use(apiSlowDown);
-  app.use(mongoSanitize({ replaceWith: "_" }));
   app.use(sanitizeRequestBody);
 
   app.use(
