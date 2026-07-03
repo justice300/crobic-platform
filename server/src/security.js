@@ -88,10 +88,29 @@ function sanitizeValue(value) {
 }
 
 export function sanitizeRequestBody(req, _res, next) {
-  if (req.body && typeof req.body === "object") req.body = sanitizeValue(req.body);
-  if (req.query && typeof req.query === "object") req.query = sanitizeValue(req.query);
-  if (req.params && typeof req.params === "object") req.params = sanitizeValue(req.params);
-  next();
+  try {
+    if (req.body && typeof req.body === "object") {
+      req.body = sanitizeValue(req.body);
+    }
+
+    // Do not reassign req.query in Express 5 because it can be read-only.
+    if (req.query && typeof req.query === "object") {
+      const cleanQuery = sanitizeValue(req.query);
+      for (const key of Object.keys(req.query)) {
+        delete req.query[key];
+      }
+      Object.assign(req.query, cleanQuery);
+    }
+
+    if (req.params && typeof req.params === "object") {
+      const cleanParams = sanitizeValue(req.params);
+      Object.assign(req.params, cleanParams);
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 export function validateRequest(req, res, next) {
