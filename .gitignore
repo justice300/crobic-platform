@@ -8,3 +8,10 @@ server/uploads
 client/dist
 dist
 .DS_Store
+
+.env.local
+.env.production
+server/uploads/
+client/build/
+*.log
+npm-debug.log*

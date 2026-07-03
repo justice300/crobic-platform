@@ -13,7 +13,11 @@
     "vite": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest"
+    "lucide-react": "latest",
+    "@sentry/react": "latest",
+    "axios": "latest",
+    "dompurify": "latest",
+    "video.js": "latest"
   },
   "devDependencies": {}
 }

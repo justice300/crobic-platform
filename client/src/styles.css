@@ -47,9 +47,10 @@ p { color: var(--muted); line-height: 1.75; }
 .logo-glow:before { content: ''; position: absolute; inset: -5px; border-radius: 50%; background: var(--gold-soft); filter: blur(10px); opacity: 0; transition: .4s; }
 .brand:hover .logo-glow:before { opacity: 1; }
 .brand img { position: relative; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; ring: 1px solid rgba(255,255,255,.08); }
-.brand span:last-child { display: flex; flex-direction: column; text-align: left; }
+.brand span:last-child, .brand-copy { display: flex; flex-direction: column; text-align: left; }
 .brand strong { color: var(--gold); font-family: var(--font-display); font-size: 13px; letter-spacing: .25em; }
-.brand small { color: rgba(255,255,255,.55); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; margin-top: 2px; }
+.brand small { color: rgba(255,255,255,.72); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; margin-top: 2px; max-width: 245px; line-height: 1.25; }
+.brand em { color: rgba(196,159,100,.9); font-style: normal; font-size: 8px; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
 .desktop-nav { display: flex; align-items: center; gap: 0; }
 .desktop-nav button, .footer button, .mobile-nav button { border: 0; background: transparent; }
 .desktop-nav button { position: relative; padding: 26px 16px; color: rgba(255,255,255,.55); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .2em; transition: .4s ease; }
@@ -292,7 +293,7 @@ p { color: var(--muted); line-height: 1.75; }
 
 @media (max-width: 620px) {
   .nav-inner { width: calc(100% - 28px); }
-  .brand small { display: none; }
+  .brand small, .brand em { display: none; }
   .hero { min-height: 760px; }
   .hero-content { width: calc(100% - 32px); }
   .hero-progress { grid-template-columns: 1fr; bottom: 28px; }
@@ -1202,7 +1203,7 @@ p { color: var(--muted); line-height: 1.75; }
     padding: 18px;
   }
 }
-/* CROBIC homepage polish: compact premium info cards, single course centering, graduates spacing */
+/* CIBI homepage polish: compact premium info cards, single course centering, graduates spacing */
 
 /* 1. Make the 3 homepage info cards more compact and premium */
 .info-cards {
@@ -1331,7 +1332,7 @@ p { color: var(--muted); line-height: 1.75; }
   }
 }
 
-/* CROBIC in-portal live classroom, chat, questions, attendance */
+/* CIBI in-portal live classroom, chat, questions, attendance */
 .portal-video-shell,
 .admin-video-preview,
 .lesson-video-shell {
@@ -1669,7 +1670,7 @@ p { color: var(--muted); line-height: 1.75; }
   }
 }
 
-/* CROBIC LMS Course Builder + Student Learning Interface */
+/* CIBI LMS Course Builder + Student Learning Interface */
 .student-course-grid .student-course-card {
   min-height: 100%;
 }
@@ -2004,7 +2005,7 @@ p { color: var(--muted); line-height: 1.75; }
   }
 }
 
-/* CROBIC controlled Course Builder polish: edit, reorder, publish/hide and preview */
+/* CIBI controlled Course Builder polish: edit, reorder, publish/hide and preview */
 .course-builder-polish .content-editor-header {
   margin-bottom: 18px;
 }
@@ -2230,7 +2231,7 @@ button:disabled {
 }
 
 
-/* CROBIC global-standard auth modal */
+/* CIBI global-standard auth modal */
 .auth-backdrop {
   background:
     radial-gradient(circle at top left, rgba(196, 159, 100, 0.2), transparent 34%),
@@ -2502,7 +2503,7 @@ button:disabled {
 }
 
 
-/* CROBIC payment page global polish + receipt upload */
+/* CIBI payment page global polish + receipt upload */
 .admission-apply-card .payment-box.premium-payment-box {
   margin: 0 !important;
   max-width: none !important;
@@ -2651,7 +2652,7 @@ button:disabled {
 }
 
 
-/* CROBIC global in-site notifications and confirm modal */
+/* CIBI global in-site notifications and confirm modal */
 .crobic-toast-stack {
   position: fixed;
   right: 26px;
@@ -2812,7 +2813,7 @@ button:disabled {
 }
 
 
-/* CROBIC Admissions & Payments admin polish */
+/* CIBI Admissions & Payments admin polish */
 .students-admin-polished {
   display: grid;
   gap: 22px;
@@ -3040,7 +3041,7 @@ button:disabled {
 }
 
 
-/* CROBIC Student Status Gate + Saved Appeals/Support Chat */
+/* CIBI Student Status Gate + Saved Appeals/Support Chat */
 .student-decision-gate {
   max-width: 1180px;
   text-align: center;
@@ -3432,7 +3433,7 @@ button:disabled {
   }
 }
 
-/* CROBIC Student Portal active sidebar + tabbed dashboard */
+/* CIBI Student Portal active sidebar + tabbed dashboard */
 .student-portal-page .portal-sidebar button {
   cursor: pointer;
   border-left: 3px solid transparent;
@@ -3616,7 +3617,7 @@ button:disabled {
   }
 }
 
-/* CROBIC Certificates + Completion Review */
+/* CIBI Certificates + Completion Review */
 .certificate-heading-row,
 .certificate-preview-actions {
   display: flex;
@@ -3923,7 +3924,7 @@ button:disabled {
   }
 }
 
-/* CROBIC certificate authority settings, signature, seal and QR code */
+/* CIBI certificate authority settings, signature, seal and QR code */
 .certificate-settings-panel {
   margin: 24px 0;
   background: #fff;
@@ -4458,7 +4459,7 @@ button:disabled {
   white-space: nowrap !important;
   margin-top: auto !important;
 }
-/* CROBIC Assignments & Quiz System */
+/* CIBI Assignments & Quiz System */
 .learning-assessments-panel {
   background: #ffffff;
   border: 1px solid var(--line);
@@ -4753,7 +4754,7 @@ button:disabled {
   }
 }
 
-/* CROBIC Gradebook + Student Results Dashboard */
+/* CIBI Gradebook + Student Results Dashboard */
 .results-heading-row,
 .gradebook-admin-panel .content-editor-header {
   margin-bottom: 22px;
@@ -5025,7 +5026,7 @@ button:disabled {
   }
 }
 
-/* CROBIC Email Notification Settings */
+/* CIBI Email Notification Settings */
 .email-settings-panel {
   padding: 0;
   overflow: hidden;
@@ -5103,7 +5104,7 @@ button:disabled {
     padding: 20px;
   }
 }
-/* CROBIC admin/student portal sidebar dark background + scroll fix */
+/* CIBI admin/student portal sidebar dark background + scroll fix */
 .portal-page {
   align-items: stretch !important;
 }
@@ -5152,7 +5153,7 @@ button:disabled {
   }
 }
 
-/* CROBIC production readiness phase: audit trail, attendance records, course discussions */
+/* CIBI production readiness phase: audit trail, attendance records, course discussions */
 .audit-log-list,
 .attendance-session-list,
 .admin-discussion-list,
@@ -6166,7 +6167,7 @@ button:disabled {
   }
 }
 
-/* Programs page final owner layout: Base44-style structure with CROBIC mixed backgrounds */
+/* Programs page final owner layout: Base44-style structure with CIBI mixed backgrounds */
 .programs-page { background: var(--black); color: var(--white); }
 .programs-page .page-hero { min-height: 560px; }
 .programs-page .page-hero-content { text-align: center; margin-inline: auto; max-width: 980px; }
@@ -6265,7 +6266,7 @@ button:disabled {
   .program-requirements-box { padding: 30px 22px; }
 }
 
-/* CROBIC programs card height fix - keep four official cards compact and consistent */
+/* CIBI programs card height fix - keep four official cards compact and consistent */
 .base44-program-grid {
   align-items: stretch !important;
 }
@@ -6318,7 +6319,7 @@ button:disabled {
 }
 
 
-/* Home programme cards should match the official CROBIC programme cards without making fonts too large */
+/* Home programme cards should match the official CIBI programme cards without making fonts too large */
 .home-program-showcase-grid {
   display: grid !important;
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
@@ -6395,4 +6396,127 @@ button:disabled {
   .home-program-showcase-grid { grid-template-columns: 1fr !important; gap: 18px !important; }
   .program-section .home-program-showcase-grid .base44-program-card.compact-program-card { min-height: auto !important; }
   .program-section .home-program-showcase-grid .base44-program-card.compact-program-card h3 { min-height: auto !important; }
+}
+
+
+/* Production video, live class and notification additions */
+.notification-bell-wrap { position: relative; display: inline-flex; }
+.notification-bell { position: relative; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.86); color: var(--black); display: inline-flex; align-items: center; justify-content: center; }
+.notification-bell span { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; border-radius: 50%; background: #b42318; color: #fff; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; }
+.notification-menu { position: absolute; top: calc(100% + 12px); right: 0; width: min(340px, calc(100vw - 28px)); background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow); padding: 16px; z-index: 40; display: grid; gap: 10px; }
+.notification-menu > strong { font-family: var(--font-display); color: var(--black); }
+.notification-menu > p { margin: 0; font-size: 13px; color: var(--muted); }
+.notification-item { text-align: left; border: 1px solid var(--line); background: var(--cream); padding: 12px; display: grid; gap: 4px; }
+.notification-item b { font-size: 13px; color: var(--black); }
+.notification-item small { color: var(--muted); line-height: 1.45; }
+.notification-item.read { opacity: .62; }
+
+.course-live-banner { margin: 24px 0; padding: 24px; border: 1px solid rgba(196,159,100,.4); background: linear-gradient(135deg, rgba(7,11,24,.96), rgba(31,41,55,.94)); color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; box-shadow: var(--shadow); }
+.course-live-banner span { color: var(--gold); text-transform: uppercase; letter-spacing: .18em; font-size: 11px; font-weight: 900; display: inline-flex; align-items: center; gap: 8px; }
+.course-live-banner h3 { color: #fff; margin: 8px 0; }
+.course-live-banner p { color: rgba(255,255,255,.72); margin: 0; }
+
+.course-video-panel, .course-live-manager { margin: 24px 0; padding: 24px; background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow); }
+.course-video-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+.course-video-panel-head span { display: block; color: var(--gold); text-transform: uppercase; letter-spacing: .2em; font-size: 10px; font-weight: 900; margin-bottom: 6px; }
+.course-video-panel-head h3 { margin: 0; }
+.course-video-list { display: grid; gap: 12px; }
+.course-video-row, .recording-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 15px; border: 1px solid var(--line); background: var(--cream); }
+.course-video-row > div:first-child, .recording-row > div:first-child { display: grid; gap: 4px; }
+.course-video-row span { color: var(--gold); font-size: 10px; text-transform: uppercase; letter-spacing: .18em; font-weight: 900; }
+.course-video-row strong, .recording-row strong { color: var(--black); }
+.course-video-row small, .recording-row small { color: var(--muted); }
+.video-row-actions, .recording-input-row { display: flex; align-items: center; gap: 8px; }
+.video-upload-modal, .secure-video-modal { max-width: 760px; }
+.drop-zone { min-height: 150px; border: 2px dashed rgba(196,159,100,.42); background: rgba(196,159,100,.06); display: grid; place-items: center; text-align: center; gap: 8px; padding: 28px; cursor: pointer; color: var(--muted); }
+.drop-zone svg { color: var(--gold); }
+.drop-zone strong { color: var(--black); }
+.drop-zone.dragging { background: rgba(196,159,100,.14); border-color: var(--gold); }
+.upload-progress { position: relative; height: 28px; background: var(--cream); border: 1px solid var(--line); overflow: hidden; }
+.upload-progress span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold); transition: width .25s ease; }
+.upload-progress b { position: relative; display: flex; height: 100%; align-items: center; justify-content: center; font-size: 12px; color: var(--black); }
+.secure-video-player { width: 100%; max-height: 70vh; background: #000; display: block; }
+.course-live-active { padding: 18px; border: 1px solid rgba(196,159,100,.28); background: rgba(196,159,100,.08); display: grid; gap: 10px; margin-bottom: 16px; }
+.go-live-form { display: grid; gap: 12px; margin-bottom: 16px; }
+.recording-input-row input { min-width: min(280px, 45vw); border: 1px solid var(--line); background: #fff; padding: 11px 12px; }
+.quiet-banner.compact { padding: 18px; }
+
+@media (max-width: 720px) {
+  .course-live-banner, .course-video-row, .recording-row, .course-video-panel-head { flex-direction: column; align-items: stretch; }
+  .video-row-actions, .recording-input-row { width: 100%; }
+  .video-row-actions > *, .recording-input-row > * { flex: 1; }
+  .notification-menu { right: -70px; }
+}
+
+/* CIBI storage-saving platform video player */
+.platform-video-shell {
+  background: #070707;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.1);
+  box-shadow: 0 22px 60px rgba(0,0,0,.25);
+}
+.platform-video-frame-wrap {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.platform-youtube-mount,
+.platform-youtube-mount iframe {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: 0;
+}
+.platform-youtube-mount iframe {
+  pointer-events: none;
+}
+.platform-video-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: radial-gradient(circle at center, rgba(196,145,44,.18), rgba(0,0,0,.86));
+  font-weight: 800;
+  text-align: center;
+  padding: 20px;
+}
+.platform-video-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: linear-gradient(180deg, #111, #060606);
+  flex-wrap: wrap;
+}
+.platform-video-controls input[type="range"] {
+  flex: 1 1 180px;
+  min-width: 130px;
+  accent-color: var(--gold);
+}
+.platform-video-controls small {
+  color: #fff;
+  font-weight: 800;
+  min-width: 85px;
+  text-align: center;
+}
+.secure-video-note {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+}
+.video-policy-note {
+  margin: 10px 0;
+}
+@media (max-width: 640px) {
+  .platform-video-controls {
+    gap: 6px;
+  }
+  .platform-video-controls .mini-btn {
+    padding: 8px 9px;
+    font-size: 12px;
+  }
 }

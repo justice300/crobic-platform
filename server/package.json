@@ -8,7 +8,9 @@
     "start": "node src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:db:push": "prisma db push"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -18,7 +20,22 @@
     "express": "latest",
     "jsonwebtoken": "latest",
     "morgan": "latest",
-    "nodemailer": "^9.0.1"
+    "nodemailer": "^9.0.1",
+    "@sentry/node": "latest",
+    "axios": "latest",
+    "cookie-parser": "latest",
+    "dompurify": "latest",
+    "express-mongo-sanitize": "latest",
+    "express-rate-limit": "latest",
+    "express-slow-down": "latest",
+    "express-validator": "latest",
+    "helmet": "latest",
+    "isomorphic-dompurify": "latest",
+    "multer": "latest",
+    "pg": "latest",
+    "resend": "latest",
+    "uuid": "latest",
+    "xss": "latest"
   },
   "devDependencies": {
     "nodemon": "latest",

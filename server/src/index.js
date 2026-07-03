@@ -6,8 +6,34 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
-import { prisma, seedDatabase } from "./db.js";
-import { createToken, requireAuth, requireAdmin, requireSuperAdmin, requireActiveStudent, isAdminRole, isSuperAdminRole } from "./middleware.js";
+import { prisma, seedDatabase, checkDatabaseConnection, closeDatabaseConnections } from "./db.js";
+import {
+  createToken,
+  requireAuth,
+  requireAdmin,
+  requireSuperAdmin,
+  requireActiveStudent,
+  isAdminRole,
+  isSuperAdminRole,
+  setAuthCookies,
+  clearAuthCookies,
+  refreshAccessToken,
+  refreshTokenHash
+} from "./middleware.js";
+import { applySecurity, strictCorsOptions, loginLimiter, registerLimiter, otpLimiter, validators, validateRequest, productionErrorHandler, sanitizeRequestBody } from "./security.js";
+import { documentUpload, makeStorageName, uploadToBunny } from "./storage.js";
+import {
+  sendTransactionalEmail,
+  sendOneSignalNotification,
+  goLiveEmailHtml,
+  classEndedEmailHtml,
+  recordingAvailableEmailHtml,
+  createDailyRoom,
+  createDailyMeetingToken,
+  deleteDailyRoom,
+  appBaseUrl
+} from "./integrations.js";
+import { initSentry, sentryErrorHandler } from "./sentry.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -17,22 +43,16 @@ const PAYMENT_PROOF_DIR = path.join(UPLOAD_ROOT, "payment-proofs");
 const CERTIFICATE_ASSET_DIR = path.join(UPLOAD_ROOT, "certificate-assets");
 const ASSIGNMENT_FILE_DIR = path.join(UPLOAD_ROOT, "assignment-files");
 
-app.use(cors({ origin: CLIENT_URL, credentials: true }));
-app.use("/uploads", express.static(UPLOAD_ROOT));
+initSentry(app);
+applySecurity(app);
+app.use(cors(strictCorsOptions()));
+app.use("/uploads", express.static(UPLOAD_ROOT, { fallthrough: false }));
 app.use(express.json({ limit: "12mb" }));
-app.use(morgan("dev"));
-app.set("trust proxy", 1);
-
-app.use((req, res, next) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "SAMEORIGIN");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  if (process.env.NODE_ENV === "production") {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  }
-  next();
-});
+app.use(express.urlencoded({ extended: false, limit: "12mb" }));
+app.use(sanitizeRequestBody);
+app.use(morgan(process.env.NODE_ENV === "production" ? ":remote-addr :method :url :status :response-time ms" : "dev", {
+  skip: (req) => req.path.includes("/health")
+}));
 
 if ((process.env.JWT_SECRET || "change-this-secret-before-live") === "change-this-secret-before-live") {
   console.warn("SECURITY WARNING: JWT_SECRET is still using the default value. Change it before going live.");
@@ -78,8 +98,8 @@ async function getCertificateSettings() {
 function getEmailSettingDefaults() {
   return {
     email_notifications_enabled: "false",
-    email_school_name: "Champions Royal Bible College",
-    email_from_name: "CROBIC Admissions",
+    email_school_name: "Champion International Bible Institute",
+    email_from_name: "CIBI Admissions",
     email_from_address: "",
     email_reply_to: "",
     email_admin_recipients: "",
@@ -106,10 +126,10 @@ function splitEmailList(value = "") {
 }
 
 function emailTemplate({ heading, body, ctaText, ctaUrl, settings }) {
-  const safeHeading = String(heading || "CROBIC Notification");
+  const safeHeading = String(heading || "CIBI Notification");
   const safeBody = String(body || "").replace(/\n/g, "<br />");
   const footer = String(settings.email_footer_text || "Raising world class ministers");
-  const school = String(settings.email_school_name || "Champions Royal Bible College");
+  const school = String(settings.email_school_name || "Champion International Bible Institute");
   const button = ctaText && ctaUrl
     ? `<p style="margin:28px 0"><a href="${ctaUrl}" style="background:#c49f64;color:#070b18;padding:14px 22px;text-decoration:none;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:12px;display:inline-block">${ctaText}</a></p>`
     : "";
@@ -138,10 +158,21 @@ function emailTemplate({ heading, body, ctaText, ctaUrl, settings }) {
 
 async function sendEmailNotification({ to, subject, heading, body, ctaText, ctaUrl }) {
   const settings = await getEmailSettings();
-  if (String(settings.email_notifications_enabled || "false") !== "true") return { skipped: true, reason: "Email notifications disabled" };
-
   const recipients = Array.isArray(to) ? to.filter(Boolean) : splitEmailList(to);
   if (!recipients.length) return { skipped: true, reason: "No recipient" };
+
+  if (process.env.RESEND_API_KEY) {
+    return sendTransactionalEmail({
+      to: recipients,
+      subject,
+      title: heading || subject,
+      text: body,
+      buttonText: ctaText,
+      buttonUrl: ctaUrl ? (String(ctaUrl).startsWith("http") ? ctaUrl : `${CLIENT_URL.replace(/\/$/, "")}${ctaUrl.startsWith("/") ? "" : "/"}${ctaUrl}`) : undefined
+    });
+  }
+
+  if (String(settings.email_notifications_enabled || "false") !== "true") return { skipped: true, reason: "Email notifications disabled" };
 
   const host = String(settings.email_smtp_host || "").trim();
   const user = String(settings.email_smtp_user || "").trim();
@@ -160,7 +191,7 @@ async function sendEmailNotification({ to, subject, heading, body, ctaText, ctaU
   const baseUrl = String(settings.email_base_url || CLIENT_URL).replace(/\/$/, "");
   const finalCtaUrl = ctaUrl ? (String(ctaUrl).startsWith("http") ? ctaUrl : `${baseUrl}${ctaUrl.startsWith("/") ? "" : "/"}${ctaUrl}`) : "";
   const html = emailTemplate({ heading: heading || subject, body, ctaText, ctaUrl: finalCtaUrl, settings });
-  const fromName = String(settings.email_from_name || settings.email_school_name || "CROBIC");
+  const fromName = String(settings.email_from_name || settings.email_school_name || "CIBI");
 
   return transporter.sendMail({
     from: `"${fromName.replace(/"/g, "")}" <${fromAddress}>`,
@@ -246,6 +277,84 @@ async function requireCourseAccess(req, res, courseId) {
     return false;
   }
   return true;
+}
+
+
+function isPowerAdmin(user) {
+  return isSuperAdminRole(user?.role);
+}
+
+async function isAssignedLecturer(user, courseId) {
+  if (user?.role !== "LECTURER") return false;
+  const access = await prisma.courseLecturerAccess.findUnique({
+    where: { courseId_lecturerId: { courseId: Number(courseId), lecturerId: user.id } }
+  });
+  return Boolean(access);
+}
+
+async function canManageCourseContent(user, courseId) {
+  if (isPowerAdmin(user)) return true;
+  return isAssignedLecturer(user, courseId);
+}
+
+async function canAccessCourseContent(user, courseId) {
+  if (!user) return false;
+  if (isPowerAdmin(user)) return true;
+  if (await isAssignedLecturer(user, courseId)) return true;
+  if (user.role === "STUDENT") {
+    const enrollment = await prisma.enrollment.findFirst({
+      where: {
+        userId: user.id,
+        courseId: Number(courseId),
+        admissionStatus: { in: ["APPROVED", "GRADUATED"] }
+      }
+    });
+    return Boolean(enrollment);
+  }
+  return false;
+}
+
+function validateLivePlatformUrl(value = "") {
+  try {
+    const url = new URL(String(value));
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    return host.includes("zoom.us") || host === "youtube.com" || host === "youtu.be" || host.endsWith(".youtube.com");
+  } catch {
+    return false;
+  }
+}
+
+function clientCourseUrl(courseId) {
+  return `${appBaseUrl()}/student?courseId=${encodeURIComponent(courseId)}`;
+}
+
+async function enrolledStudentsForCourse(courseId) {
+  return prisma.user.findMany({
+    where: {
+      role: "STUDENT",
+      enrollments: {
+        some: {
+          courseId: Number(courseId),
+          admissionStatus: { in: ["APPROVED", "GRADUATED"] }
+        }
+      }
+    },
+    select: { id: true, name: true, email: true }
+  });
+}
+
+async function createCourseNotifications({ courseId, users, title, message, url, type = "INFO" }) {
+  if (!users?.length) return [];
+  return prisma.notification.createMany({
+    data: users.map((user) => ({
+      userId: user.id,
+      courseId: Number(courseId),
+      title,
+      message,
+      url,
+      type
+    }))
+  });
 }
 
 function parseCurrencyRates(value = "") {
@@ -605,7 +714,7 @@ function calculateCourseProgressForUser(course, userId) {
 function makeCertificateNumber(enrollment) {
   const year = new Date().getFullYear();
   const random = crypto.randomBytes(3).toString("hex").toUpperCase();
-  return `CROBIC-${year}-${String(enrollment.courseId).padStart(3, "0")}-${String(enrollment.userId).padStart(4, "0")}-${random}`;
+  return `CIBI-${year}-${String(enrollment.courseId).padStart(3, "0")}-${String(enrollment.userId).padStart(4, "0")}-${random}`;
 }
 
 function isLessonUnlocked(course, targetLessonId) {
@@ -652,6 +761,18 @@ async function getStudentLearningCourse(userId, courseId) {
               attempts: { where: { userId }, orderBy: { createdAt: "desc" } }
             },
             orderBy: { createdAt: "asc" }
+          },
+          videos: {
+            include: {
+              uploadedBy: { select: { id: true, name: true, role: true } },
+              progresses: { where: { userId } }
+            },
+            orderBy: [{ sortOrder: "asc" }, { chapter: "asc" }, { createdAt: "asc" }]
+          },
+          liveSessions: {
+            where: { status: { in: ["live", "ended"] } },
+            include: { startedBy: { select: { id: true, name: true, role: true } } },
+            orderBy: { createdAt: "desc" }
           }
         }
       }
@@ -661,11 +782,29 @@ async function getStudentLearningCourse(userId, courseId) {
   return enrollment;
 }
 
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true, message: "CROBIC API is running" });
+app.get("/api/health", async (req, res) => {
+  const database = await checkDatabaseConnection();
+  res.status(database ? 200 : 503).json({
+    ok: database,
+    status: database ? "healthy" : "degraded",
+    uptime: process.uptime(),
+    database,
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.post("/api/auth/register", async (req, res) => {
+app.post(
+  "/api/auth/register",
+  registerLimiter,
+  [
+    validators.safeText("name", 120),
+    validators.email,
+    validators.password,
+    validators.safeText("phone", 60, true),
+    validators.safeText("country", 80, true)
+  ],
+  validateRequest,
+  async (req, res) => {
   try {
     const { name, email, phone, country, password } = req.body;
     if (!name || !email || !password) {
@@ -675,7 +814,7 @@ app.post("/api/auth/register", async (req, res) => {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(409).json({ message: "Email already exists. Please login." });
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
       data: {
         name,
@@ -690,24 +829,24 @@ app.post("/api/auth/register", async (req, res) => {
 
     queueEmailNotification({
       to: user.email,
-      subject: "Welcome to CROBIC",
-      heading: "Your CROBIC Application Has Started",
+      subject: "Welcome to CIBI",
+      heading: "Your CIBI Application Has Started",
       body: `Dear ${user.name},
 
-Your CROBIC student account has been created. Please login, select your programme and complete payment to continue your admission process.`,
+Your CIBI student account has been created. Please login, select your programme and complete payment to continue your admission process.`,
       ctaText: "Continue Application",
       ctaUrl: "/admission"
     });
     queueAdminEmail({
-      subject: "New CROBIC student registration",
+      subject: "New CIBI student registration",
       heading: "New Student Registered",
       body: `${user.name} (${user.email}) has created a student account and may proceed to payment.`,
       ctaUrl: "/admin"
     }).catch((error) => console.error("Admin registration email failed:", error.message));
 
+    await setAuthCookies(res, user);
     res.status(201).json({
       message: "Registration created. Please complete payment to continue.",
-      token: createToken(user),
       user: publicUser(user)
     });
   } catch (error) {
@@ -715,19 +854,48 @@ Your CROBIC student account has been created. Please login, select your programm
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post(
+  "/api/auth/login",
+  loginLimiter,
+  [validators.email, validators.password],
+  validateRequest,
+  async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(401).json({ message: "Invalid login details" });
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ message: "Invalid login details" });
+    if (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
+      return res.status(423).json({ message: "Account temporarily locked after too many failed login attempts. Please try again later." });
+    }
 
-    res.json({ token: createToken(user), user: publicUser(user) });
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      const attempts = Number(user.failedLoginAttempts || 0) + 1;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: attempts,
+          lockedUntil: attempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null
+        }
+      });
+      return res.status(401).json({ message: "Invalid login details" });
+    }
+
+    await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+    await setAuthCookies(res, user);
+    res.json({ user: publicUser(user) });
   } catch (error) {
     res.status(500).json({ message: "Login failed", error: error.message });
   }
+});
+
+app.post("/api/auth/refresh", otpLimiter, refreshAccessToken);
+
+app.post("/api/auth/logout", requireAuth, async (req, res) => {
+  await prisma.user.update({ where: { id: req.user.id }, data: { refreshTokenHash: null } });
+  clearAuthCookies(res);
+  res.json({ message: "Logged out successfully" });
 });
 
 app.get("/api/auth/me", requireAuth, async (req, res) => {
@@ -770,10 +938,10 @@ app.post("/api/admin/email/test", requireAuth, requireAdmin, async (req, res) =>
     const to = req.body?.to || req.user.email || settings.email_admin_recipients;
     const result = await sendEmailNotification({
       to,
-      subject: "CROBIC email notification test",
+      subject: "CIBI email notification test",
       heading: "Email Notifications Are Working",
-      body: "This is a test email from your CROBIC platform. If you received this, your SMTP settings are correct.",
-      ctaText: "Open CROBIC",
+      body: "This is a test email from your CIBI platform. If you received this, your SMTP settings are correct.",
+      ctaText: "Open CIBI",
       ctaUrl: "/admin"
     });
     res.json({ message: result?.skipped ? `Email not sent: ${result.reason}` : "Test email sent successfully.", result: result?.skipped ? result : { accepted: result.accepted, rejected: result.rejected } });
@@ -878,7 +1046,8 @@ app.get("/api/student/courses/:courseId/learning", requireAuth, requireActiveStu
   if (!enrollment) return res.status(404).json({ message: "Course not found for this student." });
 
   const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
-  res.json({ enrollment: { ...enrollment, course: { ...enrollment.course, learningSummary: summary } } });
+  const safeCourse = sanitizeCourseVideosForClient(enrollment.course, false);
+  res.json({ enrollment: { ...enrollment, course: { ...safeCourse, learningSummary: summary } } });
 });
 
 app.post("/api/student/lessons/:lessonId/progress", requireAuth, requireActiveStudent, async (req, res) => {
@@ -917,9 +1086,9 @@ app.post("/api/student/lessons/:lessonId/progress", requireAuth, requireActiveSt
     const summary = calculateCourseProgress(updatedEnrollment.course);
     if (completed && summary.percent >= 100) {
       queueAdminEmail({
-        subject: "CROBIC student completed required lessons",
+        subject: "CIBI student completed required lessons",
         heading: "Student May Be Ready for Review",
-        body: `${req.user.name} (${req.user.email}) has completed all required lessons for ${updatedEnrollment.course?.title || "a CROBIC course"}. Check Gradebook and certificate eligibility, including assignments and quizzes.`,
+        body: `${req.user.name} (${req.user.email}) has completed all required lessons for ${updatedEnrollment.course?.title || "a CIBI course"}. Check Gradebook and certificate eligibility, including assignments and quizzes.`,
         ctaText: "Open Gradebook",
         ctaUrl: "/admin"
       }).catch((error) => console.error("Admin completion email failed:", error.message));
@@ -1131,16 +1300,16 @@ app.post("/api/payments/manual", requireAuth, async (req, res) => {
 
     queueEmailNotification({
       to: req.user.email,
-      subject: "CROBIC payment receipt received",
+      subject: "CIBI payment receipt received",
       heading: "Payment Receipt Submitted",
       body: `Dear ${req.user.name},
 
-Your bank transfer receipt for ${course.title} has been submitted. CROBIC admin will verify your payment and approve portal access after confirmation.`,
+Your bank transfer receipt for ${course.title} has been submitted. CIBI admin will verify your payment and approve portal access after confirmation.`,
       ctaText: "Check Portal Status",
       ctaUrl: "/student"
     });
     queueAdminEmail({
-      subject: "New CROBIC bank transfer receipt",
+      subject: "New CIBI bank transfer receipt",
       heading: "Payment Receipt Uploaded",
       body: `${req.user.name} (${req.user.email}) submitted a bank transfer receipt for ${course.title}. Please verify and approve if payment is confirmed.`,
       ctaText: "Review Student Payment",
@@ -1160,7 +1329,7 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
     if (!course) return res.status(404).json({ message: "Course not found" });
     if (!process.env.PAYSTACK_SECRET_KEY) return res.status(500).json({ message: "Paystack secret key is missing" });
 
-    const reference = `CROBIC-${req.user.id}-${course.id}-${Date.now()}`;
+    const reference = `CIBI-${req.user.id}-${course.id}-${Date.now()}`;
 
     await prisma.enrollment.upsert({
       where: { userId_courseId: { userId: req.user.id, courseId: course.id } },
@@ -1245,16 +1414,16 @@ app.get("/api/payments/paystack/verify/:reference", requireAuth, async (req, res
       const paidCourse = await prisma.course.findUnique({ where: { id: enrollment.courseId } });
       queueEmailNotification({
         to: paidUser.email,
-        subject: "CROBIC payment confirmed",
+        subject: "CIBI payment confirmed",
         heading: "Payment Confirmed",
         body: `Dear ${paidUser.name},
 
-Your Paystack payment for ${paidCourse?.title || "your programme"} has been confirmed. CROBIC admin will complete admission approval before portal access opens.`,
+Your Paystack payment for ${paidCourse?.title || "your programme"} has been confirmed. CIBI admin will complete admission approval before portal access opens.`,
         ctaText: "Check Portal Status",
         ctaUrl: "/student"
       });
       queueAdminEmail({
-        subject: "CROBIC Paystack payment confirmed",
+        subject: "CIBI Paystack payment confirmed",
         heading: "Payment Confirmed",
         body: `${paidUser.name} (${paidUser.email}) completed Paystack payment for ${paidCourse?.title || "a programme"}. Please review admission approval.`,
         ctaUrl: "/admin"
@@ -1312,7 +1481,7 @@ app.post("/api/student/support/cases", requireAuth, async (req, res) => {
     });
 
     queueAdminEmail({
-      subject: "New CROBIC support / appeal case",
+      subject: "New CIBI support / appeal case",
       heading: "New Support Case",
       body: `${req.user.name} (${req.user.email}) opened a support case: ${subject}.
 
@@ -1343,7 +1512,7 @@ app.post("/api/student/support/cases/:id/messages", requireAuth, async (req, res
 
     await prisma.appeal.update({ where: { id: appeal.id }, data: { status: appeal.status === "CLOSED" ? "OPEN" : "WAITING_ADMIN" } });
     queueAdminEmail({
-      subject: "CROBIC student replied to support",
+      subject: "CIBI student replied to support",
       heading: "Student Support Reply",
       body: `${req.user.name} replied to a support case.
 
@@ -1449,11 +1618,11 @@ app.post("/api/admin/support/cases/:id/restore-access", requireAuth, requireAdmi
     if (updated?.user?.email) {
       queueEmailNotification({
         to: updated.user.email,
-        subject: "CROBIC portal access restored",
+        subject: "CIBI portal access restored",
         heading: "Portal Access Restored",
         body: `Dear ${updated.user.name},
 
-Your appeal has been reviewed. Your payment and admission have been approved, and your CROBIC portal access has been restored.`,
+Your appeal has been reviewed. Your payment and admission have been approved, and your CIBI portal access has been restored.`,
         ctaText: "Open Student Portal",
         ctaUrl: "/student"
       });
@@ -1483,11 +1652,11 @@ app.post("/api/admin/support/cases/:id/messages", requireAuth, requireAdmin, asy
     if (appeal.user?.email) {
       queueEmailNotification({
         to: appeal.user.email,
-        subject: "CROBIC support replied to your case",
+        subject: "CIBI support replied to your case",
         heading: "Support Reply Received",
         body: `Dear ${appeal.user.name},
 
-CROBIC Support replied to your case.
+CIBI Support replied to your case.
 
 Reply: ${message}`,
         ctaText: "Open Support Case",
@@ -1529,7 +1698,7 @@ app.post("/api/student/assignments/:id/submit", requireAuth, requireActiveStuden
 
     queueEmailNotification({
       to: req.user.email,
-      subject: "CROBIC assignment submitted",
+      subject: "CIBI assignment submitted",
       heading: "Assignment Submitted",
       body: `Dear ${req.user.name},
 
@@ -1538,7 +1707,7 @@ Your assignment "${assignment.title}" has been submitted. Admin will review and 
       ctaUrl: "/student"
     });
     queueAdminEmail({
-      subject: "New CROBIC assignment submission",
+      subject: "New CIBI assignment submission",
       heading: "Assignment Submitted",
       body: `${req.user.name} (${req.user.email}) submitted assignment: ${assignment.title}.`,
       ctaText: "Open Gradebook",
@@ -1578,7 +1747,7 @@ app.post("/api/student/quizzes/:id/attempt", requireAuth, requireActiveStudent, 
 
     queueEmailNotification({
       to: req.user.email,
-      subject: "CROBIC quiz result",
+      subject: "CIBI quiz result",
       heading: passed ? "Quiz Passed" : "Quiz Submitted",
       body: `Dear ${req.user.name},
 
@@ -1587,7 +1756,7 @@ You scored ${score}% on "${quiz.title}". Pass mark: ${quiz.passScore || 70}%. ${
       ctaUrl: "/student"
     });
     queueAdminEmail({
-      subject: "CROBIC quiz attempt submitted",
+      subject: "CIBI quiz attempt submitted",
       heading: "Quiz Attempt Submitted",
       body: `${req.user.name} (${req.user.email}) scored ${score}% on quiz: ${quiz.title}.`,
       ctaText: "Open Gradebook",
@@ -1725,7 +1894,7 @@ app.patch("/api/admin/assignment-submissions/:id/grade", requireAuth, requireAdm
     if (updated.user?.email) {
       queueEmailNotification({
         to: updated.user.email,
-        subject: "CROBIC assignment graded",
+        subject: "CIBI assignment graded",
         heading: passed ? "Assignment Passed" : "Assignment Feedback Available",
         body: `Dear ${updated.user.name},
 
@@ -1963,9 +2132,9 @@ app.post("/api/student/courses/:courseId/discussions", requireAuth, requireActiv
     });
 
     queueAdminEmail({
-      subject: "New CROBIC course discussion",
+      subject: "New CIBI course discussion",
       heading: "Student Posted a Course Question",
-      body: `${req.user.name} posted a discussion under ${enrollment.course?.title || "a CROBIC course"}:\n\n${message}`,
+      body: `${req.user.name} posted a discussion under ${enrollment.course?.title || "a CIBI course"}:\n\n${message}`,
       ctaText: "Open Course Discussions",
       ctaUrl: "/admin"
     }).catch((error) => console.error("Admin discussion email failed:", error.message));
@@ -2036,9 +2205,9 @@ app.post("/api/admin/course-discussions/:id/replies", requireAuth, requireAdmin,
     if (discussion.author?.email) {
       queueEmailNotification({
         to: discussion.author.email,
-        subject: "CROBIC course discussion reply",
+        subject: "CIBI course discussion reply",
         heading: "Your Course Question Has a Reply",
-        body: `Dear ${discussion.author.name},\n\nCROBIC has replied to your discussion under ${discussion.course?.title || "your course"}.\n\nReply: ${message}`,
+        body: `Dear ${discussion.author.name},\n\nCIBI has replied to your discussion under ${discussion.course?.title || "your course"}.\n\nReply: ${message}`,
         ctaText: "Open Student Portal",
         ctaUrl: "/student"
       });
@@ -2100,7 +2269,7 @@ app.post("/api/admin/users-roles", requireAuth, requireSuperAdmin, async (req, r
     if (!["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"].includes(role)) return res.status(400).json({ message: "Invalid staff role." });
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(409).json({ message: "Email already exists." });
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 12);
     const created = await prisma.user.create({
       data: { name, email, password: hashed, role, status: "ACTIVE" }
     });
@@ -2380,13 +2549,13 @@ app.patch("/api/admin/enrollments/:id/status", requireAuth, requireAdmin, async 
       const statusHeading = action === "approve" ? "Admission Approved" : action === "reject" ? "Admission Decision" : action === "suspend" ? "Account Suspended" : "Programme Status Updated";
       queueEmailNotification({
         to: enrollment.user.email,
-        subject: `CROBIC: ${statusHeading}`,
+        subject: `CIBI: ${statusHeading}`,
         heading: statusHeading,
         body: `Dear ${enrollment.user.name},
 
 ${next.message}
 
-Programme: ${enrollment.course?.title || updated.course?.title || "CROBIC programme"}`,
+Programme: ${enrollment.course?.title || updated.course?.title || "CIBI programme"}`,
         ctaText: "Open Student Portal",
         ctaUrl: "/student"
       });
@@ -2456,6 +2625,14 @@ app.get("/api/admin/course-builder", requireAuth, requireAdmin, async (req, res)
     include: {
       modules: { include: { lessons: { orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
       lessons: { include: { module: true }, orderBy: { lessonOrder: "asc" } },
+      videos: {
+        include: { uploadedBy: { select: { id: true, name: true, role: true } } },
+        orderBy: [{ sortOrder: "asc" }, { chapter: "asc" }, { createdAt: "asc" }]
+      },
+      liveSessions: {
+        include: { startedBy: { select: { id: true, name: true, role: true } } },
+        orderBy: { createdAt: "desc" }
+      },
       lecturerAccesses: { include: { lecturer: { select: { id: true, name: true, email: true, role: true } } } }
     },
     orderBy: { createdAt: "desc" }
@@ -2743,7 +2920,7 @@ app.post("/api/admin/enrollments/:id/certificate", requireAuth, requireAdmin, as
 
     queueEmailNotification({
       to: enrollment.user.email,
-      subject: "CROBIC certificate issued",
+      subject: "CIBI certificate issued",
       heading: "Your Certificate Has Been Issued",
       body: `Dear ${enrollment.user.name},
 
@@ -2786,6 +2963,470 @@ app.patch("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => 
   await logAdminActivity(req, { action: "UPDATED_SETTINGS", entityType: "Setting", details: { keys: entries.map(([key]) => key) } });
   const rows = await prisma.setting.findMany();
   res.json(Object.fromEntries(rows.map((row) => [row.key, row.value])));
+});
+
+
+
+function extractYouTubeVideoId(input = "") {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  const iframeMatch = raw.match(/src=["']([^"']+)["']/i);
+  const value = iframeMatch?.[1] || raw;
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, "").replace(/^m\./, "");
+    const parts = url.pathname.split("/").filter(Boolean);
+
+    if (host === "youtu.be") return parts[0] || "";
+    if (host.includes("youtube.com") || host.includes("youtube-nocookie.com")) {
+      if (url.searchParams.get("v")) return url.searchParams.get("v") || "";
+      const embedIndex = parts.findIndex((part) => part === "embed" || part === "live" || part === "shorts");
+      if (embedIndex >= 0 && parts[embedIndex + 1]) return parts[embedIndex + 1];
+      return parts.pop() || "";
+    }
+  } catch {
+    const fallback = value.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/i);
+    return fallback?.[1] || "";
+  }
+
+  return "";
+}
+
+function buildPlatformYouTubeEmbedUrl(videoId) {
+  const origin = process.env.CLIENT_URL || process.env.FRONTEND_URL || "";
+  const params = new URLSearchParams({
+    enablejsapi: "1",
+    controls: "0",
+    modestbranding: "1",
+    rel: "0",
+    disablekb: "1",
+    fs: "0",
+    iv_load_policy: "3",
+    playsinline: "1"
+  });
+  if (origin) params.set("origin", origin);
+  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+}
+
+function normalizeCourseVideoLink(rawUrl = "") {
+  const videoUrl = String(rawUrl || "").trim();
+  const externalVideoId = extractYouTubeVideoId(videoUrl);
+  if (!externalVideoId || !/^[A-Za-z0-9_-]{6,}$/.test(externalVideoId)) {
+    const error = new Error("Please paste a valid YouTube video, YouTube Live, Shorts, or embed link.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return {
+    provider: "YOUTUBE",
+    externalVideoId,
+    videoUrl,
+    embedUrl: buildPlatformYouTubeEmbedUrl(externalVideoId)
+  };
+}
+
+function formatCourseVideo(video, includePrivate = false) {
+  if (!video) return null;
+  return {
+    id: video.id,
+    courseId: video.courseId,
+    title: video.title,
+    description: video.description,
+    chapter: video.chapter,
+    sortOrder: video.sortOrder,
+    provider: video.provider || "YOUTUBE",
+    externalVideoId: video.externalVideoId || null,
+    uploadDate: video.createdAt,
+    createdAt: video.createdAt,
+    uploadedBy: video.uploadedBy ? { id: video.uploadedBy.id, name: video.uploadedBy.name, role: video.uploadedBy.role } : null,
+    progress: Array.isArray(video.progresses) ? video.progresses[0] || null : undefined,
+    ...(includePrivate ? { videoUrl: video.videoUrl, embedUrl: video.embedUrl, cdnUrl: video.cdnUrl, bunnyPath: video.bunnyPath } : {})
+  };
+}
+
+function sanitizeCourseVideosForClient(course, includePrivateVideos = false) {
+  if (!course) return course;
+  return {
+    ...course,
+    videos: Array.isArray(course.videos)
+      ? course.videos.map((video) => formatCourseVideo(video, includePrivateVideos))
+      : course.videos
+  };
+}
+
+app.get("/api/notifications", requireAuth, async (req, res) => {
+  const notifications = await prisma.notification.findMany({
+    where: { userId: req.user.id },
+    orderBy: { createdAt: "desc" },
+    take: 50
+  });
+  res.json(notifications);
+});
+
+app.patch("/api/notifications/:id/read", requireAuth, validators.idParam("id"), validateRequest, async (req, res) => {
+  const notification = await prisma.notification.findFirst({ where: { id: Number(req.params.id), userId: req.user.id } });
+  if (!notification) return res.status(404).json({ message: "Notification not found." });
+  const updated = await prisma.notification.update({
+    where: { id: notification.id },
+    data: { readAt: new Date() }
+  });
+  res.json(updated);
+});
+
+app.get("/api/courses/:courseId/videos", requireAuth, validators.courseId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!(await canAccessCourseContent(req.user, courseId))) return res.status(403).json({ message: "You do not have access to this course." });
+  const videos = await prisma.courseVideo.findMany({
+    where: { courseId },
+    include: {
+      uploadedBy: { select: { id: true, name: true, role: true } },
+      progresses: { where: { userId: req.user.id } }
+    },
+    orderBy: [{ sortOrder: "asc" }, { chapter: "asc" }, { createdAt: "asc" }]
+  });
+  res.json(videos.map((video) => formatCourseVideo(video, false)));
+});
+
+app.post(
+  "/api/courses/:courseId/videos/upload",
+  requireAuth,
+  validators.courseId,
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const courseId = Number(req.params.courseId);
+      if (!(await canManageCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden. You are not assigned to this course." });
+
+      const title = String(req.body?.title || "").trim();
+      if (!title) return res.status(400).json({ message: "Video title is required." });
+
+      const normalized = normalizeCourseVideoLink(req.body?.videoUrl || req.body?.url || req.body?.link || "");
+      const chapter = Math.max(1, Number(req.body?.chapter || req.body?.chapterNumber || 1));
+      const lastVideo = await prisma.courseVideo.findFirst({ where: { courseId }, orderBy: { sortOrder: "desc" } });
+
+      const video = await prisma.courseVideo.create({
+        data: {
+          courseId,
+          title,
+          description: req.body?.description ? String(req.body.description).trim() : null,
+          videoUrl: normalized.videoUrl,
+          provider: normalized.provider,
+          externalVideoId: normalized.externalVideoId,
+          embedUrl: normalized.embedUrl,
+          bunnyPath: null,
+          cdnUrl: null,
+          fileName: null,
+          mimeType: "text/youtube-url",
+          fileSize: null,
+          chapter,
+          sortOrder: Number(req.body?.sortOrder || (lastVideo ? Number(lastVideo.sortOrder || 0) + 1 : chapter)),
+          uploadedById: req.user.id
+        },
+        include: { uploadedBy: { select: { id: true, name: true, role: true } } }
+      });
+
+      res.status(201).json({ videoId: video.id, video: formatCourseVideo(video, true) });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.patch("/api/courses/:courseId/videos/reorder", requireAuth, validators.courseId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!(await canManageCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+  const videoIds = Array.isArray(req.body?.videoIds) ? req.body.videoIds.map(Number).filter(Boolean) : [];
+  if (!videoIds.length) return res.status(400).json({ message: "videoIds array is required." });
+
+  await prisma.$transaction(videoIds.map((id, index) => prisma.courseVideo.updateMany({
+    where: { id, courseId },
+    data: { sortOrder: index + 1 }
+  })));
+  res.json({ message: "Video order updated." });
+});
+
+app.patch("/api/courses/:courseId/videos/:videoId", requireAuth, validators.courseId, validators.videoId, validateRequest, async (req, res, next) => {
+  try {
+    const courseId = Number(req.params.courseId);
+    const videoId = Number(req.params.videoId);
+    const video = await prisma.courseVideo.findFirst({ where: { id: videoId, courseId } });
+    if (!video) return res.status(404).json({ message: "Video not found." });
+    if (!(await canManageCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+
+    const linkUpdate = req.body?.videoUrl === undefined ? {} : normalizeCourseVideoLink(req.body.videoUrl);
+    const updated = await prisma.courseVideo.update({
+      where: { id: video.id },
+      data: {
+        title: req.body?.title === undefined ? undefined : String(req.body.title).trim(),
+        description: req.body?.description === undefined ? undefined : String(req.body.description || "").trim(),
+        chapter: req.body?.chapter === undefined ? undefined : Math.max(1, Number(req.body.chapter || 1)),
+        videoUrl: linkUpdate.videoUrl,
+        provider: linkUpdate.provider,
+        externalVideoId: linkUpdate.externalVideoId,
+        embedUrl: linkUpdate.embedUrl
+      },
+      include: { uploadedBy: { select: { id: true, name: true, role: true } } }
+    });
+    res.json(formatCourseVideo(updated, true));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/courses/:courseId/videos/:videoId/stream-url", requireAuth, validators.courseId, validators.videoId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  const videoId = Number(req.params.videoId);
+  if (!(await canAccessCourseContent(req.user, courseId))) return res.status(403).json({ message: "You do not have access to this video." });
+  const video = await prisma.courseVideo.findFirst({ where: { id: videoId, courseId }, include: { uploadedBy: { select: { id: true, name: true, role: true } } } });
+  if (!video) return res.status(404).json({ message: "Video not found." });
+
+  const externalVideoId = video.externalVideoId || extractYouTubeVideoId(video.videoUrl || video.cdnUrl || "");
+  if (!externalVideoId) return res.status(400).json({ message: "This video link is not playable inside the platform." });
+
+  res.json({
+    provider: video.provider || "YOUTUBE",
+    externalVideoId,
+    embedUrl: video.embedUrl || buildPlatformYouTubeEmbedUrl(externalVideoId),
+    video: formatCourseVideo({ ...video, externalVideoId }, false)
+  });
+});
+
+app.delete("/api/courses/:courseId/videos/:videoId", requireAuth, validators.courseId, validators.videoId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  const videoId = Number(req.params.videoId);
+  const video = await prisma.courseVideo.findFirst({ where: { id: videoId, courseId } });
+  if (!video) return res.status(404).json({ message: "Video not found." });
+  const canDelete = isPowerAdmin(req.user) || (req.user.role === "LECTURER" && video.uploadedById === req.user.id);
+  if (!canDelete) return res.status(403).json({ message: "Only Super Admin/Rector or the lecturer who added this video can delete it." });
+
+  await prisma.courseVideo.delete({ where: { id: video.id } });
+  res.json({ message: "Video link deleted successfully." });
+});
+
+app.post("/api/courses/:courseId/videos/:videoId/progress", requireAuth, validators.courseId, validators.videoId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  const videoId = Number(req.params.videoId);
+  if (!(await canAccessCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+  const video = await prisma.courseVideo.findFirst({ where: { id: videoId, courseId } });
+  if (!video) return res.status(404).json({ message: "Video not found." });
+  const progressSecond = Math.max(0, Math.floor(Number(req.body?.progressSecond || req.body?.currentTime || 0)));
+  const durationSecond = Math.max(0, Math.floor(Number(req.body?.durationSecond || req.body?.duration || 0)));
+  const completed = Boolean(req.body?.completed) || (durationSecond > 0 && progressSecond / durationSecond >= 0.9);
+  const progress = await prisma.courseVideoProgress.upsert({
+    where: { userId_videoId: { userId: req.user.id, videoId } },
+    update: { progressSecond, durationSecond, completed },
+    create: { userId: req.user.id, videoId, progressSecond, durationSecond, completed }
+  });
+  res.json(progress);
+});
+
+app.post(
+  "/api/courses/:courseId/documents/upload",
+  requireAuth,
+  validators.courseId,
+  validateRequest,
+  documentUpload.single("file"),
+  async (req, res) => {
+    const courseId = Number(req.params.courseId);
+    if (!(await canManageCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+    if (!req.file) return res.status(400).json({ message: "Document file is required." });
+    const title = String(req.body?.title || req.file.originalname || "Course document").trim();
+    const fileName = makeStorageName(req.file.originalname);
+    const uploaded = await uploadToBunny({
+      folder: `courses/${courseId}/documents`,
+      fileName,
+      buffer: req.file.buffer,
+      contentType: req.file.mimetype
+    });
+    const document = await prisma.courseDocument.create({
+      data: {
+        courseId,
+        title,
+        description: req.body?.description ? String(req.body.description).trim() : null,
+        bunnyPath: uploaded.filePath,
+        cdnUrl: uploaded.cdnUrl,
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        uploadedById: req.user.id
+      }
+    });
+    res.status(201).json({ documentId: document.id, cdnUrl: document.cdnUrl, document });
+  }
+);
+
+app.post("/api/courses/:courseId/live/start", requireAuth, validators.courseId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!(await canManageCourseContent(req.user, courseId))) return res.status(403).json({ message: "Only Super Admin, Rector, or assigned lecturer can start this live class." });
+
+  const title = String(req.body?.title || "").trim();
+  const description = req.body?.description ? String(req.body.description).trim() : "";
+  const liveUrl = String(req.body?.liveUrl || req.body?.liveURL || "").trim();
+  const scheduledAt = req.body?.scheduledAt || req.body?.scheduledTime || null;
+  if (!title || !liveUrl) return res.status(400).json({ message: "Title and Zoom/YouTube live link are required." });
+  if (!validateLivePlatformUrl(liveUrl)) return res.status(400).json({ message: "Only valid Zoom or YouTube Live links are allowed." });
+
+  await prisma.liveSession.updateMany({ where: { courseId, status: "live" }, data: { status: "ended", active: false, endedAt: new Date() } });
+
+  const live = await prisma.liveSession.create({
+    data: {
+      courseId,
+      startedById: req.user.id,
+      title,
+      description,
+      liveUrl,
+      active: true,
+      status: "live",
+      startedById: req.user.id,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null
+    },
+    include: {
+      course: { select: { id: true, title: true } },
+      startedBy: { select: { id: true, name: true, role: true } }
+    }
+  });
+
+  const students = await enrolledStudentsForCourse(courseId);
+  const notificationUrl = `${clientCourseUrl(courseId)}`;
+  await createCourseNotifications({
+    courseId,
+    users: students,
+    title: `${live.course?.title || "Course"} is live now`,
+    message: `${title} has started. Join now.`,
+    url: liveUrl,
+    type: "LIVE_CLASS"
+  });
+
+  sendTransactionalEmail({
+    to: students.map((student) => student.email).filter(Boolean),
+    subject: `${live.course?.title || "CIBI"} is live now`,
+    title: "Your CIBI Class Is Live",
+    html: goLiveEmailHtml({ course: live.course, lecturer: live.startedBy, title, description, liveUrl, startedAt: live.createdAt }),
+    buttonText: "JOIN NOW",
+    buttonUrl: liveUrl
+  }).catch((error) => console.error("Go Live email failed:", error.message));
+
+  sendOneSignalNotification({
+    userIds: students.map((student) => student.id),
+    title: `${live.course?.title || "CIBI"} is live now`,
+    message: `${title} has started. Join now.`,
+    url: liveUrl
+  }).catch((error) => console.error("OneSignal live notification failed:", error.message));
+
+  res.status(201).json({ message: "Live class started and students notified.", liveSessionId: live.id, live });
+});
+
+app.patch("/api/courses/:courseId/live/:sessionId/end", requireAuth, validators.courseId, validators.sessionId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  const sessionId = Number(req.params.sessionId);
+  const live = await prisma.liveSession.findFirst({ where: { id: sessionId, courseId } });
+  if (!live) return res.status(404).json({ message: "Live session not found." });
+  const canEnd = isPowerAdmin(req.user) || live.startedById === req.user.id;
+  if (!canEnd) return res.status(403).json({ message: "Only Super Admin, Rector, or the lecturer who started the session can end it." });
+
+  const updated = await prisma.liveSession.update({
+    where: { id: live.id },
+    data: { status: "ended", active: false, endedAt: new Date() },
+    include: { course: { select: { id: true, title: true } } }
+  });
+
+  const students = await enrolledStudentsForCourse(courseId);
+  sendTransactionalEmail({
+    to: students.map((student) => student.email).filter(Boolean),
+    subject: "CIBI live class ended",
+    title: "Live Class Ended",
+    html: classEndedEmailHtml({ title: updated.title })
+  }).catch((error) => console.error("Class ended email failed:", error.message));
+
+  res.json({ message: "Live class ended.", live: updated });
+});
+
+app.get("/api/courses/:courseId/live/active", requireAuth, validators.courseId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!(await canAccessCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+  const live = await prisma.liveSession.findFirst({
+    where: { courseId, status: "live", active: true },
+    include: {
+      course: { select: { id: true, title: true } },
+      startedBy: { select: { id: true, name: true, role: true } }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json({ live });
+});
+
+app.get("/api/courses/:courseId/live/history", requireAuth, validators.courseId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!(await canAccessCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+  const sessions = await prisma.liveSession.findMany({
+    where: { courseId, status: { in: ["ended", "scheduled", "live"] } },
+    include: { startedBy: { select: { id: true, name: true, role: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json(sessions.map((session) => ({
+    ...session,
+    durationSeconds: session.endedAt ? Math.max(0, Math.round((new Date(session.endedAt).getTime() - new Date(session.createdAt).getTime()) / 1000)) : null,
+    recordingUrl: session.recordingUrl || session.replayUrl || null
+  })));
+});
+
+app.patch("/api/courses/:courseId/live/:sessionId/recording", requireAuth, validators.courseId, validators.sessionId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  const sessionId = Number(req.params.sessionId);
+  if (!(await canManageCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+  const recordingUrl = String(req.body?.recordingUrl || req.body?.replayUrl || "").trim();
+  if (!validateLivePlatformUrl(recordingUrl) && !recordingUrl.startsWith("https://")) return res.status(400).json({ message: "A valid recording URL is required." });
+  const existing = await prisma.liveSession.findFirst({ where: { id: sessionId, courseId } });
+  if (!existing) return res.status(404).json({ message: "Live session not found." });
+
+  const live = await prisma.liveSession.update({
+    where: { id: existing.id },
+    data: { recordingUrl, replayUrl: recordingUrl },
+    include: { course: { select: { id: true, title: true } } }
+  });
+
+  const students = await enrolledStudentsForCourse(courseId);
+  sendTransactionalEmail({
+    to: students.map((student) => student.email).filter(Boolean),
+    subject: `Recording available: ${live.title}`,
+    title: "Recording Is Available",
+    html: recordingAvailableEmailHtml({ title: live.title }),
+    buttonText: "WATCH RECORDING",
+    buttonUrl: recordingUrl
+  }).catch((error) => console.error("Recording email failed:", error.message));
+
+  res.json({ message: "Recording saved and students notified.", live });
+});
+
+app.post("/api/courses/:courseId/daily/room", requireAuth, validators.courseId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!(await canManageCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+  const exp = Math.floor(Date.now() / 1000) + 4 * 60 * 60;
+  const roomName = `crobic-course-${courseId}-${Date.now()}`;
+  const room = await createDailyRoom({ name: roomName, exp });
+  res.status(201).json(room);
+});
+
+app.post("/api/courses/:courseId/daily/join-token", requireAuth, validators.courseId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!(await canAccessCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+  const roomName = String(req.body?.roomName || "").trim();
+  if (!roomName) return res.status(400).json({ message: "Daily room name is required." });
+  const token = await createDailyMeetingToken({
+    roomName,
+    userName: req.user.name,
+    userId: req.user.id,
+    isOwner: await canManageCourseContent(req.user, courseId),
+    exp: Math.floor(Date.now() / 1000) + 2 * 60 * 60
+  });
+  res.json(token);
+});
+
+app.delete("/api/courses/:courseId/daily/room/:roomName", requireAuth, validators.courseId, validateRequest, async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!(await canManageCourseContent(req.user, courseId))) return res.status(403).json({ message: "Forbidden." });
+  await deleteDailyRoom(req.params.roomName);
+  res.json({ message: "Daily room destroyed." });
 });
 
 
@@ -2838,6 +3479,8 @@ app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) =>
       chatEnabled: chatEnabled === undefined ? true : chatEnabled === true || chatEnabled === "true" || chatEnabled === "on",
       voiceEnabled: voiceEnabled === true || voiceEnabled === "true" || voiceEnabled === "on",
       active: true,
+      status: "live",
+      startedById: req.user.id,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null
     }
   });
@@ -2846,15 +3489,36 @@ app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) =>
 });
 
 app.post("/api/admin/live/stop", requireAuth, requireAdmin, async (req, res) => {
-  await prisma.liveSession.updateMany({ where: { active: true }, data: { active: false } });
+  await prisma.liveSession.updateMany({ where: { active: true }, data: { active: false, status: "ended", endedAt: new Date() } });
   res.json({ message: "Live session stopped" });
 });
 
+app.use(sentryErrorHandler());
+app.use(productionErrorHandler);
+
+let server;
 seedDatabase()
   .then(() => {
-    app.listen(PORT, () => console.log(`CROBIC API running on http://localhost:${PORT}`));
+    server = app.listen(PORT, () => console.log(`CIBI API running on http://localhost:${PORT}`));
   })
   .catch((error) => {
-    console.error("Failed to start CROBIC API", error);
+    console.error("Failed to start CIBI API", error);
     process.exit(1);
   });
+
+async function gracefulShutdown(signal) {
+  console.log(`${signal} received. Closing CIBI API gracefully.`);
+  if (server) {
+    server.close(async () => {
+      await closeDatabaseConnections();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+  } else {
+    await closeDatabaseConnections();
+    process.exit(0);
+  }
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

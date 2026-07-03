@@ -60,6 +60,9 @@ model User {
   status    UserStatus @default(PENDING_PAYMENT)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  failedLoginAttempts Int      @default(0)
+  lockedUntil         DateTime?
+  refreshTokenHash    String?
 
   enrollments             Enrollment[]
   lessonProgresses        LessonProgress[]
@@ -78,6 +81,11 @@ model User {
   grantedCourseAccesses   CourseLecturerAccess[]  @relation("CourseAccessGrantedBy")
   createdStudentGroups    StudentGroup[]          @relation("StudentGroupCreator")
   studentGroupMemberships StudentGroupMember[]
+  uploadedVideos          CourseVideo[]          @relation("VideoUploader")
+  videoProgresses         CourseVideoProgress[]
+  uploadedDocuments       CourseDocument[]       @relation("DocumentUploader")
+  startedLiveSessions     LiveSession[]          @relation("LiveSessionStarter")
+  notifications           Notification[]
 }
 
 model Course {
@@ -104,6 +112,9 @@ model Course {
   lecturerAccesses CourseLecturerAccess[]
   studentGroups    StudentGroup[]
   liveSessions     LiveSession[]
+  videos           CourseVideo[]
+  documents        CourseDocument[]
+  notifications    Notification[]
 }
 
 model CourseModule {
@@ -217,6 +228,7 @@ model Certificate {
 
   @@index([userId])
   @@index([courseId])
+  @@index([status])
 }
 
 model LessonProgress {
@@ -387,10 +399,16 @@ model Announcement {
 model LiveSession {
   id               Int       @id @default(autoincrement())
   courseId         Int?
+  startedById      Int?
   title            String
   description      String?
   liveUrl          String
   replayUrl        String?
+  recordingUrl     String?
+  status           String    @default("scheduled")
+  dailyRoomName    String?
+  dailyRoomUrl     String?
+  endedAt          DateTime?
   subtitleUrl      String?
   subtitleLanguage String?
   active           Boolean   @default(false)
@@ -401,11 +419,14 @@ model LiveSession {
   updatedAt        DateTime  @updatedAt
 
   course       Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  startedBy    User?             @relation("LiveSessionStarter", fields: [startedById], references: [id], onDelete: SetNull)
   chatMessages LiveChatMessage[]
   questions    LiveQuestion[]
   attendances  LiveAttendance[]
 
   @@index([courseId])
+  @@index([startedById])
+  @@index([status])
 }
 
 model LiveChatMessage {
@@ -563,6 +584,93 @@ model StudentGroupMember {
 
   @@unique([groupId, userId])
   @@index([userId])
+}
+
+model CourseVideo {
+  id              Int      @id @default(autoincrement())
+  courseId        Int
+  title           String
+  description     String?
+  videoUrl        String?
+  provider        String   @default("YOUTUBE")
+  externalVideoId String?
+  embedUrl        String?
+  bunnyPath       String?
+  cdnUrl          String?
+  fileName        String?
+  mimeType        String?
+  fileSize        Int?
+  chapter         Int      @default(1)
+  sortOrder       Int      @default(1)
+  uploadedById    Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  uploadedBy  User     @relation("VideoUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  progresses  CourseVideoProgress[]
+
+  @@index([courseId])
+  @@index([uploadedById])
+  @@index([sortOrder])
+  @@index([provider])
+}
+
+model CourseVideoProgress {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  videoId        Int
+  progressSecond Int      @default(0)
+  durationSecond Int      @default(0)
+  completed      Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video CourseVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@index([videoId])
+}
+
+model CourseDocument {
+  id           Int      @id @default(autoincrement())
+  courseId     Int
+  title        String
+  description  String?
+  bunnyPath    String
+  cdnUrl       String
+  fileName     String?
+  mimeType     String?
+  fileSize     Int?
+  uploadedById Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  uploadedBy User   @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([uploadedById])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  courseId  Int?
+  title     String
+  message   String
+  url       String?
+  type      String   @default("INFO")
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([readAt])
 }
 
 model Setting {

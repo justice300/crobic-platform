@@ -1,4 +1,4 @@
-\# CROBIC Platform — Phase 2 Owner Feature Requests
+\# CIBI Platform — Phase 2 Owner Feature Requests
 
 
 
@@ -220,7 +220,7 @@ Students should be able to:
 
 
 
-The live stream should play directly inside the CROBIC student portal.
+The live stream should play directly inside the CIBI student portal.
 
 
 
@@ -228,7 +228,7 @@ Students should not need to know the external platform used for streaming.
 
 
 
-The system should embed the live stream in a way that feels fully native to CROBIC.
+The system should embed the live stream in a way that feels fully native to CIBI.
 
 
 

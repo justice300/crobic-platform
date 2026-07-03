@@ -1,8 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
+import DOMPurify from "dompurify";
 import {
   ArrowRight,
   Award,
+  Bell,
   BookOpen,
   Briefcase,
   Camera,
@@ -33,7 +36,26 @@ import "./styles.css";
 
 const LOGO = "/crobic-images/cra-logo.png";
 
-const CROBIC_IMAGES = {
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: Number(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE || 0.1),
+    beforeSend(event) {
+      if (event.request?.headers) {
+        delete event.request.headers.Authorization;
+        delete event.request.headers.Cookie;
+      }
+      return event;
+    }
+  });
+}
+
+function sanitizeHtml(value = "") {
+  return DOMPurify.sanitize(String(value || ""), { USE_PROFILES: { html: true } });
+}
+
+const CIBI_IMAGES = {
   graduation: "/crobic-images/graduation-stage.jpg",
   handshake: "/crobic-images/convocation-handshake.jpg",
   classroom: "/crobic-images/classroom.jpg",
@@ -57,7 +79,7 @@ const DEFAULT_SLIDES = [
     title: "Diploma in Theology",
     description:
       "Deepen your theological understanding and ministry competence through a comprehensive 24-month curriculum designed for active ministers and church workers.",
-    imageUrl: CROBIC_IMAGES.classroom,
+    imageUrl: CIBI_IMAGES.classroom,
     ctaText: "Apply Now",
     ctaPage: "admissions"
   },
@@ -75,16 +97,16 @@ const DEFAULT_SLIDES = [
     title: "Executive Classes",
     description:
       "Designed for working-class pastors and professionals. Weekend and evening sessions that fit your schedule without compromising depth and quality.",
-    imageUrl: CROBIC_IMAGES.graduation,
+    imageUrl: CIBI_IMAGES.graduation,
     ctaText: "Apply Now",
     ctaPage: "admissions"
   }
 ];
 
 const DEFAULT_GALLERY = [
-  { title: "Graduation Ceremony", imageUrl: CROBIC_IMAGES.graduation, category: "Graduation" },
-  { title: "Certificate Presentation", imageUrl: CROBIC_IMAGES.handshake, category: "Convocation" },
-  { title: "Classroom Training", imageUrl: CROBIC_IMAGES.classroom, category: "Training" }
+  { title: "Graduation Ceremony", imageUrl: CIBI_IMAGES.graduation, category: "Graduation" },
+  { title: "Certificate Presentation", imageUrl: CIBI_IMAGES.handshake, category: "Convocation" },
+  { title: "Classroom Training", imageUrl: CIBI_IMAGES.classroom, category: "Training" }
 ];
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"];
@@ -180,12 +202,12 @@ function settingPoints(settings, key, fallback = []) {
   return value ? value.split("|").map((item) => item.trim()).filter(Boolean) : fallback;
 }
 
-const CROBIC_TOAST_EVENT = "crobic-toast";
-const CROBIC_CONFIRM_EVENT = "crobic-confirm";
+const CIBI_TOAST_EVENT = "crobic-toast";
+const CIBI_CONFIRM_EVENT = "crobic-confirm";
 
 function showToast(message, type = "info", title = "") {
   if (!message) return;
-  window.dispatchEvent(new CustomEvent(CROBIC_TOAST_EVENT, { detail: { message, type, title } }));
+  window.dispatchEvent(new CustomEvent(CIBI_TOAST_EVENT, { detail: { message, type, title } }));
 }
 
 function showConfirm({
@@ -196,7 +218,7 @@ function showConfirm({
   danger = false
 } = {}) {
   return new Promise((resolve) => {
-    window.dispatchEvent(new CustomEvent(CROBIC_CONFIRM_EVENT, {
+    window.dispatchEvent(new CustomEvent(CIBI_CONFIRM_EVENT, {
       detail: { title, message, confirmText, cancelText, danger, resolve }
     }));
   });
@@ -225,12 +247,12 @@ function NotificationCenter() {
       setConfirmState(event.detail || null);
     }
 
-    window.addEventListener(CROBIC_TOAST_EVENT, handleToast);
-    window.addEventListener(CROBIC_CONFIRM_EVENT, handleConfirm);
+    window.addEventListener(CIBI_TOAST_EVENT, handleToast);
+    window.addEventListener(CIBI_CONFIRM_EVENT, handleConfirm);
 
     return () => {
-      window.removeEventListener(CROBIC_TOAST_EVENT, handleToast);
-      window.removeEventListener(CROBIC_CONFIRM_EVENT, handleConfirm);
+      window.removeEventListener(CIBI_TOAST_EVENT, handleToast);
+      window.removeEventListener(CIBI_CONFIRM_EVENT, handleConfirm);
     };
   }, []);
 
@@ -322,13 +344,28 @@ function App() {
     setAuthOpen(true);
   }
 
-  function logout() {
+  async function logout() {
+    try {
+      await api("/auth/logout", { method: "POST" });
+    } catch {
+      // Session may already be expired.
+    }
     clearToken();
     setUser(null);
     goTo("home");
   }
 
-  if (loading) return <div className="loading-screen"><img src={LOGO} alt="CROBIC" /> Loading CROBIC...</div>;
+  useEffect(() => {
+    const handler = () => {
+      setUser(null);
+      goTo("home");
+      showToast("Your session expired. Please login again.", "error");
+    };
+    window.addEventListener("crobic:auth-expired", handler);
+    return () => window.removeEventListener("crobic:auth-expired", handler);
+  }, []);
+
+  if (loading) return <div className="loading-screen"><img src={LOGO} alt="CIBI" /> Loading CIBI...</div>;
 
   return (
     <>
@@ -380,6 +417,62 @@ function App() {
   );
 }
 
+
+function NotificationBell({ user }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState([]);
+
+  async function load() {
+    if (!user) return;
+    try {
+      const result = await api("/notifications");
+      setItems(result || []);
+    } catch {
+      setItems([]);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    if (!user) return undefined;
+    const timer = setInterval(load, 30000);
+    return () => clearInterval(timer);
+  }, [user?.id]);
+
+  async function markRead(item) {
+    try {
+      await api(`/notifications/${item.id}/read`, { method: "PATCH" });
+      setItems((current) => current.map((row) => row.id === item.id ? { ...row, readAt: new Date().toISOString() } : row));
+      if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  const unread = items.filter((item) => !item.readAt).length;
+
+  return (
+    <div className="notification-bell-wrap">
+      <button type="button" className="notification-bell" onClick={() => setOpen((value) => !value)} aria-label="Notifications">
+        <Bell size={17} />
+        {unread > 0 && <span>{unread}</span>}
+      </button>
+      {open && (
+        <div className="notification-menu">
+          <strong>Notifications</strong>
+          {items.length === 0 && <p>No notifications yet.</p>}
+          {items.slice(0, 8).map((item) => (
+            <button type="button" key={item.id} className={item.readAt ? "notification-item read" : "notification-item"} onClick={() => markRead(item)}>
+              <b>{item.title}</b>
+              <small>{item.message}</small>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen }) {
   const links = [
     ["home", "Home"],
@@ -395,10 +488,11 @@ function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen 
     <header className="navbar">
       <div className="nav-inner">
         <button className="brand" onClick={() => goTo("home")}> 
-          <span className="logo-glow"><img src={LOGO} alt="CROBIC Logo" /></span>
-          <span>
-            <strong>CROBIC</strong>
-            <small>Champions Royal Bible College</small>
+          <span className="logo-glow"><img src={LOGO} alt="CIBI Logo" /></span>
+          <span className="brand-copy">
+            <strong>CIBI</strong>
+            <small>Champion International Bible Institute</small>
+            <em>Formerly CROBIC</em>
           </span>
         </button>
 
@@ -413,6 +507,7 @@ function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen 
         <div className="nav-actions">
           {user ? (
             <>
+              <NotificationBell user={user} />
               <button className="ghost-btn" onClick={() => goTo(isStaffUser(user) ? "admin" : "student")}>Portal</button>
               <button className="dark-btn" onClick={logout}>Logout</button>
             </>
@@ -489,7 +584,7 @@ function Home({ data, goTo, openAuth }) {
         <div className="corner corner-top" />
         <div className="corner corner-bottom" />
         <div className="hero-content">
-          <p className="eyebrow framed">{slide.eyebrow || "Champions Royal Bible College"}</p>
+          <p className="eyebrow framed">{slide.eyebrow || "Champion International Bible Institute"}</p>
           <h1>{slide.title}</h1>
           <p>{slide.description}</p>
           <div className="hero-actions">
@@ -528,18 +623,18 @@ function Home({ data, goTo, openAuth }) {
 
       <section className="split-section container about-preview">
         <div className="image-frame">
-          <img src={getSetting(s, "home_about_image_url", CROBIC_IMAGES.handshake)} alt="Convocation ceremony at Champions Royal Bible College" />
+          <img src={getSetting(s, "home_about_image_url", CIBI_IMAGES.handshake)} alt="Convocation ceremony at Champion International Bible Institute" />
           <div className="image-caption"><strong>{getSetting(s, "home_about_caption_name", "Papa Joshua Iginla")}</strong><span>{getSetting(s, "home_about_caption_title", "Founder and President")}</span></div>
         </div>
         <div>
           <Kicker text={getSetting(s, "home_about_kicker", "About Us")} />
-          <h2>{getSetting(s, "home_about_title", "About CROBIC")}</h2>
+          <h2>{getSetting(s, "home_about_title", "About CIBI")}</h2>
           <div className="short-gold-line" />
           <p>
-            {getSetting(s, "home_about_paragraph_1", "Champions Royal Bible College is the biblical training arm of Champions Royal Assembly, raising ministers and kingdom leaders through biblical doctrine, spiritual formation and practical ministry preparation.")}
+            {getSetting(s, "home_about_paragraph_1", "Champion International Bible Institute is the biblical training arm of Champions Royal Assembly, raising ministers and kingdom leaders through biblical doctrine, spiritual formation and practical ministry preparation.")}
           </p>
           <p>
-            {getSetting(s, "home_about_paragraph_2", "CROBIC combines theological learning, live classes, recorded lessons, book resources and a protected student portal for a clean academic experience.")}
+            {getSetting(s, "home_about_paragraph_2", "CIBI combines theological learning, live classes, recorded lessons, book resources and a protected student portal for a clean academic experience.")}
           </p>
           <button className="text-link" onClick={() => goTo("about")}><span /> Read More <ArrowRight size={14} /></button>
         </div>
@@ -563,12 +658,12 @@ function Home({ data, goTo, openAuth }) {
       </section>
 
       <section className="graduate-quote">
-        <div className="graduate-bg" style={{ backgroundImage: `url(${getSetting(s, "home_graduate_image_url", CROBIC_IMAGES.graduation)})` }} />
+        <div className="graduate-bg" style={{ backgroundImage: `url(${getSetting(s, "home_graduate_image_url", CIBI_IMAGES.graduation)})` }} />
         <div className="quote-card">
           <Kicker text={getSetting(s, "home_graduate_kicker", "Our Graduates")} center />
           <h2>{getSetting(s, "home_graduate_title", "Graduates We Have Raised")}</h2>
           <div className="gold-divider"><span /></div>
-          <blockquote>{getSetting(s, "home_graduate_quote", "“CROBIC continues to raise champions for God’s kingdom through biblical training, discipline and spiritual formation.”")}</blockquote>
+          <blockquote>{getSetting(s, "home_graduate_quote", "“CIBI continues to raise champions for God’s kingdom through biblical training, discipline and spiritual formation.”")}</blockquote>
           <p className="quote-author">{getSetting(s, "home_graduate_author", "Prophet Joshua Iginla")}</p>
           <div className="graduate-number"><strong>{getSetting(s, "home_graduate_number", "1000+")}</strong><span>{getSetting(s, "home_graduate_number_label", "Ministerial Graduates")}</span></div>
         </div>
@@ -684,7 +779,7 @@ function mergeProgrammeCourses(courses = [], settings = {}) {
 function About({ goTo, settings = {} }) {
   const founderParagraphs = settingLines(settings, "about_founder_bio", [
     "Papa Joshua Iginla is the founder of Champions Royal Assembly, a church known for prophetic and deliverance ministry with headquarters in Abuja, Nigeria.",
-    "As President and Lead Lecturer of CROBIC, he personally teaches students and raises ministers as tools for effective ministry."
+    "As President and Lead Lecturer of CIBI, he personally teaches students and raises ministers as tools for effective ministry."
   ]);
 
   const churchStats = settingPipeList(settings, "about_church_stats", [
@@ -701,7 +796,7 @@ function About({ goTo, settings = {} }) {
   ]);
 
   const milestones = settingPipeList(settings, "about_milestones", [
-    ["2005–2006", "CROBIC Established"],
+    ["2005–2006", "CIBI Established"],
     ["2020", "14th Anniversary - Graduated 30 ministerial students after 2 years"],
     ["2021", "15th Anniversary - Released End Time Kingdom Expanders"],
     ["2022", "16th Anniversary - Convocation A Fire Generation"],
@@ -713,15 +808,15 @@ function About({ goTo, settings = {} }) {
   return (
     <main className="base44-about-page">
       <PageHero
-        eyebrow={getSetting(settings, "about_hero_eyebrow", "CROBIC")}
-        title={getSetting(settings, "about_hero_title", "About Champions Royal Bible College")}
+        eyebrow={getSetting(settings, "about_hero_eyebrow", "CIBI")}
+        title={getSetting(settings, "about_hero_title", "About Champion International Bible Institute")}
         text={getSetting(settings, "about_hero_text", "The Biblical Arm of Champions Royal Assembly")}
-        image={getSetting(settings, "about_hero_image_url", CROBIC_IMAGES.classroom)}
+        image={getSetting(settings, "about_hero_image_url", CIBI_IMAGES.classroom)}
       />
 
       <section className="about-founder-section container">
         <div className="about-founder-image-wrap">
-          <img src={getSetting(settings, "about_founder_image_url", getSetting(settings, "about_section_image_url", CROBIC_IMAGES.handshake))} alt={getSetting(settings, "about_founder_name", "Papa Joshua Iginla")} />
+          <img src={getSetting(settings, "about_founder_image_url", getSetting(settings, "about_section_image_url", CIBI_IMAGES.handshake))} alt={getSetting(settings, "about_founder_name", "Papa Joshua Iginla")} />
         </div>
         <div className="about-founder-copy">
           <p className="eyebrow dark">{getSetting(settings, "about_founder_kicker", "The Founder")}</p>
@@ -731,7 +826,7 @@ function About({ goTo, settings = {} }) {
           {founderParagraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
           <div className="about-founder-facts">
             <div><span>{getSetting(settings, "about_founder_fact_1_label", "Education")}</span><p>{getSetting(settings, "about_founder_fact_1_text", "B.Sc. Political Science, Masters and Doctorate in Political Science")}</p></div>
-            <div><span>{getSetting(settings, "about_founder_fact_2_label", "CROBIC Role")}</span><p>{getSetting(settings, "about_founder_fact_2_text", "President & Lead Lecturer")}</p></div>
+            <div><span>{getSetting(settings, "about_founder_fact_2_label", "CIBI Role")}</span><p>{getSetting(settings, "about_founder_fact_2_text", "President & Lead Lecturer")}</p></div>
           </div>
         </div>
       </section>
@@ -790,7 +885,7 @@ function About({ goTo, settings = {} }) {
       <section className="about-milestones-section container">
         <SectionIntro
           eyebrow={getSetting(settings, "about_milestones_kicker", "Our History")}
-          title={getSetting(settings, "about_milestones_title", "CROBIC Milestones")}
+          title={getSetting(settings, "about_milestones_title", "CIBI Milestones")}
           text={getSetting(settings, "about_milestones_text", "")}
         />
         <div className="about-timeline">
@@ -803,12 +898,12 @@ function About({ goTo, settings = {} }) {
         </div>
       </section>
 
-      <section className="about-classroom-cta" style={{ backgroundImage: `url(${getSetting(settings, "about_classroom_image_url", CROBIC_IMAGES.classroom)})` }}>
+      <section className="about-classroom-cta" style={{ backgroundImage: `url(${getSetting(settings, "about_classroom_image_url", CIBI_IMAGES.classroom)})` }}>
         <div className="about-classroom-overlay" />
         <div className="about-classroom-content">
           <p className="eyebrow framed">{getSetting(settings, "about_classroom_kicker", "In The Classroom")}</p>
           <h2>{getSetting(settings, "about_classroom_title", "Learning Directly from the Prophet")}</h2>
-          <p>{getSetting(settings, "about_classroom_text", "At CROBIC, students receive firsthand instruction from Prophet Joshua Iginla himself, gaining unique insights into prophetic ministry, deliverance, and kingdom administration that cannot be found in any textbook.")}</p>
+          <p>{getSetting(settings, "about_classroom_text", "At CIBI, students receive firsthand instruction from Prophet Joshua Iginla himself, gaining unique insights into prophetic ministry, deliverance, and kingdom administration that cannot be found in any textbook.")}</p>
           <button className="gold-btn big" onClick={() => goTo("admissions")}>{getSetting(settings, "about_classroom_button", "Begin Your Journey")}</button>
         </div>
       </section>
@@ -831,10 +926,10 @@ function Programs({ courses, openAuth, user, goTo, settings = {} }) {
   return (
     <main className="programs-page">
       <PageHero
-        eyebrow={getSetting(settings, "programs_hero_eyebrow", "CROBIC")}
+        eyebrow={getSetting(settings, "programs_hero_eyebrow", "CIBI")}
         title={getSetting(settings, "programs_hero_title", "Our Programs")}
         text={getSetting(settings, "programs_hero_text", "Foundation Certificate, Diploma, Advanced Diploma Certificate, and Workers and Leadership Training Program")}
-        image={getSetting(settings, "programs_hero_image_url", CROBIC_IMAGES.graduation)}
+        image={getSetting(settings, "programs_hero_image_url", CIBI_IMAGES.graduation)}
       />
 
       <section className="program-overview-section">
@@ -850,7 +945,7 @@ function Programs({ courses, openAuth, user, goTo, settings = {} }) {
 
           <div className="program-core-note">
             <h3>{getSetting(settings, "programs_core_title", "Core Foundational Course")}</h3>
-            <p>{getSetting(settings, "programs_core_text", "Compulsory for all programs — covers what CROBIC stands for and believes in. All students must complete this course regardless of their chosen program.")}</p>
+            <p>{getSetting(settings, "programs_core_text", "Compulsory for all programs — covers what CIBI stands for and believes in. All students must complete this course regardless of their chosen program.")}</p>
           </div>
         </div>
       </section>
@@ -994,7 +1089,7 @@ function BookLibrary({ books, settings = {} }) {
 
   return (
     <main>
-      <PageHero eyebrow={getSetting(settings, "books_hero_eyebrow", "Book Library")} title={getSetting(settings, "books_hero_title", "Books by Joshua Iginla")} text={getSetting(settings, "books_hero_text", "Open to the general public. Each book uses its official Stellar purchase link.")} image={getSetting(settings, "books_hero_image_url", CROBIC_IMAGES.graduation)} />
+      <PageHero eyebrow={getSetting(settings, "books_hero_eyebrow", "Book Library")} title={getSetting(settings, "books_hero_title", "Books by Joshua Iginla")} text={getSetting(settings, "books_hero_text", "Open to the general public. Each book uses its official Stellar purchase link.")} image={getSetting(settings, "books_hero_image_url", CIBI_IMAGES.graduation)} />
       <section className="page container">
         <div className="library-tools">
           <div className="search-box"><Search size={18} /><input placeholder="Search books..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
@@ -1033,7 +1128,7 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
     "Interview or review by the admissions team when required",
     "Payment confirmation before student portal activation",
     "Admin approval before access to courses, live classes and student WhatsApp group",
-    "Agreement to CROBIC academic and spiritual discipline standards"
+    "Agreement to CIBI academic and spiritual discipline standards"
   ]);
 
   const applicationSteps = settingPipeList(settings, "admission_application_steps", [
@@ -1059,12 +1154,12 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
       <PageHero
         eyebrow={getSetting(settings, "admission_hero_eyebrow", "Admission and Enrollment")}
         title={getSetting(settings, "admission_hero_title", "Admission is Now Open")}
-        text={getSetting(settings, "admission_hero_text", "Apply for CROBIC programmes, complete registration payment, and receive portal access after payment confirmation and admin approval.")}
-        image={getSetting(settings, "admission_hero_image_url", CROBIC_IMAGES.classroom)}
+        text={getSetting(settings, "admission_hero_text", "Apply for CIBI programmes, complete registration payment, and receive portal access after payment confirmation and admin approval.")}
+        image={getSetting(settings, "admission_hero_image_url", CIBI_IMAGES.classroom)}
       />
 
       <section className="admission-section container">
-        <SectionIntro eyebrow={getSetting(settings, "admission_eligibility_eyebrow", "Eligibility")} title={getSetting(settings, "admission_eligibility_title", "Who Should Apply")} text={getSetting(settings, "admission_eligibility_text", "CROBIC is open to ministers, Bible students, church workers and kingdom leaders seeking structured theological training.")} />
+        <SectionIntro eyebrow={getSetting(settings, "admission_eligibility_eyebrow", "Eligibility")} title={getSetting(settings, "admission_eligibility_title", "Who Should Apply")} text={getSetting(settings, "admission_eligibility_text", "CIBI is open to ministers, Bible students, church workers and kingdom leaders seeking structured theological training.")} />
         <div className="admission-role-grid">
           {eligibility.map((item) => (
             <div className="admission-role-card card-hover" key={item.title}>
@@ -1190,12 +1285,12 @@ function Gallery({ gallery = [], settings = {} }) {
   const items = gallery.length ? gallery : DEFAULT_GALLERY;
   return (
     <main>
-      <PageHero eyebrow={getSetting(settings, "gallery_hero_eyebrow", "Gallery")} title={getSetting(settings, "gallery_hero_title", "CROBIC Gallery")} text={getSetting(settings, "gallery_hero_text", "A visual glimpse into CROBIC training, classroom moments and graduation ceremonies.")} image={getSetting(settings, "gallery_hero_image_url", CROBIC_IMAGES.graduation)} />
+      <PageHero eyebrow={getSetting(settings, "gallery_hero_eyebrow", "Gallery")} title={getSetting(settings, "gallery_hero_title", "CIBI Gallery")} text={getSetting(settings, "gallery_hero_text", "A visual glimpse into CIBI training, classroom moments and graduation ceremonies.")} image={getSetting(settings, "gallery_hero_image_url", CIBI_IMAGES.graduation)} />
       <section className="page container">
         <div className="gallery-grid">
           {items.map((item, index) => (
             <figure key={item.id || index} className="gallery-card">
-              <img src={item.imageUrl || item.image || CROBIC_IMAGES.graduation} alt={item.title} />
+              <img src={item.imageUrl || item.image || CIBI_IMAGES.graduation} alt={item.title} />
               <figcaption>{item.title}{item.category ? <small>{item.category}</small> : null}</figcaption>
             </figure>
           ))}
@@ -1208,12 +1303,12 @@ function Gallery({ gallery = [], settings = {} }) {
 function Contact({ settings = {} }) {
   return (
     <main>
-      <PageHero eyebrow={getSetting(settings, "contact_hero_eyebrow", "Contact")} title={getSetting(settings, "contact_hero_title", "Get in Touch with CROBIC")} text={getSetting(settings, "contact_hero_text", "Contact the college for admissions, book enquiries, student support and general information.")} image={getSetting(settings, "contact_hero_image_url", CROBIC_IMAGES.classroom)} />
+      <PageHero eyebrow={getSetting(settings, "contact_hero_eyebrow", "Contact")} title={getSetting(settings, "contact_hero_title", "Get in Touch with CIBI")} text={getSetting(settings, "contact_hero_text", "Contact the college for admissions, book enquiries, student support and general information.")} image={getSetting(settings, "contact_hero_image_url", CIBI_IMAGES.classroom)} />
       <section className="page container">
         <div className="contact-grid">
           <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone")}</h3><p>{getSetting(settings, "contact_phone", "+234 814 943 9447")}</p></div>
           <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{getSetting(settings, "contact_address", "Kubwa, Abuja, FCT, Nigeria")}</p></div>
-          <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CROBIC information.")}</p></div>
+          <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CIBI information.")}</p></div>
         </div>
       </section>
     </main>
@@ -1221,9 +1316,51 @@ function Contact({ settings = {} }) {
 }
 
 
+function extractYouTubeVideoId(input = "") {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  const iframeMatch = raw.match(/src=["']([^"']+)["']/i);
+  const value = iframeMatch?.[1] || raw;
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, "").replace(/^m\./, "");
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (host === "youtu.be") return parts[0] || "";
+    if (host.includes("youtube.com") || host.includes("youtube-nocookie.com")) {
+      if (url.searchParams.get("v")) return url.searchParams.get("v") || "";
+      const index = parts.findIndex((part) => ["embed", "live", "shorts"].includes(part));
+      if (index >= 0 && parts[index + 1]) return parts[index + 1];
+      return parts.pop() || "";
+    }
+  } catch {
+    const match = value.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/i);
+    return match?.[1] || "";
+  }
+  return "";
+}
+
+function buildPlatformYouTubeEmbedUrl(videoId) {
+  const params = new URLSearchParams({
+    enablejsapi: "1",
+    controls: "0",
+    modestbranding: "1",
+    rel: "0",
+    disablekb: "1",
+    fs: "0",
+    iv_load_policy: "3",
+    playsinline: "1",
+    origin: window.location.origin
+  });
+  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+}
+
 function getEmbeddableVideoUrl(input) {
   const raw = String(input || "").trim();
   if (!raw) return null;
+
+  const youtubeId = extractYouTubeVideoId(raw);
+  if (youtubeId) return { type: "youtube", videoId: youtubeId, src: buildPlatformYouTubeEmbedUrl(youtubeId) };
 
   const iframeMatch = raw.match(/src=["']([^"']+)["']/i);
   if (iframeMatch?.[1]) return { type: "iframe", src: iframeMatch[1] };
@@ -1233,18 +1370,6 @@ function getEmbeddableVideoUrl(input) {
   try {
     const url = new URL(raw);
     const host = url.hostname.replace("www.", "");
-
-    if (host.includes("youtube.com")) {
-      const videoId = url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop();
-      if (url.pathname.includes("/embed/")) return { type: "iframe", src: raw };
-      if (url.pathname.includes("/live/")) return { type: "iframe", src: `https://www.youtube.com/embed/${videoId}` };
-      if (videoId) return { type: "iframe", src: `https://www.youtube.com/embed/${videoId}` };
-    }
-
-    if (host.includes("youtu.be")) {
-      const videoId = url.pathname.split("/").filter(Boolean)[0];
-      if (videoId) return { type: "iframe", src: `https://www.youtube.com/embed/${videoId}` };
-    }
 
     if (host.includes("vimeo.com")) {
       const videoId = url.pathname.split("/").filter(Boolean).pop();
@@ -1265,18 +1390,176 @@ function getEmbeddableVideoUrl(input) {
   }
 }
 
+let youtubeApiPromise;
+function loadYouTubeIframeApi() {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (youtubeApiPromise) return youtubeApiPromise;
+
+  youtubeApiPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    const previousReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      previousReady?.();
+      resolve(window.YT);
+    };
+    if (!existing) {
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      script.onerror = () => reject(new Error("Could not load secure video player."));
+      document.head.appendChild(script);
+    }
+  });
+
+  return youtubeApiPromise;
+}
+
+function formatWatchTime(seconds = 0) {
+  const total = Math.max(0, Math.floor(Number(seconds || 0)));
+  const minutes = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
+function PlatformYouTubePlayer({ videoId, title, initialSecond = 0, onProgress = () => {} }) {
+  const containerRef = useRef(null);
+  const playerRef = useRef(null);
+  const timerRef = useRef(null);
+  const lastSavedRef = useRef(0);
+  const playingRef = useRef(false);
+  const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(Number(initialSecond || 0));
+  const [duration, setDuration] = useState(0);
+  const [muted, setMuted] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReady(false);
+    loadYouTubeIframeApi()
+      .then((YT) => {
+        if (cancelled || !containerRef.current) return;
+        playerRef.current = new YT.Player(containerRef.current, {
+          videoId,
+          host: "https://www.youtube-nocookie.com",
+          playerVars: {
+            controls: 0,
+            modestbranding: 1,
+            rel: 0,
+            disablekb: 1,
+            fs: 0,
+            iv_load_policy: 3,
+            playsinline: 1,
+            origin: window.location.origin
+          },
+          events: {
+            onReady(event) {
+              setReady(true);
+              const total = event.target.getDuration?.() || 0;
+              setDuration(total);
+              if (initialSecond > 0 && initialSecond < total) event.target.seekTo(initialSecond, true);
+            },
+            onStateChange(event) {
+              const state = event.data;
+              playingRef.current = state === 1;
+              setPlaying(state === 1);
+              if (state === 0) {
+                const time = event.target.getCurrentTime?.() || 0;
+                const total = event.target.getDuration?.() || 0;
+                onProgress(Math.floor(time), Math.floor(total), true);
+              }
+            }
+          }
+        });
+      })
+      .catch((error) => showToast(error.message, "error"));
+
+    timerRef.current = setInterval(() => {
+      const player = playerRef.current;
+      if (!player?.getCurrentTime) return;
+      const time = player.getCurrentTime() || 0;
+      const total = player.getDuration?.() || 0;
+      setCurrent(time);
+      setDuration(total);
+      if (playingRef.current && Math.abs(time - lastSavedRef.current) >= 10) {
+        lastSavedRef.current = time;
+        onProgress(Math.floor(time), Math.floor(total), false);
+      }
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearInterval(timerRef.current);
+      try { playerRef.current?.destroy?.(); } catch { /* ignore */ }
+      playerRef.current = null;
+    };
+  }, [videoId]);
+
+  function togglePlay() {
+    const player = playerRef.current;
+    if (!player) return;
+    if (playing) player.pauseVideo?.();
+    else player.playVideo?.();
+  }
+
+  function seek(next) {
+    const player = playerRef.current;
+    const total = duration || player?.getDuration?.() || 0;
+    const safe = Math.max(0, Math.min(Number(next || 0), total || Number(next || 0)));
+    player?.seekTo?.(safe, true);
+    setCurrent(safe);
+  }
+
+  function toggleMute() {
+    const player = playerRef.current;
+    if (!player) return;
+    if (muted) player.unMute?.();
+    else player.mute?.();
+    setMuted(!muted);
+  }
+
+  return (
+    <div className="platform-video-shell" onContextMenu={(e) => e.preventDefault()}>
+      <div className="platform-video-frame-wrap">
+        <div ref={containerRef} className="platform-youtube-mount" title={title || "CIBI video"} />
+        {!ready && <div className="platform-video-loading">Preparing CIBI video player...</div>}
+      </div>
+      <div className="platform-video-controls">
+        <button type="button" className="dark-btn mini-btn" onClick={togglePlay} disabled={!ready}>{playing ? "Pause" : "Play"}</button>
+        <button type="button" className="ghost-btn mini-btn" onClick={() => seek(current - 10)} disabled={!ready}>-10s</button>
+        <input
+          aria-label="Video progress"
+          type="range"
+          min="0"
+          max={Math.max(duration || 0, 1)}
+          value={Math.min(current || 0, duration || current || 1)}
+          onChange={(e) => seek(e.target.value)}
+          disabled={!ready || !duration}
+        />
+        <small>{formatWatchTime(current)} / {formatWatchTime(duration)}</small>
+        <button type="button" className="ghost-btn mini-btn" onClick={() => seek(current + 10)} disabled={!ready}>+10s</button>
+        <button type="button" className="ghost-btn mini-btn" onClick={toggleMute} disabled={!ready}>{muted ? "Unmute" : "Mute"}</button>
+      </div>
+    </div>
+  );
+}
+
 function PortalVideoPlayer({ url, title }) {
   const video = getEmbeddableVideoUrl(url);
   if (!video) return <div className="portal-video-missing">No video link added yet.</div>;
 
+  if (video.type === "youtube") {
+    return <PlatformYouTubePlayer videoId={video.videoId} title={title || "CIBI video"} />;
+  }
+
   if (video.type === "video") {
-    return <video className="portal-video" controls src={video.src} title={title || "CROBIC video"} />;
+    return <video className="portal-video" controls controlsList="nodownload" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} src={video.src} title={title || "CIBI video"} />;
   }
 
   return (
     <iframe
       className="portal-video"
-      title={title || "CROBIC video"}
+      title={title || "CIBI video"}
       src={video.src}
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
       allowFullScreen
@@ -1367,7 +1650,7 @@ function LiveClassroom({ initialLiveSession }) {
           <div className="portal-video-shell">
             <PortalVideoPlayer url={liveSession.liveUrl} title={liveSession.title} />
           </div>
-          <p className="portal-video-note">This class plays inside the CROBIC student portal. {liveSession.chatEnabled === false ? "The lecturer has turned off live chat for this class." : "Use chat for discussion and questions for lecturer attention."}</p>
+          <p className="portal-video-note">This class plays inside the CIBI student portal. {liveSession.chatEnabled === false ? "The lecturer has turned off live chat for this class." : "Use chat for discussion and questions for lecturer attention."}</p>
           {liveSession.replayUrl && <p><a className="receipt-preview-link" href={liveSession.replayUrl} target="_blank" rel="noreferrer">Replay will remain available here</a></p>}
           {liveSession.subtitleUrl && <p><a className="receipt-preview-link" href={liveSession.subtitleUrl} target="_blank" rel="noreferrer">Subtitle / translation file: {liveSession.subtitleLanguage || "available"}</a></p>}
           {liveSession.voiceEnabled && <div className="voice-response-note">Voice response is enabled as a planned classroom feature. Full microphone control requires the advanced live-room integration.</div>}
@@ -1529,7 +1812,7 @@ function getPortalDecisionCopy(accountStatus, enrollment, fallbackError = "") {
       tone: "rejected",
       category: "ADMISSION_REJECTED",
       title: "Admission Rejected",
-      message: "Your admission application was not approved. You can submit an appeal for CROBIC admin to review your application again.",
+      message: "Your admission application was not approved. You can submit an appeal for CIBI admin to review your application again.",
       buttonText: "Review Application",
       buttonPage: "admissions"
     };
@@ -1573,7 +1856,7 @@ function getPortalDecisionCopy(accountStatus, enrollment, fallbackError = "") {
       tone: "review",
       category: "PAYMENT_REVIEW",
       title: "Payment Under Review",
-      message: "Your bank transfer receipt has been submitted. CROBIC admin will verify your payment and approve portal access after confirmation.",
+      message: "Your bank transfer receipt has been submitted. CIBI admin will verify your payment and approve portal access after confirmation.",
       buttonText: "Check Admission",
       buttonPage: "admissions"
     };
@@ -1705,7 +1988,7 @@ function StudentSupportCenter({ defaultCategory = "GENERAL_SUPPORT", defaultSubj
       <div className="support-head">
         <div>
           <span><MessageCircle size={15} /> Appeals & Support</span>
-          <h2>{gateMode ? "Appeal or Chat with CROBIC Support" : "Support & Appeals"}</h2>
+          <h2>{gateMode ? "Appeal or Chat with CIBI Support" : "Support & Appeals"}</h2>
           <p>Messages are saved in your portal history. Admin replies will appear here automatically.</p>
         </div>
         <button className="ghost-btn dark-text" type="button" onClick={loadCases}>Refresh</button>
@@ -1745,7 +2028,7 @@ function StudentSupportCenter({ defaultCategory = "GENERAL_SUPPORT", defaultSubj
               <div className="support-message-list">
                 {(activeCase.messages || []).map((message) => (
                   <div className={message.sender?.role === "ADMIN" ? "support-message admin-message" : "support-message student-message"} key={message.id}>
-                    <strong>{message.sender?.role === "ADMIN" ? "CROBIC Support" : message.sender?.name || "Student"}</strong>
+                    <strong>{message.sender?.role === "ADMIN" ? "CIBI Support" : message.sender?.name || "Student"}</strong>
                     <p>{message.message}</p>
                     <small>{new Date(message.createdAt).toLocaleString()}</small>
                   </div>
@@ -1922,7 +2205,7 @@ function StudentPortal({ user, setUser, goTo }) {
                 <div className="student-tab-heading">
                   <span>Resources</span>
                   <h2>Book Library</h2>
-                  <p>Buy official CROBIC/Joshua Iginla books through the approved purchase links.</p>
+                  <p>Buy official CIBI/Joshua Iginla books through the approved purchase links.</p>
                 </div>
                 <div className="book-grid student-book-grid">
                   {publicBooks.map((book) => <BookCard key={book.id} book={book} />)}
@@ -1995,7 +2278,7 @@ function StudentProfilePanel({ user, setUser, reloadDashboard }) {
       <div className="student-tab-heading profile-heading-card">
         <span>Account Details</span>
         <h2>My Profile</h2>
-        <p>Update your correct full name and contact details. Your full name is used for official CROBIC records and certificates.</p>
+        <p>Update your correct full name and contact details. Your full name is used for official CIBI records and certificates.</p>
       </div>
 
       <form className="admin-form profile-form" onSubmit={saveProfile}>
@@ -2031,7 +2314,7 @@ function StudentCourse({ enrollment, openCourse }) {
   const summary = getCourseProgressSummary(course);
   return (
     <div className="course-card student-course-card">
-      <img src={course.imageUrl || CROBIC_IMAGES.classroom} alt={course.title} />
+      <img src={course.imageUrl || CIBI_IMAGES.classroom} alt={course.title} />
       <div>
         <span>{course.level}</span>
         <h3>{course.title}</h3>
@@ -2106,6 +2389,10 @@ function LearningCourseView({ enrollment, back, reloadDashboard }) {
           <i><b style={{ width: `${summary.percent}%` }} /></i>
         </div>
       </div>
+
+      <CourseLiveBanner courseId={course.id} />
+      <CourseVideosPanel course={course} canManage={false} onReload={reloadCourse} />
+      <PastLiveClasses courseId={course.id} liveSessions={course.liveSessions || []} />
 
       <div className="learning-layout">
         <div className="learning-main-panel">
@@ -2211,6 +2498,358 @@ function fileToDataUrl(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+
+function CourseLiveBanner({ courseId }) {
+  const [live, setLive] = useState(null);
+
+  async function load() {
+    try {
+      const result = await api(`/courses/${courseId}/live/active`);
+      setLive(result.live || null);
+    } catch {
+      setLive(null);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 30000);
+    return () => clearInterval(timer);
+  }, [courseId]);
+
+  if (!live) return null;
+
+  return (
+    <section className="course-live-banner">
+      <div>
+        <span><Radio size={15} /> Live now</span>
+        <h3>{live.title}</h3>
+        <p>{live.description || `Lecturer: ${live.startedBy?.name || "CIBI Lecturer"}`}</p>
+      </div>
+      <a className="gold-btn" href={live.liveUrl} target="_blank" rel="noreferrer">Join Now</a>
+    </section>
+  );
+}
+
+function PastLiveClasses({ courseId, liveSessions = [] }) {
+  const [sessions, setSessions] = useState(liveSessions);
+
+  async function load() {
+    try {
+      const result = await api(`/courses/${courseId}/live/history`);
+      setSessions(result || []);
+    } catch {
+      setSessions(liveSessions || []);
+    }
+  }
+
+  useEffect(() => { load(); }, [courseId]);
+
+  const ended = (sessions || []).filter((session) => session.status === "ended" || session.endedAt);
+  if (!ended.length) return null;
+
+  return (
+    <section className="course-video-panel">
+      <div className="course-video-panel-head">
+        <div><span>Live Class History</span><h3>Past Live Classes</h3></div>
+      </div>
+      <div className="course-video-list">
+        {ended.map((session) => (
+          <div className="course-video-row" key={session.id}>
+            <div>
+              <strong>{session.title}</strong>
+              <small>{formatDateTime(session.createdAt)} {session.durationSeconds ? `· ${Math.round(session.durationSeconds / 60)} mins` : ""}</small>
+            </div>
+            {(session.recordingUrl || session.replayUrl) && <a className="ghost-btn mini-btn" href={session.recordingUrl || session.replayUrl} target="_blank" rel="noreferrer">Watch Recording</a>}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CourseLiveManager({ course, onReload }) {
+  const [form, setForm] = useState({ title: "", description: "", liveUrl: "", scheduledAt: "" });
+  const [active, setActive] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [recordingUrl, setRecordingUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function loadLive() {
+    if (!course?.id) return;
+    try {
+      const [activeResult, historyResult] = await Promise.all([
+        api(`/courses/${course.id}/live/active`),
+        api(`/courses/${course.id}/live/history`)
+      ]);
+      setActive(activeResult.live || null);
+      setHistory(historyResult || []);
+    } catch {
+      setActive(null);
+    }
+  }
+
+  useEffect(() => { loadLive(); }, [course?.id]);
+
+  async function startLive(e) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const result = await api(`/courses/${course.id}/live/start`, { method: "POST", body: form });
+      showToast("Live class started. Students have been notified.", "success");
+      setActive(result.live);
+      setForm({ title: "", description: "", liveUrl: "", scheduledAt: "" });
+      await onReload?.();
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function endLive() {
+    if (!active) return;
+    const ok = await showConfirm({ title: "End live class?", message: "Students will be notified that the class has ended.", confirmText: "End Class", danger: true });
+    if (!ok) return;
+    try {
+      await api(`/courses/${course.id}/live/${active.id}/end`, { method: "PATCH" });
+      showToast("Live class ended.", "success");
+      setActive(null);
+      await loadLive();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  async function saveRecording(sessionId) {
+    if (!recordingUrl.trim()) return showToast("Paste the recording link first.", "error");
+    try {
+      await api(`/courses/${course.id}/live/${sessionId}/recording`, { method: "PATCH", body: { recordingUrl } });
+      showToast("Recording link saved and students notified.", "success");
+      setRecordingUrl("");
+      await loadLive();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  return (
+    <section className="course-live-manager">
+      <div className="course-video-panel-head">
+        <div><span>Go Live</span><h3>Course Live Class</h3></div>
+        {active && <button type="button" className="delete-btn" onClick={endLive}>End Class</button>}
+      </div>
+
+      {active ? (
+        <div className="course-live-active">
+          <strong>{active.title}</strong>
+          <p>{active.description || "Live class is currently active."}</p>
+          <a className="gold-btn mini-btn" href={active.liveUrl} target="_blank" rel="noreferrer">Open Live Link</a>
+        </div>
+      ) : (
+        <form className="admin-form go-live-form" onSubmit={startLive}>
+          <input placeholder="Live class title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+          <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <input placeholder="Zoom or YouTube Live link" value={form.liveUrl} onChange={(e) => setForm({ ...form, liveUrl: e.target.value })} required />
+          <input type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} />
+          <button className="gold-btn" type="submit" disabled={loading}>{loading ? "Starting..." : "Go Live"}</button>
+        </form>
+      )}
+
+      {history.filter((session) => session.status === "ended" || session.endedAt).slice(0, 3).map((session) => (
+        <div className="recording-row" key={session.id}>
+          <div><strong>{session.title}</strong><small>{formatDateTime(session.createdAt)}</small></div>
+          {(session.recordingUrl || session.replayUrl) ? (
+            <a className="ghost-btn mini-btn" href={session.recordingUrl || session.replayUrl} target="_blank" rel="noreferrer">Recording</a>
+          ) : (
+            <div className="recording-input-row">
+              <input placeholder="Add recording link" value={recordingUrl} onChange={(e) => setRecordingUrl(e.target.value)} />
+              <button type="button" className="dark-btn mini-btn" onClick={() => saveRecording(session.id)}>Save</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function CourseVideosPanel({ course, canManage = false, onReload = async () => {} }) {
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [playing, setPlaying] = useState(null);
+  const videos = [...(course?.videos || [])].sort((a, b) => Number(a.sortOrder || a.chapter || 0) - Number(b.sortOrder || b.chapter || 0));
+
+  async function deleteVideo(video) {
+    const ok = await showConfirm({
+      title: "Delete video?",
+      message: `This will remove "${video.title}" from the CIBI course list. The original YouTube video is not deleted.`,
+      confirmText: "Delete Video",
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      await api(`/courses/${course.id}/videos/${video.id}`, { method: "DELETE" });
+      showToast("Video removed from course.", "success");
+      await onReload();
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  }
+
+  return (
+    <section className="course-video-panel">
+      <div className="course-video-panel-head">
+        <div><span>Platform Videos</span><h3>Course Videos</h3></div>
+        {canManage && <button type="button" className="gold-btn mini-btn" onClick={() => setUploadOpen(true)}>Add Video</button>}
+      </div>
+
+      {videos.length === 0 ? (
+        <div className="quiet-banner compact"><strong>No course videos yet.</strong><p>{canManage ? "Paste a YouTube unlisted link and CIBI will play it inside the platform." : "Videos will appear here when your lecturer adds them."}</p></div>
+      ) : (
+        <div className="course-video-list">
+          {videos.map((video) => (
+            <div className="course-video-row" key={video.id}>
+              <div>
+                <span>Chapter {video.chapter || video.sortOrder || 1}</span>
+                <strong>{video.title}</strong>
+                <small>{formatDateTime(video.uploadDate || video.createdAt)} · {video.uploadedBy?.name || "CIBI"}</small>
+              </div>
+              <div className="video-row-actions">
+                <button type="button" className="dark-btn mini-btn" onClick={() => setPlaying(video)}>Play</button>
+                {canManage && <button type="button" className="delete-btn" onClick={() => deleteVideo(video)}><Trash2 size={14} /></button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {uploadOpen && <VideoLinkModal course={course} close={() => setUploadOpen(false)} onSaved={onReload} />}
+      {playing && <SecureCourseVideoPlayer courseId={course.id} video={playing} close={() => setPlaying(null)} />}
+    </section>
+  );
+}
+
+function VideoLinkModal({ course, close, onSaved }) {
+  const [form, setForm] = useState({ title: "", description: "", chapter: 1, videoUrl: "" });
+  const [saving, setSaving] = useState(false);
+
+  function validateLink(value) {
+    const videoId = extractYouTubeVideoId(value);
+    return Boolean(videoId && /^[A-Za-z0-9_-]{6,}$/.test(videoId));
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!validateLink(form.videoUrl)) return showToast("Please paste a valid YouTube video, YouTube Live, Shorts, or embed link.", "error");
+    setSaving(true);
+    try {
+      await api(`/courses/${course.id}/videos/upload`, {
+        method: "POST",
+        body: {
+          title: form.title,
+          description: form.description,
+          chapter: form.chapter,
+          videoUrl: form.videoUrl
+        }
+      });
+      showToast("Video added to CIBI course player.", "success");
+      await onSaved();
+      close();
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <form className="auth-modal video-upload-modal admin-form" onSubmit={submit}>
+        <button type="button" className="close-btn" onClick={close}><X /></button>
+        <h3>Add Course Video</h3>
+        <p>Paste a YouTube unlisted link. CIBI will play it with a platform player, no upload storage cost.</p>
+        <input placeholder="Video title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+        <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        <input type="number" min="1" placeholder="Chapter / module number" value={form.chapter} onChange={(e) => setForm({ ...form, chapter: e.target.value })} />
+        <input placeholder="Paste YouTube unlisted/video/live link" value={form.videoUrl} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} required />
+        {form.videoUrl && validateLink(form.videoUrl) && (
+          <div className="admin-video-preview builder-form-preview">
+            <PortalVideoPlayer url={form.videoUrl} title={form.title || "Video preview"} />
+          </div>
+        )}
+        <div className="quiet-banner compact video-policy-note">
+          <strong>Storage-saving mode active.</strong>
+          <p>The video file stays on YouTube. Students only see the CIBI player inside the course page.</p>
+        </div>
+        <button className="gold-btn full" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Video Link"}</button>
+      </form>
+    </div>
+  );
+}
+
+function SecureCourseVideoPlayer({ courseId, video, close }) {
+  const [playerData, setPlayerData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const saveTimer = useRef(null);
+
+  useEffect(() => {
+    setLoading(true);
+    api(`/courses/${courseId}/videos/${video.id}/stream-url`)
+      .then((result) => setPlayerData(result))
+      .catch((error) => showToast(error.message, "error"))
+      .finally(() => setLoading(false));
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [courseId, video.id]);
+
+  function saveProgress(progressSecond = 0, durationSecond = 0, completed = false) {
+    if (saveTimer.current && !completed) return;
+    const run = async () => {
+      saveTimer.current = null;
+      try {
+        await api(`/courses/${courseId}/videos/${video.id}/progress`, {
+          method: "POST",
+          body: {
+            progressSecond: Math.floor(progressSecond || 0),
+            durationSecond: Math.floor(durationSecond || 0),
+            completed
+          }
+        });
+      } catch {
+        // Progress save should not interrupt playback.
+      }
+    };
+    if (completed) run();
+    else saveTimer.current = setTimeout(run, 8000);
+  }
+
+  const videoId = playerData?.externalVideoId || video.externalVideoId || extractYouTubeVideoId(playerData?.embedUrl || "");
+  const resumeSecond = Number(video.progress?.progressSecond || 0);
+
+  return (
+    <div className="modal-backdrop">
+      <div className="auth-modal secure-video-modal">
+        <button type="button" className="close-btn" onClick={close}><X /></button>
+        <h3>{video.title}</h3>
+        <p>{video.uploadedBy?.name ? `Lecturer: ${video.uploadedBy.name}` : "CIBI platform video"}</p>
+        {loading ? (
+          <div className="quiet-banner"><strong>Preparing CIBI video player...</strong></div>
+        ) : videoId ? (
+          <PlatformYouTubePlayer
+            videoId={videoId}
+            title={video.title}
+            initialSecond={resumeSecond}
+            onProgress={saveProgress}
+          />
+        ) : (
+          <div className="quiet-banner"><strong>This video link is not playable inside CIBI.</strong></div>
+        )}
+        <small className="secure-video-note">Download and YouTube redirect controls are hidden inside the CIBI player.</small>
+      </div>
+    </div>
+  );
 }
 
 function LearningAssessments({ course, reloadCourse }) {
@@ -2520,13 +3159,13 @@ function AdminDashboard({ reloadPublic, currentUser }) {
     <main className="portal-page">
       <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Website Content", "Programs", "Currency Settings", "Users & Roles", "Students", "Books", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Students", "Programs", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
       <div className="portal-main">
-        <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CROBIC Management</h1></div></div>
+        <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CIBI Management</h1></div></div>
         {tab === "overview" && <Overview overview={overview} />}
         {tab === "users & roles" && <UsersRolesAdmin />}
         {tab === "students" && <StudentsAdmin />}
         {tab === "books" && <CrudAdmin title="Books" path="books" reloadPublic={reloadPublic} fields={bookFields} />}
         {["courses", "programs"].includes(tab) && <CrudAdmin title="Programs" path="courses" reloadPublic={reloadPublic} fields={courseFields} />}
-        {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} />}
+        {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} currentUser={currentUser} />}
         {tab === "progress" && <ProgressAdmin />}
         {tab === "gradebook" && <GradebookAdmin />}
         {tab === "student groups" && <StudentGroupsAdmin />}
@@ -3190,7 +3829,7 @@ function SupportAdmin() {
     try {
       const result = await api(`/admin/support/cases/${activeCase.id}/restore-access`, {
         method: "POST",
-        body: { message: "Your appeal has been reviewed. Your payment and admission have been approved. You can now access your CROBIC learning portal." }
+        body: { message: "Your appeal has been reviewed. Your payment and admission have been approved. You can now access your CIBI learning portal." }
       });
       await load();
       showToast(result.message || "Student access restored.", "success");
@@ -3281,7 +3920,7 @@ function SupportAdmin() {
             <div className="support-message-list admin-support-message-list">
               {(activeCase.messages || []).map((message) => (
                 <div className={message.sender?.role === "ADMIN" ? "support-message admin-message" : "support-message student-message"} key={message.id}>
-                  <strong>{message.sender?.role === "ADMIN" ? "CROBIC Support" : message.sender?.name || "Student"}</strong>
+                  <strong>{message.sender?.role === "ADMIN" ? "CIBI Support" : message.sender?.name || "Student"}</strong>
                   <p>{message.message}</p>
                   <small>{new Date(message.createdAt).toLocaleString()}</small>
                 </div>
@@ -3740,7 +4379,7 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
   );
 }
 
-function CourseBuilderAdmin({ reloadPublic = async () => {} }) {
+function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null }) {
   const blankModule = { title: "", description: "", moduleOrder: 1, published: true };
   const blankLesson = { moduleId: "", title: "", videoUrl: "", notesUrl: "", duration: "", lessonOrder: 1, completionPercentRequired: 90, required: true, published: true };
   const [courses, setCourses] = useState([]);
@@ -4000,6 +4639,9 @@ function CourseBuilderAdmin({ reloadPublic = async () => {} }) {
               <p>{selectedCourse.description}</p>
             </div>
 
+            <CourseLiveManager course={selectedCourse} onReload={load} />
+            <CourseVideosPanel course={selectedCourse} canManage={isPowerAdmin(currentUser) || currentUser?.role === "LECTURER"} onReload={load} />
+
             {sortedModules.length === 0 && generalLessons.length === 0 && <div className="quiet-banner"><strong>No modules or lessons yet.</strong><p>Add Stage 1, Stage 2, Stage 3, then add lessons inside each stage.</p></div>}
 
             {sortedModules.map((module, moduleIndex) => {
@@ -4103,13 +4745,13 @@ function CertificateSheet({ certificate, enrollment, settings = {} }) {
   return (
     <div className="certificate-sheet">
       <div className="certificate-sheet-border">
-        <img className="certificate-main-seal" src={sealUrl} alt="CROBIC seal" />
-        <span>Champions Royal Bible College</span>
+        <img className="certificate-main-seal" src={sealUrl} alt="CIBI seal" />
+        <span>Champion International Bible Institute</span>
         <h2>Certificate of Completion</h2>
         <p>This certifies that</p>
         <h3>{studentName}</h3>
         <p>has successfully completed the required course of study in</p>
-        <h4>{course.title || "CROBIC Programme"}</h4>
+        <h4>{course.title || "CIBI Programme"}</h4>
         <div className="certificate-sheet-meta">
           <div><small>Certificate No.</small><strong>{certificateNumber || "Pending"}</strong></div>
           <div><small>Date Issued</small><strong>{formatCertificateDate(certificate?.issuedAt)}</strong></div>
@@ -4191,7 +4833,7 @@ function StudentAttendancePanel() {
             <div className="attendance-record-card" key={record.id}>
               <div>
                 <strong>{record.liveSession?.title || "Live Class"}</strong>
-                <small>{record.liveSession?.description || "CROBIC live session"}</small>
+                <small>{record.liveSession?.description || "CIBI live session"}</small>
               </div>
               <div><span>Joined</span><b>{formatDateTime(record.joinedAt)}</b></div>
               <div><span>Last Seen</span><b>{formatDateTime(record.lastSeenAt)}</b></div>
@@ -4276,7 +4918,7 @@ function CourseDiscussionPanel({ courseId }) {
             <div className="discussion-replies">
               {(discussion.replies || []).map((reply) => (
                 <div className={reply.author?.role === "ADMIN" ? "discussion-reply admin-reply" : "discussion-reply"} key={reply.id}>
-                  <strong>{reply.author?.role === "ADMIN" ? "CROBIC Admin" : reply.author?.name || "Student"}</strong>
+                  <strong>{reply.author?.role === "ADMIN" ? "CIBI Admin" : reply.author?.name || "Student"}</strong>
                   <p>{reply.message}</p>
                   <small>{formatDateTime(reply.createdAt)}</small>
                 </div>
@@ -4713,11 +5355,11 @@ function CertificateVerification() {
     <main className="page container certificate-verification-page">
       <div className="section-intro">
         <Kicker text="Certificate Verification" center />
-        <h1>Verify CROBIC Certificate</h1>
-        <p>Enter a certificate number to confirm if it was issued by Champions Royal Bible College.</p>
+        <h1>Verify CIBI Certificate</h1>
+        <p>Enter a certificate number to confirm if it was issued by Champion International Bible Institute.</p>
       </div>
       <form className="certificate-verify-form" onSubmit={verify}>
-        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="CROBIC-2026-001-0001-ABC123" />
+        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="CIBI-2026-001-0001-ABC123" />
         <button className="gold-btn" type="submit">Verify Certificate</button>
       </form>
       {message && <div className="quiet-banner"><strong>Verification failed</strong><p>{message}</p></div>}
@@ -4725,7 +5367,7 @@ function CertificateVerification() {
         <div className="certificate-verification-result">
           <CheckCircle size={42} />
           <h2>Certificate Verified</h2>
-          <p>This certificate is valid and was issued by CROBIC.</p>
+          <p>This certificate is valid and was issued by CIBI.</p>
           <CertificateSheet certificate={result} settings={certSettings} />
         </div>
       )}
@@ -4957,7 +5599,7 @@ function LiveAdmin({ reloadPublic }) {
       <div className="live-admin-header">
         <div>
           <h2>Live Classroom Control</h2>
-          <p className="admin-help-text">Students watch live classes inside CROBIC. The external platform link stays hidden inside the embedded player.</p>
+          <p className="admin-help-text">Students watch live classes inside CIBI. The external platform link stays hidden inside the embedded player.</p>
         </div>
         {liveSession && <span className={liveSession.active ? "live-status active-live-status" : "live-status"}>{liveSession.active ? "Live Active" : "Last Class"}</span>}
       </div>
@@ -5390,7 +6032,7 @@ function AttendanceRecordsAdmin() {
           {(payload.grouped || []).map((group) => (
             <div className="attendance-session-card" key={group.liveSession?.id || group.liveSession?.title}>
               <div className="attendance-session-head">
-                <div><strong>{group.liveSession?.title || "Live Session"}</strong><small>{group.liveSession?.description || "CROBIC live class"}</small></div>
+                <div><strong>{group.liveSession?.title || "Live Session"}</strong><small>{group.liveSession?.description || "CIBI live class"}</small></div>
                 <span>{group.count} present</span>
               </div>
               <div className="attendance-table">
@@ -5494,7 +6136,7 @@ function CourseDiscussionsAdmin() {
               <div className="discussion-replies">
                 {(discussion.replies || []).map((reply) => (
                   <div className={reply.author?.role === "ADMIN" ? "discussion-reply admin-reply" : "discussion-reply"} key={reply.id}>
-                    <strong>{reply.author?.role === "ADMIN" ? "CROBIC Admin" : reply.author?.name || "Student"}</strong>
+                    <strong>{reply.author?.role === "ADMIN" ? "CIBI Admin" : reply.author?.name || "Student"}</strong>
                     <p>{reply.message}</p>
                     <small>{formatDateTime(reply.createdAt)}</small>
                   </div>
@@ -5523,8 +6165,8 @@ function EmailSettingsAdmin() {
     const result = await api("/admin/settings");
     setSettings({
       email_notifications_enabled: result.email_notifications_enabled || "false",
-      email_school_name: result.email_school_name || "Champions Royal Bible College",
-      email_from_name: result.email_from_name || "CROBIC Admissions",
+      email_school_name: result.email_school_name || "Champion International Bible Institute",
+      email_from_name: result.email_from_name || "CIBI Admissions",
       email_from_address: result.email_from_address || "",
       email_reply_to: result.email_reply_to || "",
       email_admin_recipients: result.email_admin_recipients || "",
@@ -5596,7 +6238,7 @@ function EmailSettingsAdmin() {
             </label>
             <label className="content-field content-field-wide">
               <span>School email name</span>
-              <input value={settings.email_school_name || ""} onChange={(e) => updateField("email_school_name", e.target.value)} placeholder="Champions Royal Bible College" />
+              <input value={settings.email_school_name || ""} onChange={(e) => updateField("email_school_name", e.target.value)} placeholder="Champion International Bible Institute" />
             </label>
             <label className="content-field content-field-wide">
               <span>Website / portal base URL</span>
@@ -5612,7 +6254,7 @@ function EmailSettingsAdmin() {
             <h3>Sender Details</h3>
             <label className="content-field content-field-wide">
               <span>From name</span>
-              <input value={settings.email_from_name || ""} onChange={(e) => updateField("email_from_name", e.target.value)} placeholder="CROBIC Admissions" />
+              <input value={settings.email_from_name || ""} onChange={(e) => updateField("email_from_name", e.target.value)} placeholder="CIBI Admissions" />
             </label>
             <label className="content-field content-field-wide">
               <span>From email address</span>
@@ -5745,10 +6387,10 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
           }
         : { email: form.email, password: form.password };
       const result = await api(endpoint, { method: "POST", body: payload });
-      setToken(result.token);
+      setToken(null);
       setUser(result.user);
       close();
-      goTo(result.user.role === "ADMIN" ? "admin" : result.user.status === "ACTIVE" ? "student" : "admissions");
+      goTo(isStaffUser(result.user) ? "admin" : result.user.status === "ACTIVE" ? "student" : "admissions");
     } catch (error) {
       showToast(error.message, "error");
     }
@@ -5761,9 +6403,9 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
 
         <div className="auth-modal-grid">
           <aside className="auth-brand-panel">
-            <img src={LOGO} alt="CROBIC Logo" />
-            <p className="eyebrow framed">Champions Royal Bible College</p>
-            <h2>{isRegister ? "Begin Your CROBIC Journey" : "Welcome Back"}</h2>
+            <img src={LOGO} alt="CIBI Logo" />
+            <p className="eyebrow framed">Champion International Bible Institute</p>
+            <h2>{isRegister ? "Begin Your CIBI Journey" : "Welcome Back"}</h2>
             <p>
               {isRegister
                 ? "Create your student application. Portal access opens after payment confirmation and admin approval."
@@ -5850,9 +6492,9 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
 
 function CourseCard({ course, openAuth, user, goTo, settings = {} }) {
   const fee = usdFee(course);
-  return <div className="course-card"><img src={course.imageUrl || CROBIC_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{fee > 0 && <strong>{formatUsd(fee)}</strong>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
+  return <div className="course-card"><img src={course.imageUrl || CIBI_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{fee > 0 && <strong>{formatUsd(fee)}</strong>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
 }
-function BookCard({ book }) { return <div className="book-card"><img src={book.imageUrl || CROBIC_IMAGES.logo} alt={book.title} /><div><span>{book.category}</span><h3>{book.title}</h3><p>{book.description}</p><strong>{book.price}</strong><a className="gold-btn full" href={book.buyLink} target="_blank" rel="noreferrer">Buy Book</a></div></div>; }
+function BookCard({ book }) { return <div className="book-card"><img src={book.imageUrl || CIBI_IMAGES.logo} alt={book.title} /><div><span>{book.category}</span><h3>{book.title}</h3><p>{book.description}</p><strong>{book.price}</strong><a className="gold-btn full" href={book.buyLink} target="_blank" rel="noreferrer">Buy Book</a></div></div>; }
 function Feature({ icon, title, text }) { return <div className="feature-card"><div className="icon-box">{icon}</div><h3>{title}</h3><p>{text}</p></div>; }
 function SectionIntro({ eyebrow, title, text }) { return <div className="section-intro"><Kicker text={eyebrow} center /><h2>{title}</h2><p>{text}</p><div className="gold-divider"><span /></div></div>; }
 function Kicker({ text, center }) { return <div className={center ? "kicker kicker-center" : "kicker"}><span /> <small>{text}</small> <span /></div>; }
@@ -5861,7 +6503,7 @@ function DashboardCard({ icon, label, value }) { return <div className="dashboar
 function Step({ number, title, text }) { return <div className="step"><strong>{number}</strong><h3>{title}</h3><p>{text}</p></div>; }
 function PathCard({ icon, title, text, points }) { return <div className="path-card"><div className="icon-box">{icon}</div><h3>{title}</h3><div className="short-gold-line" /><p>{text}</p><small>Ideal For</small><ul>{points.map((point) => <li key={point}><span />{point}</li>)}</ul></div>; }
 function AdminList({ items, onDelete, onEdit }) { return <div className="admin-list">{items.map((item) => <div className="admin-item" key={item.id}><div><strong>{item.title}</strong><p>ID: {item.id}</p></div><div className="admin-item-actions">{onEdit && <button className="edit-btn" onClick={() => onEdit(item)}>Edit</button>}<button className="delete-btn" onClick={() => onDelete(item.id)}><Trash2 size={18} /></button></div></div>)}</div>; }
-function PortalSidebar({ title, items, tab, setTab }) { return <div className="portal-sidebar"><img src={LOGO} alt="CROBIC" /><h3>{title}</h3>{items.map((item) => <button key={item} className={tab === item.toLowerCase() ? "side-active" : ""} onClick={() => setTab && setTab(item.toLowerCase())}>{item}</button>)}</div>; }
+function PortalSidebar({ title, items, tab, setTab }) { return <div className="portal-sidebar"><img src={LOGO} alt="CIBI" /><h3>{title}</h3>{items.map((item) => <button key={item} className={tab === item.toLowerCase() ? "side-active" : ""} onClick={() => setTab && setTab(item.toLowerCase())}>{item}</button>)}</div>; }
 function AccessGate({ title, openAuth }) { return <main className="page container gate"><ShieldCheck size={56} /><h1>{title}</h1><p>You need to login before accessing this section.</p><button className="gold-btn big" onClick={openAuth}>Login</button></main>; }
 function Footer({ goTo, settings = {} }) {
   return (
@@ -5870,9 +6512,9 @@ function Footer({ goTo, settings = {} }) {
 
       <div className="container footer-grid">
         <div>
-          <img src={LOGO} alt="CROBIC" />
-          <h3>{getSetting(settings, "footer_brand_title", "CROBIC")}</h3>
-          <p>{getSetting(settings, "footer_brand_text", "Champions Royal Bible College")}</p>
+          <img src={LOGO} alt="CIBI" />
+          <h3>{getSetting(settings, "footer_brand_title", "CIBI")}</h3>
+          <p>{getSetting(settings, "footer_brand_text", "Champion International Bible Institute")}</p>
           <small>{getSetting(settings, "footer_brand_small", "Raising a Generation of Champions")}</small>
         </div>
 
@@ -5903,7 +6545,7 @@ function Footer({ goTo, settings = {} }) {
       </div>
 
       <div className="container footer-bottom">
-        <p>{getSetting(settings, "footer_copyright", "© 2026 Champions Royal Bible College (CROBIC). All Rights Reserved.")}</p>
+        <p>{getSetting(settings, "footer_copyright", "© 2026 Champion International Bible Institute (CIBI). All Rights Reserved.")}</p>
         <p>{getSetting(settings, "footer_bottom_note", "The Biblical Arm of Champions Royal Assembly International")}</p>
       </div>
     </footer>

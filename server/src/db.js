@@ -1,13 +1,44 @@
 import { PrismaClient } from "@prisma/client";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 
-export const prisma = new PrismaClient();
+export const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === "production" ? ["error"] : ["query", "warn", "error"]
+});
+
+export const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  min: Number(process.env.PG_POOL_MIN || 2),
+  max: Number(process.env.PG_POOL_MAX || 20),
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined
+});
+
+pgPool.on("error", (error) => {
+  console.error("PostgreSQL pool error:", error.message);
+});
+
+export async function checkDatabaseConnection() {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return true;
+  } catch (error) {
+    console.error("Database health check failed:", error.message);
+    return false;
+  }
+}
+
+export async function closeDatabaseConnections() {
+  await prisma.$disconnect();
+  await pgPool.end().catch(() => null);
+}
 
 const defaultSettings = [
   ["student_whatsapp_group_link", "https://chat.whatsapp.com/PUT-YOUR-STUDENT-GROUP-LINK-HERE"],
-  ["bank_name", process.env.CROBIC_BANK_NAME || "PUT BANK NAME HERE"],
-  ["account_name", process.env.CROBIC_ACCOUNT_NAME || "Champions Royal Bible College"],
-  ["account_number", process.env.CROBIC_ACCOUNT_NUMBER || "0000000000"],
+  ["bank_name", process.env.CIBI_BANK_NAME || "PUT BANK NAME HERE"],
+  ["account_name", process.env.CIBI_ACCOUNT_NAME || "Champion International Bible Institute"],
+  ["account_number", process.env.CIBI_ACCOUNT_NUMBER || "0000000000"],
   ["base_currency", "USD"],
   ["currency_rates", "NGN|1500\nGHS|12\nKES|130\nZAR|18\nEUR|0.92\nGBP|0.78"],
   ["currency_converter_note", "Rates are approximate and can be updated by Super Admin."],
@@ -27,9 +58,9 @@ const defaultSettings = [
   ["home_stat_4_value", "Global"],
   ["home_stat_4_label", "Reach and Impact"],
   ["home_about_kicker", "About Us"],
-  ["home_about_title", "About CROBIC"],
-  ["home_about_paragraph_1", "Champions Royal Bible College is the biblical training arm of Champions Royal Assembly, raising ministers and kingdom leaders through biblical doctrine, spiritual formation and practical ministry preparation."],
-  ["home_about_paragraph_2", "CROBIC combines theological learning, live classes, recorded lessons, book resources and a protected student portal for a clean academic experience."],
+  ["home_about_title", "About CIBI"],
+  ["home_about_paragraph_1", "Champion International Bible Institute is the biblical training arm of Champions Royal Assembly, raising ministers and kingdom leaders through biblical doctrine, spiritual formation and practical ministry preparation."],
+  ["home_about_paragraph_2", "CIBI combines theological learning, live classes, recorded lessons, book resources and a protected student portal for a clean academic experience."],
   ["home_about_image_url", "/crobic-images/convocation-handshake.jpg"],
   ["home_about_caption_name", "Papa Joshua Iginla"],
   ["home_about_caption_title", "Founder and President"],
@@ -47,7 +78,7 @@ const defaultSettings = [
   ["home_executive_class_points", "Active pastors and evangelists|Working-class ministers|Flexible learning schedule"],
   ["home_graduate_kicker", "Our Graduates"],
   ["home_graduate_title", "Graduates We Have Raised"],
-  ["home_graduate_quote", "“CROBIC continues to raise champions for God’s kingdom through biblical training, discipline and spiritual formation.”"],
+  ["home_graduate_quote", "“CIBI continues to raise champions for God’s kingdom through biblical training, discipline and spiritual formation.”"],
   ["home_graduate_author", "Prophet Joshua Iginla"],
   ["home_graduate_number", "1000+"],
   ["home_graduate_number_label", "Ministerial Graduates"],
@@ -62,12 +93,12 @@ const defaultSettings = [
   ["home_cta_secondary_button", "View Programs"],
 
   ["about_hero_eyebrow", "About Us"],
-  ["about_hero_title", "About Champions Royal Bible College"],
+  ["about_hero_title", "About Champion International Bible Institute"],
   ["about_hero_text", "The biblical training platform of Champions Royal Assembly, built for ministers, pastors and kingdom leaders."],
   ["about_hero_image_url", "/crobic-images/convocation-handshake.jpg"],
   ["about_section_kicker", "Who We Are"],
   ["about_section_title", "Raising a Generation of Champions"],
-  ["about_section_paragraph_1", "CROBIC is structured to train students in biblical doctrine, spiritual growth, leadership, practical ministry and kingdom service."],
+  ["about_section_paragraph_1", "CIBI is structured to train students in biblical doctrine, spiritual growth, leadership, practical ministry and kingdom service."],
   ["about_section_paragraph_2", "The platform combines a public website, admission process, payment flow, protected student portal, live classes, recorded lessons and a book library."],
   ["about_section_image_url", "/crobic-images/classroom.jpg"],
   ["about_mission_title", "Mission"],
@@ -76,12 +107,12 @@ const defaultSettings = [
   ["about_vision_text", "To raise equipped leaders who understand scripture, walk in wisdom and serve effectively in ministry and society."],
 
   ["programs_hero_eyebrow", "Academics"],
-  ["programs_hero_title", "CROBIC Programs"],
+  ["programs_hero_title", "CIBI Programs"],
   ["programs_hero_text", "Certificate, Diploma and Degree routes for students preparing for ministry and leadership."],
   ["programs_hero_image_url", "/crobic-images/classroom.jpg"],
   ["programs_classes_eyebrow", "Class Options"],
   ["programs_classes_title", "Regular and Executive Classes"],
-  ["programs_classes_text", "CROBIC is designed to serve both full-time learners and working ministers."],
+  ["programs_classes_text", "CIBI is designed to serve both full-time learners and working ministers."],
   ["programs_regular_title", "Regular Classes"],
   ["programs_regular_text", "For students who want a fuller classroom learning experience."],
   ["programs_regular_points", "Daytime learning|Structured training|Ministry preparation"],
@@ -94,11 +125,11 @@ const defaultSettings = [
   ["books_hero_text", "Open to the general public. Each book uses its official Stellar purchase link."],
   ["books_hero_image_url", "/crobic-images/graduation-stage.jpg"],
   ["gallery_hero_eyebrow", "Gallery"],
-  ["gallery_hero_title", "CROBIC Gallery"],
-  ["gallery_hero_text", "A visual glimpse into CROBIC training, classroom moments and graduation ceremonies."],
+  ["gallery_hero_title", "CIBI Gallery"],
+  ["gallery_hero_text", "A visual glimpse into CIBI training, classroom moments and graduation ceremonies."],
   ["gallery_hero_image_url", "/crobic-images/graduation-stage.jpg"],
   ["contact_hero_eyebrow", "Contact"],
-  ["contact_hero_title", "Get in Touch with CROBIC"],
+  ["contact_hero_title", "Get in Touch with CIBI"],
   ["contact_hero_text", "Contact the college for admissions, book enquiries, student support and general information."],
   ["contact_hero_image_url", "/crobic-images/classroom.jpg"],
   ["contact_phone_title", "Phone"],
@@ -106,23 +137,23 @@ const defaultSettings = [
   ["contact_location_title", "Location"],
   ["contact_address", "Kubwa, Abuja, FCT, Nigeria"],
   ["contact_enquiry_title", "Enquiries"],
-  ["contact_enquiry_text", "Admissions, book support and general CROBIC information."],
+  ["contact_enquiry_text", "Admissions, book support and general CIBI information."],
   ["contact_email", "info@crobic.org"],
   ["office_hours", "Monday to Saturday, 9 AM to 5 PM"],
 
   ["admission_hero_eyebrow", "Admission and Enrollment"],
   ["admission_hero_title", "Admission is Now Open"],
-  ["admission_hero_text", "Apply for CROBIC programmes, complete registration payment, and receive portal access after payment confirmation and admin approval."],
+  ["admission_hero_text", "Apply for CIBI programmes, complete registration payment, and receive portal access after payment confirmation and admin approval."],
   ["admission_hero_image_url", "/crobic-images/classroom.jpg"],
   ["admission_eligibility_eyebrow", "Eligibility"],
   ["admission_eligibility_title", "Who Should Apply"],
-  ["admission_eligibility_text", "CROBIC is open to ministers, Bible students, church workers and kingdom leaders seeking structured theological training."],
+  ["admission_eligibility_text", "CIBI is open to ministers, Bible students, church workers and kingdom leaders seeking structured theological training."],
   ["admission_roles", "Pastors|G.O. and resident pastors\nEvangelists|Field and outreach ministers\nProphets|Prophetic ministry leaders\nBible Teachers|Sunday school and Bible study\nAssociate Ministers|Ministry workers and leaders\nChurch Workers|Deacons, workers and volunteers"],
   ["admission_requirements_eyebrow", "Prerequisites"],
   ["admission_requirements_title", "Admission Requirements"],
   ["admission_requirements_text", "Applicants should be ready for biblical learning, ministry discipline and structured academic participation."],
   ["admission_basic_requirements", "Believer of good standing with a local church\nConscious call of God for Christian service\nPastor or ministry recommendation where applicable\nSecondary school completion or equivalent foundation\nAbility to study and communicate in English\nWillingness to complete all classes, assignments and ministry training"],
-  ["admission_additional_requirements", "Ministry involvement or church service experience\nShort statement of conversion and call to ministry\nInterview or review by the admissions team when required\nPayment confirmation before student portal activation\nAdmin approval before access to courses, live classes and student WhatsApp group\nAgreement to CROBIC academic and spiritual discipline standards"],
+  ["admission_additional_requirements", "Ministry involvement or church service experience\nShort statement of conversion and call to ministry\nInterview or review by the admissions team when required\nPayment confirmation before student portal activation\nAdmin approval before access to courses, live classes and student WhatsApp group\nAgreement to CIBI academic and spiritual discipline standards"],
   ["admission_apply_eyebrow", "Apply Online"],
   ["admission_apply_title", "Enroll Online Now"],
   ["admission_apply_text", "Start your application, choose your programme and complete your registration payment."],
@@ -150,24 +181,24 @@ const defaultSettings = [
   ["admission_contact_location_title", "Location"],
   ["admission_contact_hours_title", "Office Hours"],
 
-  ["footer_brand_title", "CROBIC"],
-  ["footer_brand_text", "Champions Royal Bible College"],
+  ["footer_brand_title", "CIBI"],
+  ["footer_brand_text", "Champion International Bible Institute"],
   ["footer_brand_small", "Raising a Generation of Champions"],
   ["footer_address", "Kubwa, Abuja, FCT, Nigeria"],
   ["footer_phone", "+234 814 943 9447"],
   ["footer_email", "info@crobic.org"],
-  ["footer_copyright", "© 2026 Champions Royal Bible College (CROBIC). All Rights Reserved."],
+  ["footer_copyright", "© 2026 Champion International Bible Institute (CIBI). All Rights Reserved."],
   ["footer_bottom_note", "The Biblical Arm of Champions Royal Assembly International"]
 ];
 
 export async function seedDatabase() {
   const adminEmail = process.env.ADMIN_EMAIL || "admin@crobic.org";
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
-  const adminName = process.env.ADMIN_NAME || "CROBIC Admin";
+  const adminName = process.env.ADMIN_NAME || "CIBI Admin";
 
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
   if (!existingAdmin) {
-    const password = await bcrypt.hash(adminPassword, 10);
+    const password = await bcrypt.hash(adminPassword, 12);
     await prisma.user.create({
       data: {
         name: adminName,
@@ -264,7 +295,7 @@ export async function seedDatabase() {
     await prisma.slide.createMany({
       data: [
         {
-          eyebrow: "Champions Royal Bible College",
+          eyebrow: "Champion International Bible Institute",
           title: "A Premium Bible College for Kingdom Leaders",
           description: "Study structured biblical courses, attend live sessions, watch lessons and grow through a world-class Christian learning platform.",
           imageUrl: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1200&auto=format&fit=crop",
@@ -289,7 +320,7 @@ export async function seedDatabase() {
   if (galleryCount === 0) {
     await prisma.gallery.createMany({
       data: [
-        { title: "Graduation Ceremony", category: "Graduation", imageUrl: "/crobic-images/graduation-stage.jpg", description: "CROBIC graduation ceremony" },
+        { title: "Graduation Ceremony", category: "Graduation", imageUrl: "/crobic-images/graduation-stage.jpg", description: "CIBI graduation ceremony" },
         { title: "Certificate Presentation", category: "Convocation", imageUrl: "/crobic-images/convocation-handshake.jpg", description: "Certificate presentation" },
         { title: "Classroom Training", category: "Training", imageUrl: "/crobic-images/classroom.jpg", description: "Classroom training session" }
       ]

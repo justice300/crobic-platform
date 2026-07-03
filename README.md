@@ -1,6 +1,6 @@
-# CROBIC Platform
+# CIBI Platform
 
-Full-stack CROBIC Bible College LMS starter.
+Full-stack CIBI Bible College LMS starter.
 
 ## Features
 
