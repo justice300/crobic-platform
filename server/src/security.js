@@ -22,10 +22,15 @@ export function strictCorsOptions() {
   const allowed = allowedOrigins();
   return {
     origin(origin, callback) {
-      if (!origin && !isProduction) return callback(null, true);
-      if (origin && allowed.includes(origin.replace(/\/$/, ""))) return callback(null, true);
-      return callback(new Error("CORS origin not allowed"));
-    },
+    // Allow direct browser visits, Render health checks, Postman, curl
+    if (!origin) return callback(null, true);
+
+    if (allowed.includes(origin.replace(/\/$/, ""))) {
+      return callback(null, true);
+    }
+
+  return callback(new Error("CORS origin not allowed"));
+},
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
