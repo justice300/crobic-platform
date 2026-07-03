@@ -33,10 +33,12 @@ export function refreshTokenHash(token) {
 }
 
 export function cookieOptions(maxAgeMs) {
+  const isProduction = process.env.NODE_ENV === "production";
+
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
     maxAge: maxAgeMs
   };
