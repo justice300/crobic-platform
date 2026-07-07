@@ -12,10 +12,16 @@ function allowedOrigins() {
     process.env.CLIENT_URL,
     process.env.VERCEL_FRONTEND_URL,
     process.env.FRONTEND_URL,
+    "https://cibionline.org",
+    "https://www.cibionline.org",
+    "https://crobic-web.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173"
-  ].filter(Boolean).map((origin) => origin.replace(/\/$/, ""));
+  ]
+    .filter(Boolean)
+    .map((origin) => origin.replace(/\/$/, ""));
 }
+
 
 export function strictCorsOptions() {
   const allowed = allowedOrigins();
