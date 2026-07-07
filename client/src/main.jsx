@@ -63,6 +63,7 @@ const CIBI_IMAGES = {
 };
 
 const SLIDE_DURATION = 6500;
+const fallbackCourses = [];
 
 const DEFAULT_SLIDES = [
   {
