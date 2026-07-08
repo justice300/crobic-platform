@@ -7554,3 +7554,234 @@ small {
     margin-bottom: 0 !important;
   }
 }
+
+
+/* =========================================================
+   FINAL FIX — Admission Programme Fees should match Base44
+   Compact three cards plus a separate currency converter, no tall programme cards.
+   ========================================================= */
+.admission-page .admission-fees-section {
+  padding-top: 112px !important;
+  padding-bottom: 118px !important;
+}
+
+.admission-page .admission-fees-section .section-intro {
+  margin-bottom: 70px !important;
+}
+
+.admission-page .admission-fees-section .section-intro p {
+  display: none !important;
+}
+
+.admission-page .admission-fees-section > .fee-grid,
+.admission-page .admission-base44-fee-grid {
+  width: min(900px, calc(100% - 32px)) !important;
+  max-width: 900px !important;
+  margin: 0 auto !important;
+  padding: 46px 48px 34px !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 18px !important;
+  background: rgba(10, 14, 25, 0.48) !important;
+  border: 1px solid rgba(145,166,199,.14) !important;
+  box-shadow: none !important;
+}
+
+.admission-page .admission-base44-fee-grid .fee-card,
+.admission-page .admission-base44-fee-card {
+  min-height: 150px !important;
+  height: 150px !important;
+  padding: 24px 18px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  background: rgba(14, 18, 30, 0.88) !important;
+  border: 1px solid rgba(145,166,199,.13) !important;
+  box-shadow: none !important;
+}
+
+.admission-page .admission-base44-fee-card span {
+  display: block !important;
+  color: #c7a66a !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  letter-spacing: .13em !important;
+  line-height: 1.35 !important;
+  text-transform: uppercase !important;
+  margin: 0 0 14px !important;
+}
+
+.admission-page .admission-base44-fee-card h3 {
+  color: #f5f7ff !important;
+  font-family: Georgia, 'Times New Roman', serif !important;
+  font-size: 30px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  margin: 0 0 10px !important;
+  min-height: 0 !important;
+}
+
+.admission-page .admission-base44-fee-card p {
+  color: #91a6c7 !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.3 !important;
+  margin: 0 !important;
+}
+
+.admission-page .admission-base44-fee-card .currency-converter-box,
+.admission-page .admission-base44-fee-card strong {
+  display: none !important;
+}
+
+
+.admission-page .admission-fees-converter-panel {
+  width: min(900px, calc(100% - 32px)) !important;
+  margin: -1px auto 0 !important;
+  padding: 26px 48px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, .92fr) minmax(280px, 1.08fr) !important;
+  gap: 28px !important;
+  align-items: center !important;
+  background: rgba(10, 14, 25, 0.48) !important;
+  border-left: 1px solid rgba(145,166,199,.14) !important;
+  border-right: 1px solid rgba(145,166,199,.14) !important;
+  border-top: 1px solid rgba(145,166,199,.10) !important;
+}
+
+.admission-page .admission-fees-converter-copy span {
+  display: block !important;
+  margin-bottom: 8px !important;
+  color: #c7a66a !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .24em !important;
+  text-transform: uppercase !important;
+}
+
+.admission-page .admission-fees-converter-copy strong {
+  display: block !important;
+  color: #f5f7ff !important;
+  font-family: Georgia, 'Times New Roman', serif !important;
+  font-size: 22px !important;
+  line-height: 1.15 !important;
+  margin-bottom: 8px !important;
+}
+
+.admission-page .admission-fees-converter-copy p {
+  color: #91a6c7 !important;
+  font-size: 13px !important;
+  line-height: 1.65 !important;
+  margin: 0 !important;
+}
+
+.admission-page .admission-fees-converter-panel .currency-converter-box {
+  margin: 0 !important;
+  width: 100% !important;
+  padding: 18px !important;
+  display: grid !important;
+  grid-template-columns: 1fr 140px !important;
+  gap: 12px !important;
+  align-items: end !important;
+  background: rgba(18, 22, 32, .9) !important;
+  border: 1px solid rgba(199, 166, 106, .26) !important;
+}
+
+.admission-page .admission-fees-converter-panel .currency-converter-box strong,
+.admission-page .admission-fees-converter-panel .currency-converter-box > span,
+.admission-page .admission-fees-converter-panel .currency-converter-box small {
+  display: none !important;
+}
+
+.admission-page .admission-fees-converter-panel .currency-amount-field {
+  display: block !important;
+  margin: 0 !important;
+}
+
+.admission-page .admission-fees-converter-panel .currency-amount-field span {
+  display: block !important;
+  margin-bottom: 8px !important;
+  color: #91a6c7 !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: .2em !important;
+  text-transform: uppercase !important;
+}
+
+.admission-page .admission-fees-converter-panel input,
+.admission-page .admission-fees-converter-panel select {
+  width: 100% !important;
+  height: 48px !important;
+  background: #f5f0e8 !important;
+  color: #111827 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 16px !important;
+  font-size: 15px !important;
+}
+
+.admission-page .admission-fees-converter-panel .currency-converter-box b {
+  grid-column: 1 / -1 !important;
+  color: #c7a66a !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  letter-spacing: .05em !important;
+  margin-top: 2px !important;
+}
+
+.admission-page .admission-fees-contact-note {
+  width: min(900px, calc(100% - 32px)) !important;
+  margin: -1px auto 0 !important;
+  padding: 0 48px 48px !important;
+  text-align: center !important;
+  background: rgba(10, 14, 25, 0.48) !important;
+  border-left: 1px solid rgba(145,166,199,.14) !important;
+  border-right: 1px solid rgba(145,166,199,.14) !important;
+  border-bottom: 1px solid rgba(145,166,199,.14) !important;
+}
+
+.admission-page .admission-fees-contact-note p {
+  color: #91a6c7 !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  margin: 0 0 18px !important;
+}
+
+.admission-page .admission-fees-contact-note strong {
+  color: #c7a66a !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  letter-spacing: .08em !important;
+}
+
+@media (max-width: 900px) {
+  .admission-page .admission-fees-section > .fee-grid,
+  .admission-page .admission-base44-fee-grid {
+    grid-template-columns: 1fr !important;
+    padding: 28px !important;
+  }
+
+  .admission-page .admission-base44-fee-grid .fee-card,
+  .admission-page .admission-base44-fee-card {
+    height: auto !important;
+    min-height: 135px !important;
+  }
+
+  .admission-page .admission-fees-converter-panel {
+    grid-template-columns: 1fr !important;
+    padding: 24px 28px !important;
+  }
+
+  .admission-page .admission-fees-converter-panel .currency-converter-box {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admission-page .admission-fees-contact-note {
+    padding: 0 28px 32px !important;
+  }
+}

@@ -923,6 +923,19 @@ function programmeDisplayList(programmes = [], courses = [], settings = {}) {
   return mergeProgrammeCourses(courses, settings);
 }
 
+function isCorporateProgramme(programme = {}) {
+  const text = `${programme.level || ""} ${programme.title || ""} ${programme.slot || ""}`.toLowerCase();
+  return /worker|corporate|leadership training/.test(text);
+}
+
+function admissionFeeLabel(programme = {}, index = 0) {
+  const text = `${programme.level || ""} ${programme.title || ""}`.toLowerCase();
+  if (/advanced/.test(text)) return "Advanced Diploma Certificate";
+  if (/diploma/.test(text)) return "Diploma Certificate";
+  if (/foundation|certificate/.test(text)) return "Foundation Certificate";
+  return ["Foundation Certificate", "Diploma Certificate", "Advanced Diploma Certificate"][index] || (programme.level || "Programme");
+}
+
 function About({ goTo, settings = {} }) {
   const founderParagraphs = settingLines(settings, "about_founder_bio", [
     "Papa Joshua Iginla is the founder of Champions Royal Assembly, a church known for prophetic and deliverance ministry with headquarters in Abuja, Nigeria.",
@@ -1295,6 +1308,7 @@ function Admissions({ courses, programmes = [], settings, user, openAuth, goTo, 
   ]).map((item) => ({ label: item.title, value: item.sub }));
 
   const visibleProgrammes = programmeDisplayList(programmes, courses, settings);
+  const feeProgrammes = visibleProgrammes.filter((programme) => !isCorporateProgramme(programme)).slice(0, 3);
 
   return (
     <main className="admission-page">
@@ -1376,17 +1390,28 @@ function Admissions({ courses, programmes = [], settings, user, openAuth, goTo, 
         </div>
       </section>
 
-      <section className="admission-section container">
-        <SectionIntro eyebrow={getSetting(settings, "admission_fees_eyebrow", "Fees")} title={getSetting(settings, "admission_fees_title", "Programme Fees")} text={getSetting(settings, "admission_fees_text", "Fees are shown based on active programmes created by admin.")} />
-        <div className="fee-grid">
-          {visibleProgrammes.slice(0, 4).map((course) => (
-            <div className="fee-card" key={course.id || course.title}>
-              <span>{course.level || "Programme"}</span>
-              <h3>{course.title}</h3>
-              <p>{course.duration || `${course.lessons?.length || course.lessons || 0} lessons`}</p>
-              <strong>{formatUsd(usdFee(course))}</strong><CurrencyConverter amountUsd={usdFee(course)} settings={settings} />
+      <section className="admission-section container admission-fees-section">
+        <SectionIntro eyebrow={getSetting(settings, "admission_fees_eyebrow", "Fees")} title={getSetting(settings, "admission_fees_title", "Programme Fees")} text={getSetting(settings, "admission_fees_text", "")} />
+        <div className="fee-grid admission-base44-fee-grid">
+          {feeProgrammes.map((programme, index) => (
+            <div className="fee-card admission-base44-fee-card" key={programme.id || programme.title}>
+              <span>{admissionFeeLabel(programme, index)}</span>
+              <h3>{usdFee(programme) > 0 ? formatUsd(usdFee(programme)) : "Contact"}</h3>
+              <p>{programme.duration || "Flexible"}</p>
             </div>
           ))}
+        </div>
+        <div className="admission-fees-converter-panel">
+          <div className="admission-fees-converter-copy">
+            <span>Convert Estimate</span>
+            <strong>Currency Converter</strong>
+            <p>Enter any programme fee in USD to estimate the equivalent in your local currency.</p>
+          </div>
+          <CurrencyConverter amountUsd={0} settings={settings} editableAmount />
+        </div>
+        <div className="admission-fees-contact-note">
+          <p>For Workers and Leadership Training Program fees, contact the admissions office.</p>
+          <strong>{CIBI_PHONE_DISPLAY}</strong>
         </div>
       </section>
 
