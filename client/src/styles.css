@@ -6975,3 +6975,153 @@ button:disabled {
 }
 
 /* End Phase 4B CIBI recovery polish */
+
+
+/* Phase 4C CIBI contrast correction */
+
+/* ABOUT PAGE: keep the premium dark direction, but make headings readable */
+.base44-about-page {
+  background: var(--black) !important;
+  color: #ffffff !important;
+}
+
+.base44-about-page .section-intro h2,
+.base44-about-page .page-hero-content h1,
+.base44-about-page .about-founder-copy h2,
+.base44-about-page .about-church-section h2,
+.base44-about-page .about-beliefs-section h2,
+.base44-about-page .about-milestones-section h2,
+.base44-about-page .about-mission-vision h3,
+.base44-about-page .about-stat-card h3,
+.base44-about-page .about-belief-card h3,
+.base44-about-page .about-timeline-item strong {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.base44-about-page .about-stat-card,
+.base44-about-page .about-mission-vision > div,
+.base44-about-page .about-belief-card,
+.base44-about-page .about-timeline-item {
+  background: rgba(255,255,255,.035) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  box-shadow: none !important;
+}
+
+.base44-about-page .about-stat-card p,
+.base44-about-page .about-mission-vision p,
+.base44-about-page .about-belief-card p,
+.base44-about-page .about-timeline-item p,
+.base44-about-page .section-intro p {
+  color: rgba(210, 222, 242, .68) !important;
+}
+
+.base44-about-page .about-stat-card svg,
+.base44-about-page .about-stat-card span svg {
+  color: var(--gold) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.base44-about-page .short-gold-line {
+  background: var(--gold) !important;
+}
+
+/* PROGRAMS PAGE: remove harsh white boxes on dark background */
+.programs-page {
+  background: var(--black) !important;
+  color: #ffffff !important;
+}
+
+.programs-page .section-intro h2,
+.programs-page .page-hero-content h1,
+.programs-page .program-core-note h3,
+.programs-page .program-currency-panel strong,
+.programs-page .program-accordion-item strong,
+.programs-page .program-requirements-box h3 {
+  color: #ffffff !important;
+}
+
+.programs-page .section-intro p {
+  color: rgba(210, 222, 242, .68) !important;
+}
+
+/* Use site off-white/gold shade for cards instead of pure white */
+.programs-page .base44-program-card,
+.programs-page .program-core-note,
+.programs-page .program-currency-panel,
+.programs-page .program-accordion-item,
+.programs-page .program-requirements-box {
+  background: var(--cream) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(196,159,100,.28) !important;
+  box-shadow: 0 24px 70px rgba(0,0,0,.18) !important;
+}
+
+.programs-page .base44-program-card h3,
+.programs-page .program-core-note h3,
+.programs-page .program-currency-panel strong,
+.programs-page .program-accordion-item strong,
+.programs-page .program-requirements-box h3 {
+  color: var(--text) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.programs-page .base44-program-card p,
+.programs-page .base44-program-card small,
+.programs-page .program-core-note p,
+.programs-page .program-currency-panel p,
+.programs-page .program-currency-panel span,
+.programs-page .program-accordion-item small,
+.programs-page .program-accordion-body p,
+.programs-page .program-accordion-body span,
+.programs-page .program-requirements-box p {
+  color: var(--muted) !important;
+}
+
+.programs-page .program-card-info svg,
+.programs-page .program-showcase-card svg,
+.programs-page .program-accordion-body svg,
+.programs-page .program-requirements-box svg {
+  color: var(--gold) !important;
+  display: inline-block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Program cards: keep icons and certification */
+.programs-page .program-card-cert {
+  display: block !important;
+  color: var(--muted) !important;
+}
+
+.programs-page .program-card-cert strong {
+  color: var(--gold) !important;
+}
+
+/* Homepage program cards should also stay clean/off-white, not heavy dark */
+.home-program-showcase-grid .program-showcase-card {
+  background: var(--cream) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(196,159,100,.28) !important;
+  border-top: 3px solid var(--gold) !important;
+}
+
+.home-program-showcase-grid .program-showcase-card h3 {
+  color: var(--text) !important;
+}
+
+.home-program-showcase-grid .program-showcase-card p,
+.home-program-showcase-grid .program-showcase-card small {
+  color: var(--muted) !important;
+}
+
+.home-program-showcase-grid .program-card-info svg {
+  color: var(--gold) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* End Phase 4C CIBI contrast correction */
