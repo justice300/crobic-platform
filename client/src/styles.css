@@ -6800,577 +6800,68 @@ button:disabled {
 
 
 
-/* Phase 4B CIBI recovery polish */
-
-/* Keep the new global registration CTA, hide old duplicate CTAs */
-.cta-section.cta-luxury,
-.program-final-cta {
-  display: none !important;
-}
-
-/* Professional WhatsApp button */
-.floating-whatsapp {
-  position: fixed !important;
-  right: 24px !important;
-  bottom: 24px !important;
-  z-index: 90 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  background: #128c3e !important;
-  color: #ffffff !important;
-  border-radius: 999px !important;
-  border: 0 !important;
-  padding: 14px 20px !important;
-  font-size: 12px !important;
-  font-weight: 900 !important;
-  text-transform: uppercase !important;
-  letter-spacing: .09em !important;
-  box-shadow: 0 18px 48px rgba(7, 11, 24, .24) !important;
-}
-
-.floating-whatsapp svg {
-  display: inline-block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  color: #ffffff !important;
-}
-
-/* Fix programme cards: clean white cards, black text, icons remain */
-.home-program-showcase-grid .program-showcase-card,
-.base44-program-grid .program-showcase-card {
-  background: #ffffff !important;
-  color: var(--text) !important;
-  border: 1px solid rgba(17,24,39,.1) !important;
-  border-top: 3px solid var(--gold) !important;
-  box-shadow: 0 24px 70px rgba(7,11,24,.08) !important;
-}
-
-.home-program-showcase-grid .program-showcase-card h3,
-.base44-program-grid .program-showcase-card h3 {
-  color: var(--text) !important;
-}
-
-.home-program-showcase-grid .program-showcase-card p,
-.home-program-showcase-grid .program-showcase-card small,
-.home-program-showcase-grid .program-showcase-card span,
-.base44-program-grid .program-showcase-card p,
-.base44-program-grid .program-showcase-card small,
-.base44-program-grid .program-showcase-card span {
-  color: var(--muted) !important;
-}
-
-.home-program-showcase-grid .program-showcase-card > span,
-.base44-program-grid .program-showcase-card > span {
-  color: var(--gold) !important;
-  background: rgba(196,159,100,.1) !important;
-  border: 1px solid rgba(196,159,100,.22) !important;
-}
-
-.program-card-info svg,
-.program-showcase-card svg {
-  display: inline-block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  color: var(--gold) !important;
-}
-
-/* Do not hide certification/details */
-.program-card-cert {
-  display: block !important;
-  color: var(--muted) !important;
-}
-
-.program-card-cert strong {
-  color: var(--gold) !important;
-}
-
-/* Fix About page empty-looking cards */
-.about-stat-card h3,
-.about-belief-card h3,
-.about-mission-vision h3,
-.about-timeline-item strong {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  color: var(--text) !important;
-}
-
-.about-stat-card p,
-.about-belief-card p,
-.about-mission-vision p,
-.about-timeline-item p {
-  color: var(--muted) !important;
-}
-
-.about-stat-card svg,
-.about-stat-card span svg {
-  display: inline-block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  color: var(--gold) !important;
-}
-
-/* Fix programme core note, calculator and curriculum text */
-.program-core-note,
-.program-currency-panel,
-.program-accordion-item,
-.program-requirements-box {
-  background: #ffffff !important;
-  color: var(--text) !important;
-  border: 1px solid rgba(17,24,39,.1) !important;
-}
-
-.program-core-note h3,
-.program-currency-panel strong,
-.program-accordion-item strong,
-.program-requirements-box strong,
-.program-requirements-box h3 {
-  color: var(--text) !important;
-}
-
-.program-core-note p,
-.program-currency-panel p,
-.program-currency-panel span,
-.program-accordion-item small,
-.program-accordion-body p,
-.program-accordion-body span,
-.program-requirements-box p {
-  color: var(--muted) !important;
-}
-
-.program-accordion-body svg,
-.program-requirements-box svg {
-  display: inline-block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  color: var(--gold) !important;
-}
-
-/* Keep normal black text on light sections */
-.page,
-.programs-page,
-.base44-about-page,
-.admission-page {
-  color: var(--text) !important;
-}
-
-.page p,
-.programs-page p,
-.base44-about-page p,
-.admission-page p {
-  color: var(--muted) !important;
-}
-
-@media (max-width: 720px) {
-  .floating-whatsapp {
-    right: 14px !important;
-    bottom: 14px !important;
-    padding: 13px !important;
-  }
-
-  .floating-whatsapp span {
-    display: none !important;
-  }
-}
-
-/* End Phase 4B CIBI recovery polish */
-
-
-/* Phase 4C CIBI contrast correction */
-
-/* ABOUT PAGE: keep the premium dark direction, but make headings readable */
-.base44-about-page {
-  background: var(--black) !important;
-  color: #ffffff !important;
-}
-
-.base44-about-page .section-intro h2,
-.base44-about-page .page-hero-content h1,
-.base44-about-page .about-founder-copy h2,
-.base44-about-page .about-church-section h2,
-.base44-about-page .about-beliefs-section h2,
-.base44-about-page .about-milestones-section h2,
-.base44-about-page .about-mission-vision h3,
-.base44-about-page .about-stat-card h3,
-.base44-about-page .about-belief-card h3,
-.base44-about-page .about-timeline-item strong {
-  color: #ffffff !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-.base44-about-page .about-stat-card,
-.base44-about-page .about-mission-vision > div,
-.base44-about-page .about-belief-card,
-.base44-about-page .about-timeline-item {
-  background: rgba(255,255,255,.035) !important;
-  border: 1px solid rgba(255,255,255,.10) !important;
-  box-shadow: none !important;
-}
-
-.base44-about-page .about-stat-card p,
-.base44-about-page .about-mission-vision p,
-.base44-about-page .about-belief-card p,
-.base44-about-page .about-timeline-item p,
-.base44-about-page .section-intro p {
-  color: rgba(210, 222, 242, .68) !important;
-}
-
-.base44-about-page .about-stat-card svg,
-.base44-about-page .about-stat-card span svg {
-  color: var(--gold) !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-.base44-about-page .short-gold-line {
-  background: var(--gold) !important;
-}
-
-/* PROGRAMS PAGE: remove harsh white boxes on dark background */
-.programs-page {
-  background: var(--black) !important;
-  color: #ffffff !important;
-}
-
-.programs-page .section-intro h2,
-.programs-page .page-hero-content h1,
-.programs-page .program-core-note h3,
-.programs-page .program-currency-panel strong,
-.programs-page .program-accordion-item strong,
-.programs-page .program-requirements-box h3 {
-  color: #ffffff !important;
-}
-
-.programs-page .section-intro p {
-  color: rgba(210, 222, 242, .68) !important;
-}
-
-/* Use site off-white/gold shade for cards instead of pure white */
-.programs-page .base44-program-card,
-.programs-page .program-core-note,
-.programs-page .program-currency-panel,
-.programs-page .program-accordion-item,
-.programs-page .program-requirements-box {
-  background: var(--cream) !important;
-  color: var(--text) !important;
-  border: 1px solid rgba(196,159,100,.28) !important;
-  box-shadow: 0 24px 70px rgba(0,0,0,.18) !important;
-}
-
-.programs-page .base44-program-card h3,
-.programs-page .program-core-note h3,
-.programs-page .program-currency-panel strong,
-.programs-page .program-accordion-item strong,
-.programs-page .program-requirements-box h3 {
-  color: var(--text) !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-.programs-page .base44-program-card p,
-.programs-page .base44-program-card small,
-.programs-page .program-core-note p,
-.programs-page .program-currency-panel p,
-.programs-page .program-currency-panel span,
-.programs-page .program-accordion-item small,
-.programs-page .program-accordion-body p,
-.programs-page .program-accordion-body span,
-.programs-page .program-requirements-box p {
-  color: var(--muted) !important;
-}
-
-.programs-page .program-card-info svg,
-.programs-page .program-showcase-card svg,
-.programs-page .program-accordion-body svg,
-.programs-page .program-requirements-box svg {
-  color: var(--gold) !important;
-  display: inline-block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* Program cards: keep icons and certification */
-.programs-page .program-card-cert {
-  display: block !important;
-  color: var(--muted) !important;
-}
-
-.programs-page .program-card-cert strong {
-  color: var(--gold) !important;
-}
-
-/* Homepage program cards should also stay clean/off-white, not heavy dark */
-.home-program-showcase-grid .program-showcase-card {
-  background: var(--cream) !important;
-  color: var(--text) !important;
-  border: 1px solid rgba(196,159,100,.28) !important;
-  border-top: 3px solid var(--gold) !important;
-}
-
-.home-program-showcase-grid .program-showcase-card h3 {
-  color: var(--text) !important;
-}
-
-.home-program-showcase-grid .program-showcase-card p,
-.home-program-showcase-grid .program-showcase-card small {
-  color: var(--muted) !important;
-}
-
-.home-program-showcase-grid .program-card-info svg {
-  color: var(--gold) !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* End Phase 4C CIBI contrast correction */
 
 
 
 
 
-/* Phase 4D CIBI typography and timeline refinement */
 
-/* Reduce giant public-page headings to a more premium editorial scale */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* Phase 5 Base44 clean system */
+
+/* Clean Base44 heading scale: not giant */
 main .section-intro h2,
 .base44-about-page .section-intro h2,
 .programs-page .section-intro h2,
-.admission-page .section-intro h2 {
-  font-size: clamp(36px, 4.4vw, 58px) !important;
-  line-height: 1.06 !important;
-  letter-spacing: -0.035em !important;
+.admission-page .section-intro h2,
+.home-faq-section .section-intro h2 {
+  font-size: clamp(36px, 4.2vw, 60px) !important;
+  line-height: 1.1 !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 600 !important;
 }
 
 main .page-hero-content h1,
 .base44-about-page .page-hero-content h1,
 .programs-page .page-hero-content h1,
 .admission-page .page-hero-content h1 {
-  font-size: clamp(42px, 5.2vw, 72px) !important;
-  line-height: 1.04 !important;
-  letter-spacing: -0.035em !important;
+  font-size: clamp(40px, 4.8vw, 64px) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 600 !important;
 }
 
-.base44-about-page h3,
-.programs-page h3,
-.admission-page h3 {
-  font-size: clamp(22px, 2.1vw, 30px) !important;
-  line-height: 1.15 !important;
-}
-
-/* Give About page sections more breathing space */
-.base44-about-page .about-church-section,
-.base44-about-page .about-beliefs-section,
-.base44-about-page .about-milestones-section {
-  padding-top: 95px !important;
-  padding-bottom: 95px !important;
-}
-
-.base44-about-page .section-intro {
-  margin-bottom: 54px !important;
-}
-
-/* About stat cards: keep dark premium style but improve readability */
-.base44-about-page .about-stat-card {
-  min-height: 210px !important;
-  padding: 34px 26px !important;
-}
-
-.base44-about-page .about-stat-card h3 {
-  font-size: clamp(18px, 1.6vw, 24px) !important;
-  line-height: 1.12 !important;
-  margin-top: 22px !important;
-  color: #ffffff !important;
-}
-
-.base44-about-page .about-stat-card p {
-  font-size: 14px !important;
-  line-height: 1.65 !important;
-}
-
-/* Mission/Vision: smaller, cleaner, not oversized */
-.base44-about-page .about-mission-vision > div {
-  padding: 48px !important;
-}
-
-.base44-about-page .about-mission-vision h3 {
-  font-size: clamp(28px, 3vw, 42px) !important;
-}
-
-.base44-about-page .about-mission-vision p {
-  font-size: 16px !important;
-  line-height: 1.75 !important;
-}
-
-/* Belief cards: readable heading, not giant */
-.base44-about-page .about-belief-card {
-  padding: 42px 36px !important;
-}
-
-.base44-about-page .about-belief-card h3 {
-  font-size: clamp(24px, 2.5vw, 34px) !important;
-  color: #ffffff !important;
-}
-
-.base44-about-page .about-belief-card p {
-  font-size: 15px !important;
-  line-height: 1.75 !important;
-}
-
-/* Milestones: remove the heavy boxes and let the section breathe */
-.base44-about-page .about-timeline {
-  max-width: 760px !important;
-  margin: 0 auto !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
-.base44-about-page .about-timeline-item {
-  background: transparent !important;
-  border: 0 !important;
-  border-bottom: 1px solid rgba(255,255,255,.09) !important;
-  box-shadow: none !important;
-  padding: 28px 0 28px 78px !important;
-  min-height: auto !important;
-  position: relative !important;
-}
-
-.base44-about-page .about-timeline-item:last-child {
-  border-bottom: 0 !important;
-}
-
-.base44-about-page .about-timeline-item i {
-  position: absolute !important;
-  left: 0 !important;
-  top: 26px !important;
-}
-
-.base44-about-page .about-timeline-item strong {
-  color: #ffffff !important;
-  font-size: clamp(20px, 2vw, 28px) !important;
-  line-height: 1.15 !important;
-}
-
-.base44-about-page .about-timeline-item p {
-  margin-top: 8px !important;
-  font-size: 15px !important;
-  line-height: 1.65 !important;
-  color: rgba(210,222,242,.72) !important;
-}
-
-/* Programs page: reduce title scale too */
-.programs-page .program-core-note h3,
-.programs-page .program-currency-panel strong,
-.programs-page .program-accordion-item strong {
-  font-size: clamp(20px, 2vw, 28px) !important;
-  line-height: 1.2 !important;
-}
-
-/* Mobile */
-@media (max-width: 720px) {
-  main .section-intro h2,
-  main .page-hero-content h1 {
-    font-size: 38px !important;
-  }
-
-  .base44-about-page .about-mission-vision > div,
-  .base44-about-page .about-belief-card {
-    padding: 30px 24px !important;
-  }
-
-  .base44-about-page .about-timeline-item {
-    padding-left: 58px !important;
-  }
-}
-
-/* End Phase 4D CIBI typography and timeline refinement */
-
-
-/* Phase 4E Base44 clean correction */
-
-/* Base44-like dark section system */
+/* Dark Base44 public pages */
 .base44-about-page,
-.admission-page,
-.programs-page {
+.programs-page,
+.admission-page {
   background: var(--black) !important;
-}
-
-/* Stop giant headings on internal sections */
-.base44-about-page .section-intro h2,
-.admission-page .section-intro h2,
-.programs-page .section-intro h2 {
-  font-size: clamp(42px, 4.8vw, 76px) !important;
-  line-height: 1.02 !important;
   color: #ffffff !important;
 }
 
 .base44-about-page .section-intro p,
-.admission-page .section-intro p,
-.programs-page .section-intro p {
-  color: rgba(145, 166, 199, .82) !important;
+.programs-page .section-intro p,
+.admission-page .section-intro p {
+  color: rgba(145,166,199,.82) !important;
   font-size: 16px !important;
   line-height: 1.7 !important;
 }
 
-/* ABOUT: remove ugly heavy milestone box feel */
-.base44-about-page .about-timeline {
-  max-width: 920px !important;
-  margin: 0 auto !important;
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.base44-about-page .about-timeline-item {
-  display: grid !important;
-  grid-template-columns: 64px 1fr !important;
-  gap: 28px !important;
-  align-items: start !important;
-  padding: 26px 0 !important;
-  border: 0 !important;
-  border-bottom: 1px solid rgba(255,255,255,.09) !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.base44-about-page .about-timeline-item:last-child {
-  border-bottom: 0 !important;
-}
-
-.base44-about-page .about-timeline-item i {
-  position: static !important;
-  width: 42px !important;
-  height: 42px !important;
-  margin: 0 auto !important;
-  border: 1px solid var(--gold) !important;
-  border-radius: 50% !important;
-  background: transparent !important;
-}
-
-.base44-about-page .about-timeline-item div {
-  display: grid !important;
-  grid-template-columns: 150px 1fr !important;
-  gap: 28px !important;
-  align-items: start !important;
-}
-
-.base44-about-page .about-timeline-item strong {
-  color: #ffffff !important;
-  font-size: 22px !important;
-  line-height: 1.1 !important;
-  white-space: nowrap !important;
-  letter-spacing: .02em !important;
-}
-
-.base44-about-page .about-timeline-item p {
-  margin: 0 !important;
-  color: rgba(145,166,199,.82) !important;
-  font-size: 15px !important;
-  line-height: 1.65 !important;
-}
-
-/* ABOUT: clean cards like Base44, not heavy blocks */
+/* About cards: clean dark, thin border, no heavy box */
 .base44-about-page .about-stat-card,
 .base44-about-page .about-belief-card,
 .base44-about-page .about-mission-vision > div {
@@ -7383,7 +6874,7 @@ main .page-hero-content h1,
 .base44-about-page .about-belief-card h3,
 .base44-about-page .about-mission-vision h3 {
   color: #ffffff !important;
-  font-size: 22px !important;
+  font-size: clamp(18px, 1.8vw, 24px) !important;
   line-height: 1.18 !important;
 }
 
@@ -7393,168 +6884,78 @@ main .page-hero-content h1,
   color: rgba(145,166,199,.82) !important;
 }
 
-/* ADMISSION: make Who Should Apply look like Base44 reference */
-.admission-page .admission-section {
-  background: var(--black) !important;
-  padding: 115px 0 !important;
+.base44-about-page .about-stat-card svg,
+.base44-about-page .about-stat-card span svg {
+  color: var(--gold) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
-.admission-page .admission-role-grid {
-  grid-template-columns: repeat(6, 1fr) !important;
-  gap: 20px !important;
-  max-width: 1280px !important;
-  margin: 0 auto !important;
-}
-
-.admission-page .admission-role-card {
-  background: rgba(255,255,255,.025) !important;
-  border: 1px solid rgba(255,255,255,.09) !important;
-  box-shadow: none !important;
-  min-height: 138px !important;
-  padding: 28px 18px !important;
-  text-align: center !important;
-}
-
-.admission-page .admission-role-card h3 {
-  color: #ffffff !important;
-  font-size: 18px !important;
-  line-height: 1.22 !important;
-  margin-bottom: 10px !important;
-}
-
-.admission-page .admission-role-card p {
-  color: rgba(145,166,199,.82) !important;
-  font-size: 13px !important;
-  line-height: 1.55 !important;
-}
-
-/* PROGRAMS: make Regular / Executive Classes clean like Base44 */
-.programs-page .program-learning-section {
-  background: var(--black) !important;
-  padding: 115px 0 !important;
-}
-
-.programs-page .program-learning-grid {
-  border: 0 !important;
-  gap: 22px !important;
-}
-
-.programs-page .program-learning-grid .path-card {
-  background: rgba(255,255,255,.025) !important;
-  border: 1px solid rgba(255,255,255,.09) !important;
-  box-shadow: none !important;
-  padding: 42px !important;
-}
-
-.programs-page .program-learning-grid .path-card h3 {
-  color: #ffffff !important;
-  font-size: 24px !important;
-}
-
-.programs-page .program-learning-grid .path-card p,
-.programs-page .program-learning-grid .path-card li {
-  color: rgba(145,166,199,.82) !important;
-}
-
-/* Keep off-white cards only where they make sense */
-.programs-page .base44-program-card,
-.programs-page .program-core-note,
-.programs-page .program-currency-panel,
-.programs-page .program-accordion-item,
-.programs-page .program-requirements-box {
-  background: var(--cream) !important;
-  color: var(--text) !important;
-}
-
-/* Mobile */
-@media (max-width: 1100px) {
-  .admission-page .admission-role-grid {
-    grid-template-columns: repeat(3, 1fr) !important;
-  }
-
-  .base44-about-page .about-timeline-item div {
-    grid-template-columns: 120px 1fr !important;
-  }
-}
-
-@media (max-width: 720px) {
-  .admission-page .admission-role-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .base44-about-page .about-timeline-item {
-    grid-template-columns: 42px 1fr !important;
-    gap: 18px !important;
-  }
-
-  .base44-about-page .about-timeline-item div {
-    grid-template-columns: 1fr !important;
-    gap: 8px !important;
-  }
-
-  .base44-about-page .about-timeline-item strong {
-    white-space: normal !important;
-  }
-}
-
-/* End Phase 4E Base44 clean correction */
-
-
-
-
-
-/* Phase 4G Exact Base44 reference timeline */
-
+/* Exact Base44 timeline: dot + one text block */
 .base44-about-page .about-milestones-section {
   background: var(--black) !important;
-  padding: 105px 0 150px !important;
+  padding: 105px 0 145px !important;
+  border-top: 1px solid rgba(255,255,255,.06) !important;
+}
+
+.base44-about-page .about-milestones-section .section-intro {
+  margin-bottom: 76px !important;
 }
 
 .base44-about-page .about-timeline {
-  width: min(900px, calc(100% - 48px)) !important;
-  max-width: 900px !important;
+  width: min(760px, calc(100% - 48px)) !important;
+  max-width: 760px !important;
   margin: 0 auto !important;
+  position: relative !important;
+  display: grid !important;
+  gap: 0 !important;
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
-  position: relative !important;
 }
 
 .base44-about-page .about-timeline::before {
   content: "" !important;
   position: absolute !important;
-  left: 42px !important;
-  top: 26px !important;
-  bottom: 26px !important;
+  left: 23px !important;
+  top: 23px !important;
+  bottom: 23px !important;
   width: 1px !important;
   background: rgba(255,255,255,.12) !important;
 }
 
 .base44-about-page .about-timeline-item {
-  position: relative !important;
   display: grid !important;
-  grid-template-columns: 84px 130px 1fr !important;
+  grid-template-columns: 56px minmax(0, 1fr) !important;
+  gap: 20px !important;
   align-items: start !important;
-  gap: 18px !important;
-  min-height: 112px !important;
-  padding: 0 !important;
+  min-height: 108px !important;
+  padding: 0 0 34px !important;
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
+  position: relative !important;
+}
+
+.base44-about-page .about-timeline-item::before {
+  display: none !important;
+}
+
+.base44-about-page .about-timeline-item:last-child {
+  padding-bottom: 0 !important;
 }
 
 .base44-about-page .about-timeline-item i {
   position: relative !important;
-  left: auto !important;
-  top: auto !important;
+  inset: auto !important;
   width: 46px !important;
   height: 46px !important;
-  margin: 0 0 0 19px !important;
+  margin: 0 !important;
   border-radius: 50% !important;
   border: 1px solid var(--gold) !important;
   background: var(--black) !important;
-  z-index: 2 !important;
   display: block !important;
+  z-index: 2 !important;
 }
 
 .base44-about-page .about-timeline-item i::after {
@@ -7570,67 +6971,128 @@ main .page-hero-content h1,
 }
 
 .base44-about-page .about-timeline-item div {
-  display: contents !important;
+  display: block !important;
+  padding-top: 4px !important;
 }
 
 .base44-about-page .about-timeline-item strong {
+  display: block !important;
   color: var(--gold) !important;
   font-family: var(--font-body) !important;
-  font-size: 17px !important;
-  line-height: 1.2 !important;
+  font-size: 15px !important;
+  line-height: 1.25 !important;
   font-weight: 800 !important;
-  letter-spacing: .05em !important;
-  white-space: nowrap !important;
-  padding-top: 7px !important;
+  letter-spacing: .04em !important;
+  white-space: normal !important;
+  margin-bottom: 8px !important;
 }
 
 .base44-about-page .about-timeline-item p {
   margin: 0 !important;
-  padding-top: 7px !important;
+  padding: 0 !important;
   color: rgba(145,166,199,.82) !important;
-  font-size: 15px !important;
+  font-size: 14px !important;
   line-height: 1.6 !important;
-  max-width: 640px !important;
+  max-width: 560px !important;
+}
+
+/* Admission and program dark cards like Base44 */
+.admission-page .admission-section,
+.admission-page .admission-band,
+.programs-page .program-learning-section,
+.programs-page .program-curriculum-section,
+.programs-page .program-requirements-section {
+  background: var(--black) !important;
+  color: #ffffff !important;
+}
+
+.admission-page .admission-role-card,
+.programs-page .program-learning-grid .path-card,
+.programs-page .program-accordion-item,
+.programs-page .program-requirements-box {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+.admission-page .admission-role-card h3,
+.programs-page .program-learning-grid .path-card h3,
+.programs-page .program-accordion-item strong,
+.programs-page .program-requirements-box h3 {
+  color: #ffffff !important;
+}
+
+.admission-page .admission-role-card p,
+.programs-page .program-learning-grid .path-card p,
+.programs-page .program-learning-grid .path-card li,
+.programs-page .program-accordion-item small,
+.programs-page .program-accordion-body p,
+.programs-page .program-requirements-box p {
+  color: rgba(145,166,199,.82) !important;
+}
+
+/* Keep icons visible */
+.admission-page svg,
+.programs-page svg,
+.base44-about-page svg {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* WhatsApp stays clean */
+.floating-whatsapp {
+  position: fixed !important;
+  right: 24px !important;
+  bottom: 24px !important;
+  z-index: 90 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  background: #128c3e !important;
+  color: #ffffff !important;
+  border-radius: 999px !important;
+  padding: 14px 20px !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .09em !important;
 }
 
 /* Mobile */
 @media (max-width: 720px) {
-  .base44-about-page .about-timeline {
-    width: min(100% - 32px, 900px) !important;
+  main .section-intro h2,
+  .base44-about-page .section-intro h2,
+  .programs-page .section-intro h2,
+  .admission-page .section-intro h2 {
+    font-size: 36px !important;
   }
 
-  .base44-about-page .about-timeline::before {
-    left: 23px !important;
+  main .page-hero-content h1,
+  .base44-about-page .page-hero-content h1,
+  .programs-page .page-hero-content h1,
+  .admission-page .page-hero-content h1 {
+    font-size: 38px !important;
+  }
+
+  .base44-about-page .about-timeline {
+    width: min(100% - 32px, 760px) !important;
   }
 
   .base44-about-page .about-timeline-item {
-    grid-template-columns: 52px 1fr !important;
+    grid-template-columns: 52px minmax(0, 1fr) !important;
     gap: 16px !important;
-    min-height: auto !important;
-    padding-bottom: 34px !important;
   }
 
-  .base44-about-page .about-timeline-item i {
-    width: 46px !important;
-    height: 46px !important;
-    margin-left: 0 !important;
+  .floating-whatsapp {
+    right: 14px !important;
+    bottom: 14px !important;
+    padding: 13px 14px !important;
   }
 
-  .base44-about-page .about-timeline-item div {
-    display: block !important;
-  }
-
-  .base44-about-page .about-timeline-item strong {
-    display: block !important;
-    white-space: normal !important;
-    padding-top: 2px !important;
-    margin-bottom: 6px !important;
-  }
-
-  .base44-about-page .about-timeline-item p {
-    padding-top: 0 !important;
-    font-size: 14px !important;
+  .floating-whatsapp span {
+    display: none !important;
   }
 }
 
-/* End Phase 4G Exact Base44 reference timeline */
+/* End Phase 5 Base44 clean system */
