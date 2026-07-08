@@ -7406,152 +7406,151 @@ small {
 
 /* End CIBI FINAL PUBLIC STYLE SYSTEM */
 
-/* Frame 5 to 6 Admission Programme Fees Base44 Match */
 
-/*
-  Scope: Admission page Programme Fees section only.
-  Frame 5 reference = compact Base44 fee cards:
-  - dark background
-  - centered compact fee panel
-  - three-card behavior when multiple courses exist
-  - no converter inside fee cards
-  - calm gold labels, white prices, blue duration text
-*/
-.admission-page .admission-section:has(.fee-grid) {
-  background: var(--black) !important;
-  color: #ffffff !important;
-  padding-top: 108px !important;
-  padding-bottom: 128px !important;
-  border-top: 1px solid rgba(255,255,255,.055) !important;
-  border-bottom: 1px solid rgba(255,255,255,.055) !important;
-}
-
-.admission-page .admission-section:has(.fee-grid) .section-intro {
-  max-width: 720px !important;
-  margin: 0 auto 70px !important;
-  text-align: center !important;
-}
-
-.admission-page .admission-section:has(.fee-grid) .section-intro h2 {
-  color: #ffffff !important;
-  font-size: clamp(42px, 4.8vw, 60px) !important;
-  line-height: 1.08 !important;
-  letter-spacing: -0.025em !important;
-  font-weight: 600 !important;
-}
-
-.admission-page .admission-section:has(.fee-grid) .section-intro p {
-  max-width: 620px !important;
-  margin: 0 auto !important;
-  color: rgba(145,166,199,.82) !important;
-  font-size: 17px !important;
-  line-height: 1.75 !important;
-}
-
-.admission-page .fee-grid {
-  width: min(820px, calc(100% - 40px)) !important;
-  max-width: 820px !important;
-  margin: 0 auto !important;
-  padding: 34px 34px 38px !important;
-  display: flex !important;
-  flex-wrap: wrap !important;
-  justify-content: center !important;
-  align-items: stretch !important;
-  gap: 18px !important;
-  background: rgba(255,255,255,.018) !important;
-  border: 1px solid rgba(255,255,255,.09) !important;
-  box-shadow: none !important;
-}
-
-.admission-page .fee-card {
-  flex: 0 1 255px !important;
-  min-height: 145px !important;
-  padding: 27px 24px 25px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-  background: rgba(255,255,255,.018) !important;
-  border: 1px solid rgba(255,255,255,.09) !important;
-  box-shadow: none !important;
-  color: #ffffff !important;
-}
-
-.admission-page .fee-card span {
+/* =========================================================
+   Admission application form — Base44 full-form correction
+   Keeps the real admission form, removes the split promo panel,
+   and makes the inputs match the dark Base44 reference.
+   ========================================================= */
+.admission-page #apply .admission-form-card,
+.admission-page .admission-form-card {
   display: block !important;
-  margin: 0 0 14px !important;
-  color: var(--gold) !important;
-  font-family: var(--font-body) !important;
-  font-size: 10px !important;
-  line-height: 1.35 !important;
-  font-weight: 900 !important;
-  letter-spacing: .18em !important;
+  max-width: 960px !important;
+  width: min(960px, calc(100% - 32px)) !important;
+  margin: 72px auto 0 !important;
+  padding: 64px 70px !important;
+  background: rgba(10, 14, 25, 0.58) !important;
+  border: 1px solid rgba(145, 166, 199, 0.16) !important;
+  box-shadow: none !important;
+}
+
+.admission-page .admission-form-card .apply-copy {
+  display: none !important;
+}
+
+.admission-page .admission-full-application-form,
+.admission-page .admission-form-card form.admission-full-application-form,
+.admission-page .admission-form-card .admin-form {
+  display: block !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.admission-page .admission-full-application-form h3 {
+  display: none !important;
+}
+
+.admission-page .admission-full-application-form .two-columns,
+.admission-page .admission-form-card .two-columns {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 28px !important;
+  margin: 0 0 28px !important;
+}
+
+.admission-page .admission-full-application-form .content-field,
+.admission-page .admission-form-card .content-field {
+  display: grid !important;
+  gap: 12px !important;
+  margin: 0 0 28px !important;
+}
+
+.admission-page .admission-full-application-form .content-field span,
+.admission-page .admission-form-card .content-field span {
+  color: #91a6c7 !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.32em !important;
   text-transform: uppercase !important;
 }
 
-.admission-page .fee-card h3 {
+.admission-page .admission-full-application-form input,
+.admission-page .admission-full-application-form select,
+.admission-page .admission-full-application-form textarea,
+.admission-page .admission-form-card input,
+.admission-page .admission-form-card select,
+.admission-page .admission-form-card textarea {
+  width: 100% !important;
+  min-height: 58px !important;
+  padding: 0 24px !important;
+  background: rgba(13, 17, 29, 0.92) !important;
+  border: 1px solid rgba(145, 166, 199, 0.13) !important;
+  border-radius: 0 !important;
+  color: #f4f7ff !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  font-size: 16px !important;
+  line-height: 1.4 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.admission-page .admission-full-application-form textarea,
+.admission-page .admission-form-card textarea {
+  min-height: 112px !important;
+  padding-top: 20px !important;
+  resize: vertical !important;
+}
+
+.admission-page .admission-full-application-form input::placeholder,
+.admission-page .admission-full-application-form textarea::placeholder,
+.admission-page .admission-form-card input::placeholder,
+.admission-page .admission-form-card textarea::placeholder {
+  color: rgba(145, 166, 199, 0.42) !important;
+}
+
+.admission-page .admission-full-application-form input:focus,
+.admission-page .admission-full-application-form select:focus,
+.admission-page .admission-full-application-form textarea:focus,
+.admission-page .admission-form-card input:focus,
+.admission-page .admission-form-card select:focus,
+.admission-page .admission-form-card textarea:focus {
+  border-color: rgba(196, 159, 100, 0.68) !important;
+  background: rgba(13, 17, 29, 1) !important;
+}
+
+.admission-page .application-form-note {
   display: none !important;
 }
 
-.admission-page .fee-card strong {
-  display: block !important;
-  margin: 0 0 7px !important;
-  color: #ffffff !important;
-  font-family: var(--font-display) !important;
-  font-size: 28px !important;
-  line-height: 1 !important;
-  font-weight: 700 !important;
-  letter-spacing: -0.02em !important;
-}
-
-.admission-page .fee-card p {
-  margin: 0 !important;
-  color: rgba(145,166,199,.82) !important;
-  font-size: 13px !important;
-  line-height: 1.55 !important;
-}
-
-/* Frame 5 does not show a converter inside the fee cards */
-.admission-page .fee-card .currency-converter-box,
-.admission-page .fee-card .currency-converter-input-mode,
-.admission-page .fee-card .currency-amount-field {
-  display: none !important;
-}
-
-/* Base44-like note under fee cards */
-.admission-page .fee-grid::after {
-  content: "For Workers and Leadership Training Program fees, contact the admissions office.\A 0812 130 0287";
-  flex: 0 0 100% !important;
-  display: block !important;
+.admission-page .admission-full-application-form .gold-btn.full,
+.admission-page .admission-form-card .gold-btn.full {
+  width: 100% !important;
+  min-height: 58px !important;
   margin-top: 10px !important;
-  padding-top: 8px !important;
-  color: rgba(145,166,199,.82) !important;
-  font-size: 13px !important;
-  line-height: 2.15 !important;
-  text-align: center !important;
-  white-space: pre-line !important;
+  background: #c7a66a !important;
+  color: #070b18 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.28em !important;
+  text-transform: uppercase !important;
+}
+
+.admission-page .admission-full-application-form .dark-btn.full,
+.admission-page .admission-form-card .dark-btn.full {
+  display: none !important;
 }
 
 @media (max-width: 760px) {
-  .admission-page .admission-section:has(.fee-grid) {
-    padding-top: 84px !important;
-    padding-bottom: 96px !important;
+  .admission-page #apply .admission-form-card,
+  .admission-page .admission-form-card {
+    width: calc(100% - 28px) !important;
+    margin-top: 46px !important;
+    padding: 36px 24px !important;
   }
 
-  .admission-page .fee-grid {
-    width: min(100% - 32px, 820px) !important;
-    padding: 22px !important;
-  }
-
-  .admission-page .fee-card {
-    flex-basis: 100% !important;
-    min-height: 135px !important;
-  }
-
-  .admission-page .admission-section:has(.fee-grid) .section-intro h2 {
-    font-size: 36px !important;
+  .admission-page .admission-full-application-form .two-columns,
+  .admission-page .admission-form-card .two-columns {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+    margin-bottom: 0 !important;
   }
 }
-
-/* End Frame 5 to 6 Admission Programme Fees Base44 Match */
