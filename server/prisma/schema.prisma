@@ -88,8 +88,29 @@ model User {
   notifications           Notification[]
 }
 
+model Programme {
+  id            Int      @id @default(autoincrement())
+  title         String
+  level         String
+  duration      String?
+  description   String
+  imageUrl      String?
+  fee           Int      @default(0)
+  feeUsd        Float    @default(0)
+  currency      String   @default("USD")
+  certification String?
+  published     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  courses      Course[]
+  enrollments  Enrollment[]
+  certificates Certificate[]
+}
+
 model Course {
   id          Int      @id @default(autoincrement())
+  programmeId Int?
   title       String
   level       String
   duration    String?
@@ -115,6 +136,10 @@ model Course {
   videos           CourseVideo[]
   documents        CourseDocument[]
   notifications    Notification[]
+
+  programme Programme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+
+  @@index([programmeId])
 }
 
 model CourseModule {
@@ -160,7 +185,8 @@ model Lesson {
 model Enrollment {
   id                Int             @id @default(autoincrement())
   userId            Int
-  courseId          Int
+  courseId          Int?
+  programmeId       Int?
   amount            Int             @default(0)
   paymentStatus     PaymentStatus   @default(PENDING_PAYMENT)
   admissionStatus   AdmissionStatus @default(AWAITING_PAYMENT)
@@ -176,11 +202,14 @@ model Enrollment {
   updatedAt         DateTime        @updatedAt
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course      Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  programme  Programme?  @relation(fields: [programmeId], references: [id], onDelete: SetNull)
   appeals     Appeal[]
   certificate Certificate?
 
   @@unique([userId, courseId])
+  @@unique([userId, programmeId])
+  @@index([programmeId])
 }
 
 model Appeal {
@@ -216,6 +245,7 @@ model Certificate {
   id                Int       @id @default(autoincrement())
   userId            Int
   courseId          Int
+  programmeId      Int?
   enrollmentId      Int       @unique
   certificateNumber String    @unique
   status            String    @default("ISSUED")
@@ -227,10 +257,12 @@ model Certificate {
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   course     Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  programme Programme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([courseId])
+  @@index([programmeId])
   @@index([status])
 }
 

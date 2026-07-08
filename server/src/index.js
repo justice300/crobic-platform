@@ -299,14 +299,20 @@ async function canManageCourseContent(user, courseId) {
 
 async function canAccessCourseContent(user, courseId) {
   if (!user) return false;
+  const id = Number(courseId);
   if (isPowerAdmin(user)) return true;
-  if (await isAssignedLecturer(user, courseId)) return true;
+  if (await isAssignedLecturer(user, id)) return true;
   if (user.role === "STUDENT") {
+    const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true } });
+    if (!course) return false;
     const enrollment = await prisma.enrollment.findFirst({
       where: {
         userId: user.id,
-        courseId: Number(courseId),
-        admissionStatus: { in: ["APPROVED", "GRADUATED"] }
+        admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+        OR: [
+          { courseId: id },
+          course.programmeId ? { programmeId: course.programmeId } : { id: -1 }
+        ]
       }
     });
     return Boolean(enrollment);
@@ -355,6 +361,116 @@ async function createCourseNotifications({ courseId, users, title, message, url,
       type
     }))
   });
+}
+
+
+function normaliseProgrammePayload(body = {}) {
+  return {
+    title: String(body.title || "").trim(),
+    level: String(body.level || "Programme").trim(),
+    duration: body.duration ? String(body.duration).trim() : null,
+    description: String(body.description || "").trim(),
+    imageUrl: body.imageUrl ? String(body.imageUrl).trim() : null,
+    fee: Math.max(0, Number(body.fee || 0)),
+    feeUsd: Math.max(0, Number(body.feeUsd || 0)),
+    currency: String(body.currency || "USD").trim() || "USD",
+    certification: body.certification ? String(body.certification).trim() : null,
+    published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on"
+  };
+}
+
+function normaliseCoursePayload(body = {}) {
+  return {
+    programmeId: body.programmeId ? Number(body.programmeId) : null,
+    title: String(body.title || "").trim(),
+    level: String(body.level || "Course").trim(),
+    duration: body.duration ? String(body.duration).trim() : null,
+    description: String(body.description || "").trim(),
+    imageUrl: body.imageUrl ? String(body.imageUrl).trim() : null,
+    fee: Math.max(0, Number(body.fee || 0)),
+    feeUsd: Math.max(0, Number(body.feeUsd || 0)),
+    currency: String(body.currency || "USD").trim() || "USD",
+    published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on"
+  };
+}
+
+function programmeFeeAmount(programmeOrCourse = {}) {
+  const local = Number(programmeOrCourse.fee || 0);
+  if (local > 0) return local;
+  return Math.round(Number(programmeOrCourse.feeUsd || 0));
+}
+
+function programmeDisplayTitle(enrollment = {}) {
+  return enrollment.programme?.title || enrollment.course?.programme?.title || enrollment.course?.title || "Selected programme";
+}
+
+function parseApplicationJson(value = "") {
+  try { return value ? JSON.parse(value) : {}; } catch { return {}; }
+}
+
+function studentCourseInclude(userId) {
+  return {
+    programme: true,
+    modules: {
+      where: { published: true },
+      include: {
+        lessons: {
+          where: { published: true },
+          include: { progress: { where: { userId } } },
+          orderBy: { lessonOrder: "asc" }
+        }
+      },
+      orderBy: { moduleOrder: "asc" }
+    },
+    lessons: {
+      where: { published: true },
+      include: { progress: { where: { userId } } },
+      orderBy: { lessonOrder: "asc" }
+    },
+    assignments: {
+      where: { published: true },
+      include: { submissions: { where: { userId } } },
+      orderBy: { createdAt: "asc" }
+    },
+    quizzes: {
+      where: { published: true },
+      include: {
+        questions: { orderBy: { questionOrder: "asc" } },
+        attempts: { where: { userId }, orderBy: { createdAt: "desc" } }
+      },
+      orderBy: { createdAt: "asc" }
+    }
+  };
+}
+
+function adminCourseInclude() {
+  return {
+    programme: true,
+    modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
+    lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
+    assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
+    quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
+  };
+}
+
+function expandProgrammeCourseEnrollments(enrollments = []) {
+  const rows = [];
+  for (const enrollment of enrollments || []) {
+    const programmeCourses = enrollment.programme?.courses || [];
+    if (enrollment.programmeId && programmeCourses.length) {
+      for (const course of programmeCourses) {
+        rows.push({
+          ...enrollment,
+          courseId: course.id,
+          course,
+          programmeTitle: enrollment.programme.title
+        });
+      }
+    } else if (enrollment.course) {
+      rows.push({ ...enrollment, programmeTitle: programmeDisplayTitle(enrollment) });
+    }
+  }
+  return rows;
 }
 
 function parseCurrencyRates(value = "") {
@@ -727,59 +843,77 @@ function isLessonUnlocked(course, targetLessonId) {
 }
 
 async function getStudentLearningCourse(userId, courseId) {
+  const id = Number(courseId);
+  const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true } });
+  if (!course) return null;
+
   const enrollment = await prisma.enrollment.findFirst({
-    where: { userId, courseId: Number(courseId), admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+    where: {
+      userId,
+      admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+      OR: [
+        { courseId: id },
+        course.programmeId ? { programmeId: course.programmeId } : { id: -1 }
+      ]
+    },
     include: {
       certificate: true,
-      course: {
+      programme: true,
+      course: true
+    }
+  });
+
+  if (!enrollment) return null;
+
+  const learningCourse = await prisma.course.findUnique({
+    where: { id },
+    include: {
+      programme: true,
+      modules: {
+        where: { published: true },
         include: {
-          modules: {
-            where: { published: true },
-            include: {
-              lessons: {
-                where: { published: true },
-                include: { progress: { where: { userId } } },
-                orderBy: { lessonOrder: "asc" }
-              }
-            },
-            orderBy: { moduleOrder: "asc" }
-          },
           lessons: {
             where: { published: true },
             include: { progress: { where: { userId } } },
             orderBy: { lessonOrder: "asc" }
-          },
-          assignments: {
-            where: { published: true },
-            include: { submissions: { where: { userId } } },
-            orderBy: { createdAt: "asc" }
-          },
-          quizzes: {
-            where: { published: true },
-            include: {
-              questions: { orderBy: { questionOrder: "asc" } },
-              attempts: { where: { userId }, orderBy: { createdAt: "desc" } }
-            },
-            orderBy: { createdAt: "asc" }
-          },
-          videos: {
-            include: {
-              uploadedBy: { select: { id: true, name: true, role: true } },
-              progresses: { where: { userId } }
-            },
-            orderBy: [{ sortOrder: "asc" }, { chapter: "asc" }, { createdAt: "asc" }]
-          },
-          liveSessions: {
-            where: { status: { in: ["live", "ended"] } },
-            include: { startedBy: { select: { id: true, name: true, role: true } } },
-            orderBy: { createdAt: "desc" }
           }
-        }
+        },
+        orderBy: { moduleOrder: "asc" }
+      },
+      lessons: {
+        where: { published: true },
+        include: { progress: { where: { userId } } },
+        orderBy: { lessonOrder: "asc" }
+      },
+      assignments: {
+        where: { published: true },
+        include: { submissions: { where: { userId } } },
+        orderBy: { createdAt: "asc" }
+      },
+      quizzes: {
+        where: { published: true },
+        include: {
+          questions: { orderBy: { questionOrder: "asc" } },
+          attempts: { where: { userId }, orderBy: { createdAt: "desc" } }
+        },
+        orderBy: { createdAt: "asc" }
+      },
+      videos: {
+        include: {
+          uploadedBy: { select: { id: true, name: true, role: true } },
+          progresses: { where: { userId } }
+        },
+        orderBy: [{ sortOrder: "asc" }, { chapter: "asc" }, { createdAt: "asc" }]
+      },
+      liveSessions: {
+        where: { status: { in: ["live", "ended"] } },
+        include: { startedBy: { select: { id: true, name: true, role: true } } },
+        orderBy: { createdAt: "desc" }
       }
     }
   });
 
-  return enrollment;
+  return { ...enrollment, courseId: id, course: learningCourse, programme: enrollment.programme || learningCourse?.programme || null };
 }
 
 app.get("/api/health", async (req, res) => {
@@ -812,6 +946,7 @@ app.post(
       phone,
       country,
       password,
+      programmeId,
       courseId,
       learningStream,
       applicationSource,
@@ -829,8 +964,21 @@ app.post(
       return res.status(400).json({ message: "Name, email and password are required" });
     }
 
+    const selectedProgrammeId = Number(programmeId || 0);
     const selectedCourseId = Number(courseId || 0);
-    if (!selectedCourseId) {
+    let programme = null;
+    let course = null;
+
+    if (selectedProgrammeId) {
+      programme = await prisma.programme.findFirst({ where: { id: selectedProgrammeId, published: true }, include: { courses: { where: { published: true }, orderBy: { title: "asc" } } } });
+    }
+
+    if (!programme && selectedCourseId) {
+      course = await prisma.course.findFirst({ where: { id: selectedCourseId, published: true }, include: { programme: true } });
+      programme = course?.programme || null;
+    }
+
+    if (!programme && !course) {
       return res.status(400).json({ message: "Please select the programme you are applying for." });
     }
 
@@ -839,19 +987,15 @@ app.post(
       return res.status(400).json({ message: "Please select your learning stream." });
     }
 
-    const course = await prisma.course.findFirst({
-      where: { id: selectedCourseId, published: true }
-    });
-    if (!course) {
-      return res.status(404).json({ message: "Selected programme was not found or is not active." });
-    }
-
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(409).json({ message: "Email already exists. Please login." });
 
     const hashed = await bcrypt.hash(password, 12);
     const applicationDetails = {
       applicationSource: String(applicationSource || "ADMISSION_PAGE").slice(0, 80),
+      programmeId: programme?.id || null,
+      programmeTitle: programme?.title || course?.title || "Selected programme",
+      firstCourseId: course?.id || null,
       learningStream: selectedLearningStream,
       ministryRole: String(ministryRole || "").trim(),
       yearsInMinistry: String(yearsInMinistry || "").trim(),
@@ -879,8 +1023,9 @@ app.post(
       const createdEnrollment = await tx.enrollment.create({
         data: {
           userId: createdUser.id,
-          courseId: course.id,
-          amount: course.fee,
+          programmeId: programme?.id || null,
+          courseId: programme ? null : course?.id,
+          amount: programmeFeeAmount(programme || course),
           paymentStatus: "PENDING_PAYMENT",
           admissionStatus: "AWAITING_PAYMENT",
           paymentMethod: "NONE",
@@ -888,7 +1033,7 @@ app.post(
           applicationJson: JSON.stringify(applicationDetails),
           applicationSubmittedAt: new Date()
         },
-        include: { course: true }
+        include: { programme: true, course: { include: { programme: true } } }
       });
 
       return { user: createdUser, enrollment: createdEnrollment };
@@ -902,7 +1047,7 @@ app.post(
 
 Your CIBI student account has been created.
 
-Programme: ${enrollment.course?.title || course.title}
+Programme: ${programmeDisplayTitle(enrollment)}
 Learning Stream: ${selectedLearningStream}
 
 Please continue to payment. Portal access opens only after payment confirmation and admin approval.`,
@@ -912,7 +1057,7 @@ Please continue to payment. Portal access opens only after payment confirmation 
     queueAdminEmail({
       subject: "New CIBI student application",
       heading: "New Student Application",
-      body: `${user.name} (${user.email}) applied for ${enrollment.course?.title || course.title}.
+      body: `${user.name} (${user.email}) applied for ${programmeDisplayTitle(enrollment)}.
 
 Learning Stream: ${selectedLearningStream}
 
@@ -1029,12 +1174,14 @@ app.post("/api/admin/email/test", requireAuth, requireAdmin, async (req, res) =>
 
 app.get("/api/public/bootstrap", async (req, res) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  const [slides, books, courses, announcements, liveSession, settingsRows, testimonials, faqs, gallery] = await Promise.all([
+  const [slides, books, programmes, courses, announcements, liveSession, settingsRows, testimonials, faqs, gallery] = await Promise.all([
     prisma.slide.findMany({ where: { active: true }, orderBy: { slideOrder: "asc" } }),
     prisma.book.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
+    prisma.programme.findMany({ where: { published: true }, include: { courses: { where: { published: true }, orderBy: { title: "asc" } } }, orderBy: { createdAt: "desc" } }),
     prisma.course.findMany({
       where: { published: true },
       include: {
+        programme: true,
         modules: { where: { published: true }, include: { lessons: { where: { published: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
         lessons: { where: { published: true }, orderBy: { lessonOrder: "asc" } }
       },
@@ -1049,7 +1196,7 @@ app.get("/api/public/bootstrap", async (req, res) => {
   ]);
 
   const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
-  res.json({ slides, books, courses, announcements, liveSession, settings, testimonials, faqs, gallery });
+  res.json({ slides, books, programmes, courses, announcements, liveSession, settings, testimonials, faqs, gallery });
 });
 
 app.get("/api/student/dashboard", requireAuth, requireActiveStudent, async (req, res) => {
@@ -1058,39 +1205,10 @@ app.get("/api/student/dashboard", requireAuth, requireActiveStudent, async (req,
       where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
       include: {
         certificate: true,
-        course: {
-          include: {
-            modules: {
-              where: { published: true },
-              include: {
-                lessons: {
-                  where: { published: true },
-                  include: { progress: { where: { userId: req.user.id } } },
-                  orderBy: { lessonOrder: "asc" }
-                }
-              },
-              orderBy: { moduleOrder: "asc" }
-            },
-            lessons: {
-              where: { published: true },
-              include: { progress: { where: { userId: req.user.id } } },
-              orderBy: { lessonOrder: "asc" }
-            },
-            assignments: {
-              where: { published: true },
-              include: { submissions: { where: { userId: req.user.id } } },
-              orderBy: { createdAt: "asc" }
-            },
-            quizzes: {
-              where: { published: true },
-              include: {
-                questions: { orderBy: { questionOrder: "asc" } },
-                attempts: { where: { userId: req.user.id }, orderBy: { createdAt: "desc" } }
-              },
-              orderBy: { createdAt: "asc" }
-            }
-          }
-        }
+        programme: {
+          include: { courses: { where: { published: true }, include: studentCourseInclude(req.user.id), orderBy: { title: "asc" } } }
+        },
+        course: { include: studentCourseInclude(req.user.id) }
       },
       orderBy: { createdAt: "desc" }
     }),
@@ -1099,23 +1217,37 @@ app.get("/api/student/dashboard", requireAuth, requireActiveStudent, async (req,
     prisma.setting.findMany()
   ]);
 
-  const enrichedEnrollments = enrollments.map((enrollment) => {
-    const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
-    return {
-      ...enrollment,
-      course: {
-        ...enrollment.course,
-        learningSummary: {
-          percent: summary.percent,
-          completedRequired: summary.completedRequired,
-          totalRequired: summary.totalRequired
-        }
+  const expandedEnrollments = [];
+  for (const enrollment of enrollments) {
+    const programmeCourses = enrollment.programme?.courses || [];
+    if (enrollment.programmeId && programmeCourses.length) {
+      for (const course of programmeCourses) {
+        const summary = calculateCourseCompletionForUser(course, enrollment.userId);
+        expandedEnrollments.push({
+          ...enrollment,
+          virtualEnrollmentId: `${enrollment.id}-${course.id}`,
+          course,
+          courseId: course.id,
+          programmeTitle: enrollment.programme.title,
+          course: { ...course, learningSummary: { percent: summary.percent, completedRequired: summary.completedRequired, totalRequired: summary.totalRequired } }
+        });
       }
-    };
-  });
+    } else if (enrollment.course) {
+      const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
+      expandedEnrollments.push({
+        ...enrollment,
+        virtualEnrollmentId: String(enrollment.id),
+        programmeTitle: programmeDisplayTitle(enrollment),
+        course: {
+          ...enrollment.course,
+          learningSummary: { percent: summary.percent, completedRequired: summary.completedRequired, totalRequired: summary.totalRequired }
+        }
+      });
+    }
+  }
 
   const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
-  res.json({ enrollments: enrichedEnrollments, announcements, liveSession, settings });
+  res.json({ enrollments: expandedEnrollments, announcements, liveSession, settings });
 });
 
 app.get("/api/student/courses/:courseId/learning", requireAuth, requireActiveStudent, async (req, res) => {
@@ -1179,7 +1311,7 @@ app.post("/api/student/lessons/:lessonId/progress", requireAuth, requireActiveSt
 app.get("/api/student/payment-status", requireAuth, async (req, res) => {
   const enrollments = await prisma.enrollment.findMany({
     where: { userId: req.user.id },
-    include: { course: true },
+    include: { programme: true, course: { include: { programme: true } } },
     orderBy: { createdAt: "desc" }
   });
   res.json({ user: publicUser(req.user), enrollments });
@@ -1353,35 +1485,68 @@ async function getStudentApplicationEnrollment(userId, requestedCourseId = null)
 
 app.post("/api/payments/manual", requireAuth, async (req, res) => {
   try {
-    const { courseId, manualReference, paymentProofUrl } = req.body;
-    if (req.user?.role !== "STUDENT") return res.status(403).json({ message: "Student account required." });
+    const { programmeId, courseId, manualReference, paymentProofUrl } = req.body;
     if (!paymentProofUrl) return res.status(400).json({ message: "Payment receipt is required for bank transfer." });
 
-    const enrollment = await getStudentApplicationEnrollment(req.user.id, courseId);
-    if (!enrollment) {
-      return res.status(400).json({ message: "Please submit the admission form and select a programme before payment." });
+    const selectedProgrammeId = Number(programmeId || 0);
+    const selectedCourseId = Number(courseId || 0);
+    let programme = selectedProgrammeId ? await prisma.programme.findFirst({ where: { id: selectedProgrammeId, published: true } }) : null;
+    let course = null;
+    if (!programme && selectedCourseId) {
+      course = await prisma.course.findFirst({ where: { id: selectedCourseId, published: true }, include: { programme: true } });
+      programme = course?.programme || null;
     }
+    if (!programme && !course) return res.status(404).json({ message: "Programme not found" });
 
-    const course = enrollment.course;
-    if (!course) return res.status(404).json({ message: "Selected programme was not found." });
+    const amount = programmeFeeAmount(programme || course);
+    const enrollment = programme
+      ? await prisma.enrollment.upsert({
+          where: { userId_programmeId: { userId: req.user.id, programmeId: programme.id } },
+          create: {
+            userId: req.user.id,
+            programmeId: programme.id,
+            amount,
+            paymentStatus: "MANUAL_PAYMENT_PENDING",
+            admissionStatus: "AWAITING_ADMIN_APPROVAL",
+            paymentMethod: "BANK_TRANSFER",
+            manualReference,
+            paymentProofUrl
+          },
+          update: {
+            amount,
+            paymentStatus: "MANUAL_PAYMENT_PENDING",
+            admissionStatus: "AWAITING_ADMIN_APPROVAL",
+            paymentMethod: "BANK_TRANSFER",
+            manualReference,
+            paymentProofUrl
+          },
+          include: { programme: true, course: true }
+        })
+      : await prisma.enrollment.upsert({
+          where: { userId_courseId: { userId: req.user.id, courseId: course.id } },
+          create: {
+            userId: req.user.id,
+            courseId: course.id,
+            amount,
+            paymentStatus: "MANUAL_PAYMENT_PENDING",
+            admissionStatus: "AWAITING_ADMIN_APPROVAL",
+            paymentMethod: "BANK_TRANSFER",
+            manualReference,
+            paymentProofUrl
+          },
+          update: {
+            amount,
+            paymentStatus: "MANUAL_PAYMENT_PENDING",
+            admissionStatus: "AWAITING_ADMIN_APPROVAL",
+            paymentMethod: "BANK_TRANSFER",
+            manualReference,
+            paymentProofUrl
+          },
+          include: { programme: true, course: true }
+        });
 
-    const updatedEnrollment = await prisma.enrollment.update({
-      where: { id: enrollment.id },
-      data: {
-        amount: course.fee,
-        paymentStatus: "MANUAL_PAYMENT_PENDING",
-        admissionStatus: "AWAITING_ADMIN_APPROVAL",
-        paymentMethod: "BANK_TRANSFER",
-        manualReference,
-        paymentProofUrl
-      },
-      include: { course: true }
-    });
-
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: { status: "MANUAL_PAYMENT_PENDING" }
-    });
+    await prisma.user.update({ where: { id: req.user.id }, data: { status: "MANUAL_PAYMENT_PENDING" } });
+    const title = programmeDisplayTitle(enrollment);
 
     queueEmailNotification({
       to: req.user.email,
@@ -1389,27 +1554,19 @@ app.post("/api/payments/manual", requireAuth, async (req, res) => {
       heading: "Payment Receipt Submitted",
       body: `Dear ${req.user.name},
 
-Your bank transfer receipt for ${course.title} has been submitted.
-
-Learning Stream: ${updatedEnrollment.learningStream || "Not specified"}
-
-CIBI admin will verify your payment and approve portal access after confirmation.`,
+Your bank transfer receipt for ${title} has been submitted. CIBI admin will verify your payment and approve portal access after confirmation.`,
       ctaText: "Check Portal Status",
       ctaUrl: "/student"
     });
     queueAdminEmail({
       subject: "New CIBI bank transfer receipt",
       heading: "Payment Receipt Uploaded",
-      body: `${req.user.name} (${req.user.email}) submitted a bank transfer receipt for ${course.title}.
-
-Learning Stream: ${updatedEnrollment.learningStream || "Not specified"}
-
-Please verify and approve if payment is confirmed.`,
+      body: `${req.user.name} (${req.user.email}) submitted a bank transfer receipt for ${title}. Please verify and approve if payment is confirmed.`,
       ctaText: "Review Student Payment",
       ctaUrl: "/admin"
     }).catch((error) => console.error("Admin payment email failed:", error.message));
 
-    res.json({ message: "Manual payment submitted. Admin will verify and approve.", enrollment: updatedEnrollment });
+    res.json({ message: "Manual payment submitted. Admin will verify and approve.", enrollment });
   } catch (error) {
     res.status(500).json({ message: "Manual payment submission failed", error: error.message });
   }
@@ -1417,30 +1574,62 @@ Please verify and approve if payment is confirmed.`,
 
 app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
   try {
-    const { courseId } = req.body;
-    if (req.user?.role !== "STUDENT") return res.status(403).json({ message: "Student account required." });
-
-    const enrollment = await getStudentApplicationEnrollment(req.user.id, courseId);
-    if (!enrollment) {
-      return res.status(400).json({ message: "Please submit the admission form and select a programme before payment." });
+    const { programmeId, courseId } = req.body;
+    const selectedProgrammeId = Number(programmeId || 0);
+    const selectedCourseId = Number(courseId || 0);
+    let programme = selectedProgrammeId ? await prisma.programme.findFirst({ where: { id: selectedProgrammeId, published: true } }) : null;
+    let course = null;
+    if (!programme && selectedCourseId) {
+      course = await prisma.course.findFirst({ where: { id: selectedCourseId, published: true }, include: { programme: true } });
+      programme = course?.programme || null;
     }
-
-    const course = enrollment.course;
-    if (!course) return res.status(404).json({ message: "Selected programme was not found." });
+    if (!programme && !course) return res.status(404).json({ message: "Programme not found" });
     if (!process.env.PAYSTACK_SECRET_KEY) return res.status(500).json({ message: "Paystack secret key is missing" });
 
-    const reference = `CIBI-${req.user.id}-${course.id}-${Date.now()}`;
+    const targetId = programme?.id || course.id;
+    const targetPrefix = programme ? "P" : "C";
+    const reference = `CIBI-${req.user.id}-${targetPrefix}${targetId}-${Date.now()}`;
+    const amount = programmeFeeAmount(programme || course);
 
-    await prisma.enrollment.update({
-      where: { id: enrollment.id },
-      data: {
-        amount: course.fee,
-        paymentStatus: "PENDING_PAYMENT",
-        admissionStatus: "AWAITING_PAYMENT",
-        paymentMethod: "PAYSTACK",
-        paystackReference: reference
-      }
-    });
+    const enrollment = programme
+      ? await prisma.enrollment.upsert({
+          where: { userId_programmeId: { userId: req.user.id, programmeId: programme.id } },
+          create: {
+            userId: req.user.id,
+            programmeId: programme.id,
+            amount,
+            paymentStatus: "PENDING_PAYMENT",
+            admissionStatus: "AWAITING_PAYMENT",
+            paymentMethod: "PAYSTACK",
+            paystackReference: reference
+          },
+          update: {
+            amount,
+            paymentStatus: "PENDING_PAYMENT",
+            admissionStatus: "AWAITING_PAYMENT",
+            paymentMethod: "PAYSTACK",
+            paystackReference: reference
+          }
+        })
+      : await prisma.enrollment.upsert({
+          where: { userId_courseId: { userId: req.user.id, courseId: course.id } },
+          create: {
+            userId: req.user.id,
+            courseId: course.id,
+            amount,
+            paymentStatus: "PENDING_PAYMENT",
+            admissionStatus: "AWAITING_PAYMENT",
+            paymentMethod: "PAYSTACK",
+            paystackReference: reference
+          },
+          update: {
+            amount,
+            paymentStatus: "PENDING_PAYMENT",
+            admissionStatus: "AWAITING_PAYMENT",
+            paymentMethod: "PAYSTACK",
+            paystackReference: reference
+          }
+        });
 
     const response = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -1450,14 +1639,14 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
       },
       body: JSON.stringify({
         email: req.user.email,
-        amount: amountToKobo(course.fee),
+        amount: amountToKobo(amount),
         reference,
         callback_url: process.env.PAYSTACK_CALLBACK_URL || `${CLIENT_URL}/payment-callback`,
         metadata: {
           userId: req.user.id,
-          courseId: course.id,
-          courseTitle: course.title,
-          learningStream: enrollment.learningStream || ""
+          programmeId: programme?.id || null,
+          courseId: course?.id || null,
+          programmeTitle: programme?.title || course?.title || "CIBI programme"
         }
       })
     });
@@ -1467,7 +1656,7 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
       return res.status(400).json({ message: "Could not initialize Paystack payment", data });
     }
 
-    res.json({ authorizationUrl: data.data.authorization_url, reference });
+    res.json({ authorizationUrl: data.data.authorization_url, reference, enrollment });
   } catch (error) {
     res.status(500).json({ message: "Paystack initialization failed", error: error.message });
   }
@@ -1479,45 +1668,40 @@ app.get("/api/payments/paystack/verify/:reference", requireAuth, async (req, res
     if (!process.env.PAYSTACK_SECRET_KEY) return res.status(500).json({ message: "Paystack secret key is missing" });
 
     const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
-      }
+      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` }
     });
 
     const data = await response.json();
-    if (!response.ok || !data.status) {
-      return res.status(400).json({ message: "Could not verify payment", data });
-    }
+    if (!response.ok || !data.status) return res.status(400).json({ message: "Could not verify payment", data });
 
     const paid = data.data.status === "success";
-    const enrollment = await prisma.enrollment.findFirst({ where: { paystackReference: reference } });
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { paystackReference: reference },
+      include: { programme: true, course: { include: { programme: true } } }
+    });
     if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
 
     if (paid) {
       await prisma.enrollment.update({
         where: { id: enrollment.id },
-        data: {
-          paymentStatus: "PAYMENT_CONFIRMED",
-          admissionStatus: "AWAITING_ADMIN_APPROVAL",
-          paymentMethod: "PAYSTACK"
-        }
+        data: { paymentStatus: "PAYMENT_CONFIRMED", admissionStatus: "AWAITING_ADMIN_APPROVAL", paymentMethod: "PAYSTACK" }
       });
       const paidUser = await prisma.user.update({ where: { id: enrollment.userId }, data: { status: "PAYMENT_CONFIRMED" } });
-      const paidCourse = await prisma.course.findUnique({ where: { id: enrollment.courseId } });
+      const title = programmeDisplayTitle(enrollment);
       queueEmailNotification({
         to: paidUser.email,
         subject: "CIBI payment confirmed",
         heading: "Payment Confirmed",
         body: `Dear ${paidUser.name},
 
-Your Paystack payment for ${paidCourse?.title || "your programme"} has been confirmed. CIBI admin will complete admission approval before portal access opens.`,
+Your Paystack payment for ${title} has been confirmed. CIBI admin will complete admission approval before portal access opens.`,
         ctaText: "Check Portal Status",
         ctaUrl: "/student"
       });
       queueAdminEmail({
         subject: "CIBI Paystack payment confirmed",
         heading: "Payment Confirmed",
-        body: `${paidUser.name} (${paidUser.email}) completed Paystack payment for ${paidCourse?.title || "a programme"}. Please review admission approval.`,
+        body: `${paidUser.name} (${paidUser.email}) completed Paystack payment for ${title}. Please review admission approval.`,
         ctaUrl: "/admin"
       }).catch((error) => console.error("Admin Paystack email failed:", error.message));
     }
@@ -1763,8 +1947,17 @@ Reply: ${message}`,
 
 
 async function ensureStudentCanAccessCourse(userId, courseId) {
+  const course = await prisma.course.findUnique({ where: { id: Number(courseId) }, select: { id: true, programmeId: true } });
+  if (!course) return null;
   const enrollment = await prisma.enrollment.findFirst({
-    where: { userId, courseId: Number(courseId), admissionStatus: { in: ["APPROVED", "GRADUATED"] } }
+    where: {
+      userId,
+      admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+      OR: [
+        { courseId: Number(courseId) },
+        course.programmeId ? { programmeId: course.programmeId } : { id: -1 }
+      ]
+    }
   });
   return enrollment;
 }
@@ -2080,20 +2273,14 @@ app.get("/api/admin/gradebook", requireAuth, requireAdmin, async (req, res) => {
     where: activeEnrollmentWhere,
     include: {
       certificate: true,
+      programme: { include: { courses: { include: adminCourseInclude(), orderBy: { title: "asc" } } } },
       user: { select: { id: true, name: true, email: true, phone: true, country: true, role: true, status: true, createdAt: true } },
-      course: {
-        include: {
-          modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
-          lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
-          assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
-          quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
-        }
-      }
+      course: { include: adminCourseInclude() }
     },
     orderBy: { updatedAt: "desc" }
   });
 
-  res.json(enrollments.map(buildGradebookRow));
+  res.json(expandProgrammeCourseEnrollments(enrollments).map(buildGradebookRow));
 });
 
 app.get("/api/student/results", requireAuth, requireActiveStudent, async (req, res) => {
@@ -2101,20 +2288,14 @@ app.get("/api/student/results", requireAuth, requireActiveStudent, async (req, r
     where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
     include: {
       certificate: true,
+      programme: { include: { courses: { where: { published: true }, include: studentCourseInclude(req.user.id), orderBy: { title: "asc" } } } },
       user: { select: { id: true, name: true, email: true, phone: true, country: true, role: true, status: true, createdAt: true } },
-      course: {
-        include: {
-          modules: { where: { published: true }, include: { lessons: { where: { published: true }, include: { progress: { where: { userId: req.user.id } } }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
-          lessons: { where: { published: true }, include: { progress: { where: { userId: req.user.id } } }, orderBy: { lessonOrder: "asc" } },
-          assignments: { where: { published: true }, include: { submissions: { where: { userId: req.user.id } } }, orderBy: { createdAt: "asc" } },
-          quizzes: { where: { published: true }, include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: { where: { userId: req.user.id }, orderBy: { createdAt: "desc" } } }, orderBy: { createdAt: "asc" } }
-        }
-      }
+      course: { include: studentCourseInclude(req.user.id) }
     },
     orderBy: { updatedAt: "desc" }
   });
 
-  res.json(enrollments.map(buildGradebookRow));
+  res.json(expandProgrammeCourseEnrollments(enrollments).map(buildGradebookRow));
 });
 
 
@@ -2528,7 +2709,7 @@ app.get("/api/admin/overview", requireAuth, requireAdmin, async (req, res) => {
   const courseWhere = courseAccessWhereForUser(req.user);
   const courseRows = await prisma.course.findMany({ where: courseWhere, select: { id: true } });
   const courseIds = courseRows.map((course) => course.id);
-  const enrollmentWhere = staffCanSeeAllCourses(req.user) ? {} : { courseId: { in: courseIds } };
+  const enrollmentWhere = staffCanSeeAllCourses(req.user) ? {} : { OR: [{ courseId: { in: courseIds } }, { programme: { courses: { some: { id: { in: courseIds } } } } }] };
   const [students, books, pendingEnrollments, openSupport, certificates] = await Promise.all([
     prisma.user.count({ where: { role: "STUDENT", enrollments: staffCanSeeAllCourses(req.user) ? undefined : { some: { courseId: { in: courseIds } } } } }),
     prisma.book.count(),
@@ -2544,7 +2725,7 @@ app.get("/api/admin/students", requireAuth, requireAdmin, async (req, res) => {
   const courseIds = courseRows.map((course) => course.id);
   const students = await prisma.user.findMany({
     where: staffCanSeeAllCourses(req.user) ? { role: "STUDENT" } : { role: "STUDENT", enrollments: { some: { courseId: { in: courseIds } } } },
-    include: { enrollments: { where: staffCanSeeAllCourses(req.user) ? {} : { courseId: { in: courseIds } }, include: { course: true } } },
+    include: { enrollments: { where: staffCanSeeAllCourses(req.user) ? {} : { OR: [{ courseId: { in: courseIds } }, { programme: { courses: { some: { id: { in: courseIds } } } } }] }, include: { programme: true, course: { include: { programme: true } } } } },
     orderBy: { createdAt: "desc" }
   });
   res.json(students.map((student) => ({ ...publicUser(student), enrollments: student.enrollments })));
@@ -2658,17 +2839,25 @@ Programme: ${enrollment.course?.title || updated.course?.title || "CIBI programm
   }
 });
 
+function crudPayload(routeName, body = {}) {
+  if (routeName === "programmes") return normaliseProgrammePayload(body);
+  if (routeName === "courses") return normaliseCoursePayload(body);
+  return body;
+}
+
 function crudRoutes(modelName, routeName) {
   app.get(`/api/admin/${routeName}`, requireAuth, requireAdmin, async (req, res) => {
     const where = routeName === "courses" ? courseAccessWhereForUser(req.user) : {};
-    const data = await prisma[modelName].findMany({ where, orderBy: { createdAt: "desc" } });
+    const include = routeName === "courses" ? { programme: true } : routeName === "programmes" ? { courses: { orderBy: { title: "asc" } } } : undefined;
+    const data = await prisma[modelName].findMany({ where, include, orderBy: { createdAt: "desc" } });
     res.json(data);
   });
 
   app.post(`/api/admin/${routeName}`, requireAuth, requireAdmin, async (req, res) => {
     try {
-      if (routeName === "courses" && !staffCanSeeAllCourses(req.user)) return res.status(403).json({ message: "Only Super Admin/Admin can create courses." });
-      const created = await prisma[modelName].create({ data: req.body });
+      if (["courses", "programmes"].includes(routeName) && !staffCanSeeAllCourses(req.user)) return res.status(403).json({ message: "Only Super Admin/Admin can create programmes and courses." });
+      const payload = crudPayload(routeName, req.body);
+      const created = await prisma[modelName].create({ data: payload });
       await logAdminActivity(req, { action: `CREATED_${routeName.toUpperCase()}`, entityType: routeName, entityId: created.id, details: { title: created.title || created.name || created.key || null } });
       res.status(201).json(created);
     } catch (error) {
@@ -2679,10 +2868,8 @@ function crudRoutes(modelName, routeName) {
   app.patch(`/api/admin/${routeName}/:id`, requireAuth, requireAdmin, async (req, res) => {
     try {
       if (routeName === "courses" && !(await canManageCourse(req, Number(req.params.id)))) return res.status(403).json({ message: "You do not have access to this course." });
-      const updated = await prisma[modelName].update({
-        where: { id: Number(req.params.id) },
-        data: req.body
-      });
+      const payload = crudPayload(routeName, req.body);
+      const updated = await prisma[modelName].update({ where: { id: Number(req.params.id) }, data: payload });
       await logAdminActivity(req, { action: `UPDATED_${routeName.toUpperCase()}`, entityType: routeName, entityId: updated.id, details: { title: updated.title || updated.name || updated.key || null } });
       res.json(updated);
     } catch (error) {
@@ -2692,7 +2879,7 @@ function crudRoutes(modelName, routeName) {
 
   app.delete(`/api/admin/${routeName}/:id`, requireAuth, requireAdmin, async (req, res) => {
     try {
-      if (routeName === "courses" && !staffCanSeeAllCourses(req.user)) return res.status(403).json({ message: "Only Super Admin/Admin can delete courses." });
+      if (["courses", "programmes"].includes(routeName) && !staffCanSeeAllCourses(req.user)) return res.status(403).json({ message: "Only Super Admin/Admin can delete programmes and courses." });
       await prisma[modelName].delete({ where: { id: Number(req.params.id) } });
       await logAdminActivity(req, { action: `DELETED_${routeName.toUpperCase()}`, entityType: routeName, entityId: req.params.id });
       res.json({ message: "Deleted" });
@@ -2702,6 +2889,7 @@ function crudRoutes(modelName, routeName) {
   });
 }
 
+crudRoutes("programme", "programmes");
 crudRoutes("book", "books");
 crudRoutes("course", "courses");
 crudRoutes("slide", "slides");
@@ -2715,6 +2903,7 @@ app.get("/api/admin/course-builder", requireAuth, requireAdmin, async (req, res)
   const courses = await prisma.course.findMany({
     where: courseAccessWhereForUser(req.user),
     include: {
+      programme: true,
       modules: { include: { lessons: { orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
       lessons: { include: { module: true }, orderBy: { lessonOrder: "asc" } },
       videos: {
@@ -2828,24 +3017,19 @@ app.get("/api/admin/student-progress", requireAuth, requireAdmin, async (req, re
     where: activeEnrollmentWhere,
     include: {
       certificate: true,
+      programme: { include: { courses: { include: adminCourseInclude(), orderBy: { title: "asc" } } } },
       user: { select: { id: true, name: true, email: true, status: true } },
-      course: {
-        include: {
-          modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
-          lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
-          assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
-          quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
-        }
-      }
+      course: { include: adminCourseInclude() }
     },
     orderBy: { updatedAt: "desc" }
   });
 
-  const rows = enrollments.map((enrollment) => {
+  const rows = expandProgrammeCourseEnrollments(enrollments).map((enrollment) => {
     const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
     return {
       enrollmentId: enrollment.id,
       student: enrollment.user,
+      programmeTitle: enrollment.programmeTitle || programmeDisplayTitle(enrollment),
       course: { id: enrollment.course.id, title: enrollment.course.title, level: enrollment.course.level },
       certificate: enrollment.certificate,
       completedRequired: summary.completedRequirements,
@@ -2870,46 +3054,15 @@ app.get("/api/student/certificates", requireAuth, async (req, res) => {
     where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
     include: {
       certificate: true,
-      course: {
-        include: {
-          modules: {
-            where: { published: true },
-            include: {
-              lessons: {
-                where: { published: true },
-                include: { progress: { where: { userId: req.user.id } } },
-                orderBy: { lessonOrder: "asc" }
-              }
-            },
-            orderBy: { moduleOrder: "asc" }
-          },
-          lessons: {
-            where: { published: true },
-            include: { progress: { where: { userId: req.user.id } } },
-            orderBy: { lessonOrder: "asc" }
-          },
-          assignments: {
-            where: { published: true },
-            include: { submissions: { where: { userId: req.user.id } } },
-            orderBy: { createdAt: "asc" }
-          },
-          quizzes: {
-            where: { published: true },
-            include: {
-              questions: { orderBy: { questionOrder: "asc" } },
-              attempts: { where: { userId: req.user.id }, orderBy: { createdAt: "desc" } }
-            },
-            orderBy: { createdAt: "asc" }
-          }
-        }
-      }
+      programme: { include: { courses: { where: { published: true }, include: studentCourseInclude(req.user.id), orderBy: { title: "asc" } } } },
+      course: { include: studentCourseInclude(req.user.id) }
     },
     orderBy: { updatedAt: "desc" }
   });
 
-  const rows = enrollments.map((enrollment) => {
+  const rows = expandProgrammeCourseEnrollments(enrollments).map((enrollment) => {
     const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
-    return { ...enrollment, student: publicUser(req.user), learningSummary: summary };
+    return { ...enrollment, student: publicUser(req.user), programmeTitle: enrollment.programmeTitle || programmeDisplayTitle(enrollment), learningSummary: summary };
   });
 
   res.json(rows);
@@ -2920,7 +3073,8 @@ app.get("/api/certificates/verify/:certificateNumber", async (req, res) => {
     where: { certificateNumber: req.params.certificateNumber },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      course: { select: { id: true, title: true, level: true, duration: true } }
+      course: { select: { id: true, title: true, level: true, duration: true } },
+      programme: { select: { id: true, title: true, level: true, duration: true, certification: true } }
     }
   });
 
@@ -2945,22 +3099,16 @@ app.get("/api/admin/certificates", requireAuth, requireAdmin, async (req, res) =
     where: activeEnrollmentWhere,
     include: {
       certificate: true,
+      programme: { include: { courses: { include: adminCourseInclude(), orderBy: { title: "asc" } } } },
       user: { select: { id: true, name: true, email: true, phone: true, status: true } },
-      course: {
-        include: {
-          modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
-          lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
-          assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
-          quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
-        }
-      }
+      course: { include: adminCourseInclude() }
     },
     orderBy: { updatedAt: "desc" }
   });
 
-  const rows = enrollments.map((enrollment) => {
+  const rows = expandProgrammeCourseEnrollments(enrollments).map((enrollment) => {
     const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
-    return { ...enrollment, learningSummary: summary };
+    return { ...enrollment, programmeTitle: enrollment.programmeTitle || programmeDisplayTitle(enrollment), learningSummary: summary };
   });
 
   res.json(rows);
@@ -2973,14 +3121,8 @@ app.post("/api/admin/enrollments/:id/certificate", requireAuth, requireAdmin, as
       include: {
         certificate: true,
         user: true,
-        course: {
-          include: {
-            modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
-            lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
-            assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
-            quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
-          }
-        }
+        programme: { include: { courses: { include: adminCourseInclude(), orderBy: { title: "asc" } } } },
+        course: { include: adminCourseInclude() }
       }
     });
 
@@ -2990,25 +3132,32 @@ app.post("/api/admin/enrollments/:id/certificate", requireAuth, requireAdmin, as
       return res.status(400).json({ message: "Admission must be approved before certificate can be issued." });
     }
 
-    const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
-    if (summary.percent < 100) return res.status(400).json({ message: "Student has not completed all required lessons, assignments and quizzes yet." });
+    const programmeCourses = enrollment.programme?.courses || [];
+    const completionCourses = programmeCourses.length ? programmeCourses : enrollment.course ? [enrollment.course] : [];
+    if (!completionCourses.length) return res.status(400).json({ message: "No course has been attached to this programme yet." });
+
+    const incomplete = completionCourses.find((course) => calculateCourseCompletionForUser(course, enrollment.userId).percent < 100);
+    if (incomplete) return res.status(400).json({ message: `Student has not completed all required lessons, assignments and quizzes for ${incomplete.title} yet.` });
 
     if (enrollment.certificate) {
       return res.json({ message: "Certificate already exists for this enrollment.", certificate: enrollment.certificate });
     }
 
+    const primaryCourse = enrollment.course || completionCourses[0];
     const certificate = await prisma.certificate.create({
       data: {
         userId: enrollment.userId,
-        courseId: enrollment.courseId,
+        courseId: primaryCourse.id,
+        programmeId: enrollment.programmeId || primaryCourse.programmeId || null,
         enrollmentId: enrollment.id,
-        certificateNumber: makeCertificateNumber(enrollment),
+        certificateNumber: makeCertificateNumber({ ...enrollment, courseId: primaryCourse.id }),
         notes: req.body?.notes ? String(req.body.notes) : null
       }
     });
 
     await prisma.enrollment.update({ where: { id: enrollment.id }, data: { admissionStatus: "GRADUATED" } });
-    await logAdminActivity(req, { action: "ISSUED_CERTIFICATE", entityType: "Certificate", entityId: certificate.id, details: { certificateNumber: certificate.certificateNumber, student: enrollment.user?.email, course: enrollment.course?.title } });
+    const title = programmeDisplayTitle(enrollment);
+    await logAdminActivity(req, { action: "ISSUED_CERTIFICATE", entityType: "Certificate", entityId: certificate.id, details: { certificateNumber: certificate.certificateNumber, student: enrollment.user?.email, programme: title } });
 
     queueEmailNotification({
       to: enrollment.user.email,
@@ -3016,7 +3165,7 @@ app.post("/api/admin/enrollments/:id/certificate", requireAuth, requireAdmin, as
       heading: "Your Certificate Has Been Issued",
       body: `Dear ${enrollment.user.name},
 
-Your certificate for ${enrollment.course.title} has been issued. Certificate Number: ${certificate.certificateNumber}.`,
+Your certificate for ${title} has been issued. Certificate Number: ${certificate.certificateNumber}.`,
       ctaText: "View Certificate",
       ctaUrl: "/student"
     });

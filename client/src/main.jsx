@@ -332,6 +332,7 @@ function App() {
     slides: [],
     books: [],
     courses: [],
+    programmes: [],
     announcements: [],
     liveSession: null,
     settings: {},
@@ -411,9 +412,9 @@ function App() {
 
       {page === "home" && <Home data={data} goTo={goTo} openAuth={openAuth} />}
       {page === "about" && <About goTo={goTo} settings={data.settings} />}
-      {page === "programs" && <Programs courses={data.courses} openAuth={openAuth} user={user} goTo={goTo} settings={data.settings} />}
+      {page === "programs" && <Programs courses={data.courses} programmes={data.programmes || []} openAuth={openAuth} user={user} goTo={goTo} settings={data.settings} />}
       {page === "library" && <BookLibrary books={data.books} settings={data.settings} />}
-      {page === "admissions" && <Admissions courses={data.courses} settings={data.settings} user={user} openAuth={openAuth} goTo={goTo} setUser={setUser} />}
+      {page === "admissions" && <Admissions courses={data.courses} programmes={data.programmes || []} settings={data.settings} user={user} openAuth={openAuth} goTo={goTo} setUser={setUser} />}
       {page === "gallery" && <Gallery gallery={data.gallery} settings={data.settings} />}
       {page === "contact" && <Contact settings={data.settings} />}
       {page === "payment-callback" && <PaymentCallback user={user} goTo={goTo} />}
@@ -445,8 +446,9 @@ function App() {
           close={() => setAuthOpen(false)}
           setUser={setUser}
           goTo={goTo}
-          courses={data.courses}
-          settings={data.settings}
+          courses={data.courses || []}
+          programmes={data.programmes || []}
+          settings={data.settings || {}}
         />
       )}
     </>
@@ -776,7 +778,7 @@ function Home({ data, goTo, openAuth }) {
         <div className="container">
           <SectionIntro eyebrow={getSetting(s, "home_programs_eyebrow", "Academics")} title={getSetting(s, "home_programs_title", "Our Programs")} text={getSetting(s, "home_programs_text", "Certificate, Diploma and Degree routes for ministers and Bible students.")} />
           <div className="program-showcase-grid home-program-showcase-grid">
-            {mergeProgrammeCourses(data.courses, s).map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={null} goTo={goTo} settings={s} showDetails />)}
+            {programmeDisplayList(data.programmes, data.courses, s).map((course) => <ProgramCourseCard key={course.id || course.title} course={course} openAuth={openAuth} user={null} goTo={goTo} settings={s} showDetails />)}
           </div>
         </div>
       </section>
@@ -901,6 +903,24 @@ function mergeProgrammeCourses(courses = [], settings = {}) {
   }
 
   return defaults.map((item) => bySlot[item.slot]);
+}
+
+
+function programmeDisplayList(programmes = [], courses = [], settings = {}) {
+  const activeProgrammes = Array.isArray(programmes) ? programmes.filter((item) => item?.published !== false) : [];
+  if (activeProgrammes.length) {
+    return activeProgrammes.map((programme) => ({
+      ...programme,
+      level: programme.level || "Programme",
+      duration: programme.duration || "Flexible",
+      feeUsd: Number(programme.feeUsd || 0),
+      fee: Number(programme.fee || 0),
+      audience: programme.audience || programme.description,
+      certification: programme.certification || programme.title,
+      courses: programme.courses || []
+    }));
+  }
+  return mergeProgrammeCourses(courses, settings);
 }
 
 function About({ goTo, settings = {} }) {
@@ -1038,8 +1058,8 @@ function About({ goTo, settings = {} }) {
   );
 }
 
-function Programs({ courses, openAuth, user, goTo, settings = {} }) {
-  const list = mergeProgrammeCourses(courses, settings);
+function Programs({ courses, programmes = [], openAuth, user, goTo, settings = {} }) {
+  const list = programmeDisplayList(programmes, courses, settings);
   const curriculumGroups = parseProgramCurriculum(settings);
   const graduationRequirements = settingLines(settings, "programs_graduation_requirements", [
     "Complete all required courses for your program level",
@@ -1230,7 +1250,7 @@ function BookLibrary({ books, settings = {} }) {
   );
 }
 
-function Admissions({ courses, settings, user, openAuth, goTo, setUser }) {
+function Admissions({ courses, programmes = [], settings, user, openAuth, goTo, setUser }) {
   const eligibility = settingPipeList(settings, "admission_roles", [
     ["Pastors", "G.O. and resident pastors"],
     ["Evangelists", "Field and outreach ministers"],
@@ -1274,7 +1294,7 @@ function Admissions({ courses, settings, user, openAuth, goTo, setUser }) {
     ["First Term Ends", "July 2026"]
   ]).map((item) => ({ label: item.title, value: item.sub }));
 
-  const visibleCourses = courses.length ? courses : fallbackCourses();
+  const visibleProgrammes = programmeDisplayList(programmes, courses, settings);
 
   return (
     <main className="admission-page">
@@ -1327,7 +1347,7 @@ function Admissions({ courses, settings, user, openAuth, goTo, setUser }) {
             </div>
 
             <div className="apply-action-panel">
-              <PaymentPanel courses={courses} settings={settings} />
+              <PaymentPanel programmes={programmes} courses={courses} settings={settings} />
             </div>
           </div>
         ) : isStaffUser(user) ? (
@@ -1337,7 +1357,7 @@ function Admissions({ courses, settings, user, openAuth, goTo, setUser }) {
             <button className="gold-btn" type="button" onClick={() => goTo("admin")}>Open Admin Dashboard</button>
           </div>
         ) : (
-          <AdmissionApplicationForm courses={courses} settings={settings} setUser={setUser} goTo={goTo} openAuth={openAuth} />
+          <AdmissionApplicationForm programmes={programmes} courses={courses} settings={settings} setUser={setUser} goTo={goTo} openAuth={openAuth} />
         )}
       </section>
 
@@ -1359,7 +1379,7 @@ function Admissions({ courses, settings, user, openAuth, goTo, setUser }) {
       <section className="admission-section container">
         <SectionIntro eyebrow={getSetting(settings, "admission_fees_eyebrow", "Fees")} title={getSetting(settings, "admission_fees_title", "Programme Fees")} text={getSetting(settings, "admission_fees_text", "Fees are shown based on active programmes created by admin.")} />
         <div className="fee-grid">
-          {visibleCourses.slice(0, 4).map((course) => (
+          {visibleProgrammes.slice(0, 4).map((course) => (
             <div className="fee-card" key={course.id || course.title}>
               <span>{course.level || "Programme"}</span>
               <h3>{course.title}</h3>
@@ -1396,8 +1416,8 @@ function Admissions({ courses, settings, user, openAuth, goTo, setUser }) {
   );
 }
 
-function AdmissionApplicationForm({ courses = [], settings = {}, setUser, goTo, openAuth }) {
-  const availableCourses = courses.filter((course) => course?.published !== false);
+function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}, setUser, goTo, openAuth }) {
+  const availableCourses = programmeDisplayList(programmes, courses, settings);
   const learningStreams = settingPoints(settings, "admission_learning_streams", ["Regular Classes", "Executive Classes"]);
   const firstCourseId = availableCourses[0]?.id || "";
   const [form, setForm] = useState({
@@ -1447,6 +1467,7 @@ function AdmissionApplicationForm({ courses = [], settings = {}, setUser, goTo, 
         method: "POST",
         body: {
           ...form,
+          programmeId: Number(form.courseId),
           courseId: Number(form.courseId),
           applicationSource: "ADMISSION_PAGE"
         }
@@ -2232,7 +2253,7 @@ function PortalDecisionGate({ error, paymentStatus, fallbackUser, goTo }) {
           <>
             <div className="status-detail-card"><span>Admission Status</span><strong>{formatPortalStatus(enrollment.admissionStatus)}</strong></div>
             <div className="status-detail-card"><span>Payment Status</span><strong>{formatPortalStatus(enrollment.paymentStatus)}</strong></div>
-            <div className="status-detail-card"><span>Programme</span><strong>{enrollment.course?.title || "Selected programme"}</strong></div>
+            <div className="status-detail-card"><span>Programme</span><strong>{enrollment.programme?.title || enrollment.course?.programme?.title || enrollment.course?.title || "Selected programme"}</strong></div>
           </>
         )}
       </div>
@@ -2408,7 +2429,7 @@ function StudentPortal({ user, setUser, goTo }) {
 
   if (!dashboard) return <div className="loading-screen">Loading student portal...</div>;
 
-  const activeEnrollment = dashboard.enrollments.find((item) => item.id === activeEnrollmentId);
+  const activeEnrollment = dashboard.enrollments.find((item) => (item.virtualEnrollmentId || item.id) === activeEnrollmentId || String(item.id) === String(activeEnrollmentId));
   const totalLessons = dashboard.enrollments.reduce((a, e) => a + getCourseProgressSummary(e.course).lessons.length, 0);
   const completedCourses = dashboard.enrollments.filter((enrollment) => getCourseProgressSummary(enrollment.course).percent >= 100).length;
 
@@ -2467,7 +2488,7 @@ function StudentPortal({ user, setUser, goTo }) {
                       {dashboard.enrollments.map((enrollment) => {
                         const summary = getCourseProgressSummary(enrollment.course);
                         return (
-                          <button type="button" key={enrollment.id} onClick={() => openCourse(enrollment.id)}>
+                          <button type="button" key={enrollment.virtualEnrollmentId || enrollment.id} onClick={() => openCourse(enrollment.virtualEnrollmentId || enrollment.id)}>
                             <strong>{enrollment.course.title}</strong>
                             <small>{summary.percent}% complete · {summary.completedRequirements || summary.completedRequired}/{summary.totalRequirements || summary.totalRequired} required items</small>
                             <i><b style={{ width: `${summary.percent}%` }} /></i>
@@ -2504,7 +2525,7 @@ function StudentPortal({ user, setUser, goTo }) {
                 </div>
                 <div className="course-grid student-course-grid">
                   {dashboard.enrollments.map((enrollment) => (
-                    <StudentCourse key={enrollment.id} enrollment={enrollment} openCourse={() => openCourse(enrollment.id)} />
+                    <StudentCourse key={enrollment.virtualEnrollmentId || enrollment.id} enrollment={enrollment} openCourse={() => openCourse(enrollment.virtualEnrollmentId || enrollment.id)} />
                   ))}
                   {!dashboard.enrollments.length && <div className="quiet-banner"><strong>No approved courses yet.</strong><p>Your courses will appear here after admission approval.</p></div>}
                 </div>
@@ -3333,24 +3354,25 @@ function StudentQuizCard({ quiz, reloadCourse }) {
   );
 }
 
-function PaymentPanel({ courses, settings }) {
-  const [courseId, setCourseId] = useState(courses[0]?.id || "");
+function PaymentPanel({ programmes = [], courses = [], settings }) {
+  const availableProgrammes = programmeDisplayList(programmes, courses, settings);
+  const [courseId, setCourseId] = useState(availableProgrammes[0]?.id || "");
   const [applicationEnrollment, setApplicationEnrollment] = useState(null);
   const [manualReference, setManualReference] = useState("");
   const [paymentProofUrl, setPaymentProofUrl] = useState("");
   const [receiptName, setReceiptName] = useState("");
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const selectedCourse = courses.find((course) => course.id === Number(courseId)) || applicationEnrollment?.course;
-  const lockedToApplication = Boolean(applicationEnrollment?.courseId);
+  const selectedCourse = availableProgrammes.find((course) => course.id === Number(courseId)) || applicationEnrollment?.programme || applicationEnrollment?.course;
+  const lockedToApplication = Boolean(applicationEnrollment?.programmeId || applicationEnrollment?.courseId);
 
   async function loadApplicationEnrollment() {
     try {
       const result = await api("/student/payment-status");
       const enrollment = (result.enrollments || [])[0] || null;
-      if (enrollment?.courseId) {
+      if (enrollment?.programmeId || enrollment?.courseId) {
         setApplicationEnrollment(enrollment);
-        setCourseId(enrollment.courseId);
+        setCourseId(enrollment.programmeId || enrollment.courseId);
       }
     } catch {
       // Payment status is only available for logged-in students.
@@ -3367,7 +3389,7 @@ function PaymentPanel({ courses, settings }) {
       return;
     }
     try {
-      const result = await api("/payments/paystack/initialize", { method: "POST", body: { courseId } });
+      const result = await api("/payments/paystack/initialize", { method: "POST", body: { programmeId: Number(courseId), courseId: Number(courseId) } });
       window.location.href = result.authorizationUrl;
     } catch (error) {
       showToast(error.message, "error");
@@ -3425,7 +3447,7 @@ function PaymentPanel({ courses, settings }) {
       return;
     }
     try {
-      const result = await api("/payments/manual", { method: "POST", body: { courseId, manualReference, paymentProofUrl } });
+      const result = await api("/payments/manual", { method: "POST", body: { programmeId: Number(courseId), courseId: Number(courseId), manualReference, paymentProofUrl } });
       setMessage(result.message);
       showToast(result.message, "success");
       await loadApplicationEnrollment();
@@ -3461,7 +3483,7 @@ function PaymentPanel({ courses, settings }) {
         </div>
       ) : (
         <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-          {courses.map((course) => <option value={course.id} key={course.id}>{course.title} — {formatUsd(usdFee(course))}</option>)}
+          {availableProgrammes.map((course) => <option value={course.id} key={course.id}>{course.title} — {formatUsd(usdFee(course))}</option>)}
         </select>
       )}
 
@@ -3533,14 +3555,15 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 
   return (
     <main className="portal-page">
-      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Website Content", "Programs", "Currency Settings", "Users & Roles", "Students", "Books", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Students", "Programs", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
+      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Website Content", "Programmes", "Courses", "Currency Settings", "Users & Roles", "Students", "Books", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Students", "Programmes", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
       <div className="portal-main">
         <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CIBI Management</h1></div></div>
         {tab === "overview" && <Overview overview={overview} />}
         {tab === "users & roles" && <UsersRolesAdmin />}
         {tab === "students" && <StudentsAdmin />}
         {tab === "books" && <CrudAdmin title="Books" path="books" reloadPublic={reloadPublic} fields={bookFields} />}
-        {["courses", "programs"].includes(tab) && <CrudAdmin title="Programs" path="courses" reloadPublic={reloadPublic} fields={courseFields} />}
+        {tab === "programmes" && <CrudAdmin title="Programmes" path="programmes" reloadPublic={reloadPublic} fields={programmeFields} />}
+        {tab === "courses" && <CoursesAdmin reloadPublic={reloadPublic} />}
         {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} currentUser={currentUser} />}
         {tab === "progress" && <ProgressAdmin />}
         {tab === "gradebook" && <GradebookAdmin />}
@@ -4590,6 +4613,9 @@ function StudentsAdmin() {
 const bookFields = [
   ["title", "Book title"], ["author", "Author"], ["category", "Category"], ["price", "Price e.g ₦8,500"], ["buyLink", "Stellar purchase link"], ["imageUrl", "Book cover image URL"], ["description", "Description", "textarea"]
 ];
+const programmeFields = [
+  ["title", "Programme title"], ["level", "Level e.g Foundation"], ["duration", "Duration e.g 12 Months"], ["feeUsd", "Fee in USD e.g 50", "number"], ["currency", "Currency e.g USD"], ["fee", "Local payment backup e.g 75000", "number"], ["certification", "Certificate name"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]
+];
 const courseFields = [
   ["title", "Course title"], ["level", "Level"], ["duration", "Duration e.g 12 Months"], ["feeUsd", "Fee in USD e.g 50", "number"], ["currency", "Currency e.g USD"], ["fee", "Local payment backup e.g 75000", "number"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]
 ];
@@ -4730,6 +4756,110 @@ function SlidesAdmin({ reloadPublic }) {
             </div>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+
+function CoursesAdmin({ reloadPublic }) {
+  const empty = { programmeId: "", title: "", level: "Course", duration: "", feeUsd: 0, currency: "USD", fee: 0, imageUrl: "", description: "" };
+  const [items, setItems] = useState([]);
+  const [programmes, setProgrammes] = useState([]);
+  const [form, setForm] = useState(empty);
+  const [editingId, setEditingId] = useState(null);
+
+  async function load() {
+    const [courseRows, programmeRows] = await Promise.all([api("/admin/courses"), api("/admin/programmes")]);
+    setItems(courseRows || []);
+    setProgrammes(programmeRows || []);
+    if (!form.programmeId && programmeRows?.[0]?.id) setForm((current) => ({ ...current, programmeId: current.programmeId || programmeRows[0].id }));
+  }
+
+  useEffect(() => { load().catch((error) => showToast(error.message, "error")); }, []);
+
+  function startEdit(item) {
+    setForm({
+      programmeId: item.programmeId || "",
+      title: item.title || "",
+      level: item.level || "Course",
+      duration: item.duration || "",
+      feeUsd: Number(item.feeUsd || 0),
+      currency: item.currency || "USD",
+      fee: Number(item.fee || 0),
+      imageUrl: item.imageUrl || "",
+      description: item.description || ""
+    });
+    setEditingId(item.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setForm({ ...empty, programmeId: programmes[0]?.id || "" });
+    setEditingId(null);
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.programmeId) {
+      showToast("Create/select a programme before adding a course.", "error");
+      return;
+    }
+    const payload = { ...form, programmeId: Number(form.programmeId), feeUsd: Number(form.feeUsd || 0), fee: Number(form.fee || 0) };
+    if (editingId) await api(`/admin/courses/${editingId}`, { method: "PATCH", body: payload });
+    else await api("/admin/courses", { method: "POST", body: payload });
+    cancelEdit();
+    await load();
+    await reloadPublic();
+    showToast(editingId ? "Course updated." : "Course added under programme.", "success");
+  }
+
+  async function remove(id) {
+    if (!(await showConfirm({ title: "Delete course?", message: "This course will be removed from its programme.", confirmText: "Delete", danger: true }))) return;
+    await api(`/admin/courses/${id}`, { method: "DELETE" });
+    if (editingId === id) cancelEdit();
+    await load();
+    await reloadPublic();
+  }
+
+  return (
+    <section className="admin-section">
+      <h2>{editingId ? "Edit Course" : "Courses Under Programmes"}</h2>
+      <p className="admin-helper-text">Create programmes first, then attach each course to the correct programme. Student access follows the programme selected on the Admission page.</p>
+      {!programmes.length && <div className="quiet-banner"><strong>No programme yet.</strong><p>Add programmes from the Programmes tab before adding courses.</p></div>}
+      <form className="admin-form" onSubmit={submit}>
+        <select value={form.programmeId} onChange={(e) => setForm({ ...form, programmeId: e.target.value })} required>
+          <option value="">Select programme</option>
+          {programmes.map((programme) => <option key={programme.id} value={programme.id}>{programme.title}</option>)}
+        </select>
+        <input placeholder="Course title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+        <input placeholder="Level" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} required />
+        <input placeholder="Duration e.g 12 Weeks" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} />
+        <div className="form-row two-columns">
+          <input type="number" placeholder="Fee in USD, optional" value={form.feeUsd} onChange={(e) => setForm({ ...form, feeUsd: e.target.value })} />
+          <input type="number" placeholder="Local fee backup, optional" value={form.fee} onChange={(e) => setForm({ ...form, fee: e.target.value })} />
+        </div>
+        <input placeholder="Currency e.g USD" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
+        <input placeholder="Image URL" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} />
+        <textarea placeholder="Course description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
+        <div className="form-row">
+          <button className="gold-btn" type="submit">{editingId ? "Update Course" : "Add Course"}</button>
+          {editingId && <button className="ghost-btn" type="button" onClick={cancelEdit}>Cancel Edit</button>}
+        </div>
+      </form>
+      <div className="admin-list">
+        {items.map((item) => (
+          <div key={item.id} className="admin-list-item">
+            <div>
+              <strong>{item.title}</strong>
+              <p>{item.programme?.title || "No programme attached"} · {item.level}</p>
+            </div>
+            <div>
+              <button className="ghost-btn" type="button" onClick={() => startEdit(item)}>Edit</button>
+              <button className="danger-action-btn" type="button" onClick={() => remove(item.id)}>Delete</button>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -6791,8 +6921,8 @@ function findCountry(value) {
   );
 }
 
-function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], settings = {} }) {
-  const availableCourses = courses.filter((course) => course?.published !== false);
+function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programmes = [], settings = {} }) {
+  const availableCourses = programmeDisplayList(programmes, courses, settings);
   const learningStreams = settingPoints(settings, "admission_learning_streams", ["Regular Classes", "Executive Classes"]);
   const [form, setForm] = useState({
     name: "",
@@ -6832,6 +6962,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], settings
       const payload = isRegister
         ? {
             ...form,
+            programmeId: Number(form.courseId),
             courseId: Number(form.courseId),
             country: selectedCountry?.name || form.country,
             phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",
