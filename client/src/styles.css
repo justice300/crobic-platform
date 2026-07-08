@@ -7074,48 +7074,102 @@ li {
 /* End Phase 6 Global typography system */
 
 
-/* Phase 6B Dark homepage program section */
 
-.program-section {
+
+
+/* Phase 6E Scoped program cards section */
+
+/*
+  Only affects the program cards section:
+  - Home page Our Programs cards
+  - Programs page Our Programs cards
+  Nothing else.
+*/
+.program-section,
+.programs-page .program-overview-section {
   background: var(--black) !important;
   color: #ffffff !important;
+  padding-top: 115px !important;
+  padding-bottom: 120px !important;
   border-top: 1px solid rgba(255,255,255,.06) !important;
   border-bottom: 1px solid rgba(255,255,255,.06) !important;
-  margin-bottom: 0 !important;
 }
 
-.program-section .section-intro h2 {
+/* Heading inside only this section */
+.program-section .section-intro,
+.programs-page .program-overview-section .section-intro {
+  max-width: 720px !important;
+  margin: 0 auto 74px !important;
+  text-align: center !important;
+}
+
+.program-section .section-intro h2,
+.programs-page .program-overview-section .section-intro h2 {
   color: #ffffff !important;
+  font-size: clamp(42px, 4.8vw, 60px) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 600 !important;
 }
 
-.program-section .section-intro p {
+.program-section .section-intro p,
+.programs-page .program-overview-section .section-intro p {
+  max-width: 620px !important;
+  margin: 0 auto !important;
   color: rgba(145,166,199,.82) !important;
+  font-size: 17px !important;
+  line-height: 1.75 !important;
 }
 
-.program-section .gold-divider::before,
-.program-section .gold-divider::after {
-  background: linear-gradient(90deg, transparent, rgba(196,159,100,.32), transparent) !important;
-}
-
-.program-section .home-program-showcase-grid .base44-program-card.compact-program-card,
-.program-section .base44-program-card.compact-program-card {
+/* Program cards inside only this section */
+.program-section .base44-program-card,
+.program-section .program-showcase-card,
+.programs-page .program-overview-section .base44-program-card,
+.programs-page .program-overview-section .program-showcase-card {
   background: rgba(255,255,255,.025) !important;
   border: 1px solid rgba(255,255,255,.09) !important;
   border-top: 1px solid rgba(196,159,100,.65) !important;
+  color: #ffffff !important;
   box-shadow: none !important;
+}
+
+/* Card title */
+.program-section .base44-program-card h3,
+.program-section .program-showcase-card h3,
+.programs-page .program-overview-section .base44-program-card h3,
+.programs-page .program-overview-section .program-showcase-card h3 {
   color: #ffffff !important;
 }
 
-.program-section .home-program-showcase-grid .base44-program-card.compact-program-card h3,
-.program-section .base44-program-card.compact-program-card h3 {
-  color: #ffffff !important;
-}
-
-.program-section .home-program-showcase-grid .base44-program-card.compact-program-card p,
-.program-section .home-program-showcase-grid .base44-program-card.compact-program-card .program-card-info small,
-.program-section .base44-program-card.compact-program-card p,
-.program-section .base44-program-card.compact-program-card .program-card-info small {
+/* Card body text */
+.program-section .base44-program-card p,
+.program-section .base44-program-card small,
+.program-section .program-showcase-card p,
+.program-section .program-showcase-card small,
+.programs-page .program-overview-section .base44-program-card p,
+.programs-page .program-overview-section .base44-program-card small,
+.programs-page .program-overview-section .program-showcase-card p,
+.programs-page .program-overview-section .program-showcase-card small {
   color: rgba(145,166,199,.82) !important;
 }
 
-/* End Phase 6B Dark homepage program section */
+/* Icons and small labels inside only the program cards */
+.program-section .base44-program-card svg,
+.program-section .program-showcase-card svg,
+.programs-page .program-overview-section .base44-program-card svg,
+.programs-page .program-overview-section .program-showcase-card svg {
+  color: var(--gold) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.program-section .base44-program-card > span,
+.program-section .program-showcase-card > span,
+.programs-page .program-overview-section .base44-program-card > span,
+.programs-page .program-overview-section .program-showcase-card > span {
+  color: var(--gold) !important;
+  background: rgba(255,255,255,.035) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+}
+
+/* End Phase 6E Scoped program cards section */
