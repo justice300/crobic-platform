@@ -7072,3 +7072,50 @@ li {
 }
 
 /* End Phase 6 Global typography system */
+
+
+/* Phase 6B Dark homepage program section */
+
+.program-section {
+  background: var(--black) !important;
+  color: #ffffff !important;
+  border-top: 1px solid rgba(255,255,255,.06) !important;
+  border-bottom: 1px solid rgba(255,255,255,.06) !important;
+  margin-bottom: 0 !important;
+}
+
+.program-section .section-intro h2 {
+  color: #ffffff !important;
+}
+
+.program-section .section-intro p {
+  color: rgba(145,166,199,.82) !important;
+}
+
+.program-section .gold-divider::before,
+.program-section .gold-divider::after {
+  background: linear-gradient(90deg, transparent, rgba(196,159,100,.32), transparent) !important;
+}
+
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card,
+.program-section .base44-program-card.compact-program-card {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  border-top: 1px solid rgba(196,159,100,.65) !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card h3,
+.program-section .base44-program-card.compact-program-card h3 {
+  color: #ffffff !important;
+}
+
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card p,
+.program-section .home-program-showcase-grid .base44-program-card.compact-program-card .program-card-info small,
+.program-section .base44-program-card.compact-program-card p,
+.program-section .base44-program-card.compact-program-card .program-card-info small {
+  color: rgba(145,166,199,.82) !important;
+}
+
+/* End Phase 6B Dark homepage program section */
