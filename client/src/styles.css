@@ -7405,3 +7405,157 @@ small {
 }
 
 /* End CIBI FINAL PUBLIC STYLE SYSTEM */
+
+/* Frame 5 to 6 Admission Programme Fees Base44 Match */
+
+/*
+  Scope: Admission page Programme Fees section only.
+  Frame 5 reference = compact Base44 fee cards:
+  - dark background
+  - centered compact fee panel
+  - three-card behavior when multiple courses exist
+  - no converter inside fee cards
+  - calm gold labels, white prices, blue duration text
+*/
+.admission-page .admission-section:has(.fee-grid) {
+  background: var(--black) !important;
+  color: #ffffff !important;
+  padding-top: 108px !important;
+  padding-bottom: 128px !important;
+  border-top: 1px solid rgba(255,255,255,.055) !important;
+  border-bottom: 1px solid rgba(255,255,255,.055) !important;
+}
+
+.admission-page .admission-section:has(.fee-grid) .section-intro {
+  max-width: 720px !important;
+  margin: 0 auto 70px !important;
+  text-align: center !important;
+}
+
+.admission-page .admission-section:has(.fee-grid) .section-intro h2 {
+  color: #ffffff !important;
+  font-size: clamp(42px, 4.8vw, 60px) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 600 !important;
+}
+
+.admission-page .admission-section:has(.fee-grid) .section-intro p {
+  max-width: 620px !important;
+  margin: 0 auto !important;
+  color: rgba(145,166,199,.82) !important;
+  font-size: 17px !important;
+  line-height: 1.75 !important;
+}
+
+.admission-page .fee-grid {
+  width: min(820px, calc(100% - 40px)) !important;
+  max-width: 820px !important;
+  margin: 0 auto !important;
+  padding: 34px 34px 38px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  align-items: stretch !important;
+  gap: 18px !important;
+  background: rgba(255,255,255,.018) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+}
+
+.admission-page .fee-card {
+  flex: 0 1 255px !important;
+  min-height: 145px !important;
+  padding: 27px 24px 25px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  background: rgba(255,255,255,.018) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+.admission-page .fee-card span {
+  display: block !important;
+  margin: 0 0 14px !important;
+  color: var(--gold) !important;
+  font-family: var(--font-body) !important;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+  font-weight: 900 !important;
+  letter-spacing: .18em !important;
+  text-transform: uppercase !important;
+}
+
+.admission-page .fee-card h3 {
+  display: none !important;
+}
+
+.admission-page .fee-card strong {
+  display: block !important;
+  margin: 0 0 7px !important;
+  color: #ffffff !important;
+  font-family: var(--font-display) !important;
+  font-size: 28px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.admission-page .fee-card p {
+  margin: 0 !important;
+  color: rgba(145,166,199,.82) !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+/* Frame 5 does not show a converter inside the fee cards */
+.admission-page .fee-card .currency-converter-box,
+.admission-page .fee-card .currency-converter-input-mode,
+.admission-page .fee-card .currency-amount-field {
+  display: none !important;
+}
+
+/* Base44-like note under fee cards */
+.admission-page .fee-grid::after {
+  content: "For Workers and Leadership Training Program fees, contact the admissions office.\A 0812 130 0287";
+  flex: 0 0 100% !important;
+  display: block !important;
+  margin-top: 10px !important;
+  padding-top: 8px !important;
+  color: rgba(145,166,199,.82) !important;
+  font-size: 13px !important;
+  line-height: 2.15 !important;
+  text-align: center !important;
+  white-space: pre-line !important;
+}
+
+.admission-page .fee-grid::after::first-line {
+  color: rgba(145,166,199,.82) !important;
+}
+
+@media (max-width: 760px) {
+  .admission-page .admission-section:has(.fee-grid) {
+    padding-top: 84px !important;
+    padding-bottom: 96px !important;
+  }
+
+  .admission-page .fee-grid {
+    width: min(100% - 32px, 820px) !important;
+    padding: 22px !important;
+  }
+
+  .admission-page .fee-card {
+    flex-basis: 100% !important;
+    min-height: 135px !important;
+  }
+
+  .admission-page .admission-section:has(.fee-grid) .section-intro h2 {
+    font-size: 36px !important;
+  }
+}
+
+/* End Frame 5 to 6 Admission Programme Fees Base44 Match */
