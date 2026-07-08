@@ -7125,3 +7125,163 @@ button:disabled {
 }
 
 /* End Phase 4C CIBI contrast correction */
+
+
+
+
+
+/* Phase 4D CIBI typography and timeline refinement */
+
+/* Reduce giant public-page headings to a more premium editorial scale */
+main .section-intro h2,
+.base44-about-page .section-intro h2,
+.programs-page .section-intro h2,
+.admission-page .section-intro h2 {
+  font-size: clamp(36px, 4.4vw, 58px) !important;
+  line-height: 1.06 !important;
+  letter-spacing: -0.035em !important;
+}
+
+main .page-hero-content h1,
+.base44-about-page .page-hero-content h1,
+.programs-page .page-hero-content h1,
+.admission-page .page-hero-content h1 {
+  font-size: clamp(42px, 5.2vw, 72px) !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.035em !important;
+}
+
+.base44-about-page h3,
+.programs-page h3,
+.admission-page h3 {
+  font-size: clamp(22px, 2.1vw, 30px) !important;
+  line-height: 1.15 !important;
+}
+
+/* Give About page sections more breathing space */
+.base44-about-page .about-church-section,
+.base44-about-page .about-beliefs-section,
+.base44-about-page .about-milestones-section {
+  padding-top: 95px !important;
+  padding-bottom: 95px !important;
+}
+
+.base44-about-page .section-intro {
+  margin-bottom: 54px !important;
+}
+
+/* About stat cards: keep dark premium style but improve readability */
+.base44-about-page .about-stat-card {
+  min-height: 210px !important;
+  padding: 34px 26px !important;
+}
+
+.base44-about-page .about-stat-card h3 {
+  font-size: clamp(18px, 1.6vw, 24px) !important;
+  line-height: 1.12 !important;
+  margin-top: 22px !important;
+  color: #ffffff !important;
+}
+
+.base44-about-page .about-stat-card p {
+  font-size: 14px !important;
+  line-height: 1.65 !important;
+}
+
+/* Mission/Vision: smaller, cleaner, not oversized */
+.base44-about-page .about-mission-vision > div {
+  padding: 48px !important;
+}
+
+.base44-about-page .about-mission-vision h3 {
+  font-size: clamp(28px, 3vw, 42px) !important;
+}
+
+.base44-about-page .about-mission-vision p {
+  font-size: 16px !important;
+  line-height: 1.75 !important;
+}
+
+/* Belief cards: readable heading, not giant */
+.base44-about-page .about-belief-card {
+  padding: 42px 36px !important;
+}
+
+.base44-about-page .about-belief-card h3 {
+  font-size: clamp(24px, 2.5vw, 34px) !important;
+  color: #ffffff !important;
+}
+
+.base44-about-page .about-belief-card p {
+  font-size: 15px !important;
+  line-height: 1.75 !important;
+}
+
+/* Milestones: remove the heavy boxes and let the section breathe */
+.base44-about-page .about-timeline {
+  max-width: 760px !important;
+  margin: 0 auto !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.base44-about-page .about-timeline-item {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+  padding: 28px 0 28px 78px !important;
+  min-height: auto !important;
+  position: relative !important;
+}
+
+.base44-about-page .about-timeline-item:last-child {
+  border-bottom: 0 !important;
+}
+
+.base44-about-page .about-timeline-item i {
+  position: absolute !important;
+  left: 0 !important;
+  top: 26px !important;
+}
+
+.base44-about-page .about-timeline-item strong {
+  color: #ffffff !important;
+  font-size: clamp(20px, 2vw, 28px) !important;
+  line-height: 1.15 !important;
+}
+
+.base44-about-page .about-timeline-item p {
+  margin-top: 8px !important;
+  font-size: 15px !important;
+  line-height: 1.65 !important;
+  color: rgba(210,222,242,.72) !important;
+}
+
+/* Programs page: reduce title scale too */
+.programs-page .program-core-note h3,
+.programs-page .program-currency-panel strong,
+.programs-page .program-accordion-item strong {
+  font-size: clamp(20px, 2vw, 28px) !important;
+  line-height: 1.2 !important;
+}
+
+/* Mobile */
+@media (max-width: 720px) {
+  main .section-intro h2,
+  main .page-hero-content h1 {
+    font-size: 38px !important;
+  }
+
+  .base44-about-page .about-mission-vision > div,
+  .base44-about-page .about-belief-card {
+    padding: 30px 24px !important;
+  }
+
+  .base44-about-page .about-timeline-item {
+    padding-left: 58px !important;
+  }
+}
+
+/* End Phase 4D CIBI typography and timeline refinement */
