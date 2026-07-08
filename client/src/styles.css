@@ -7533,10 +7533,6 @@ small {
   white-space: pre-line !important;
 }
 
-.admission-page .fee-grid::after::first-line {
-  color: rgba(145,166,199,.82) !important;
-}
-
 @media (max-width: 760px) {
   .admission-page .admission-section:has(.fee-grid) {
     padding-top: 84px !important;
