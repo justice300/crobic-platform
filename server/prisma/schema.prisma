@@ -168,6 +168,9 @@ model Enrollment {
   paystackReference String?
   manualReference   String?
   paymentProofUrl   String?
+  learningStream    String?
+  applicationJson   String?
+  applicationSubmittedAt DateTime?
   approvedAt        DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt

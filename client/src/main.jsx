@@ -413,7 +413,7 @@ function App() {
       {page === "about" && <About goTo={goTo} settings={data.settings} />}
       {page === "programs" && <Programs courses={data.courses} openAuth={openAuth} user={user} goTo={goTo} settings={data.settings} />}
       {page === "library" && <BookLibrary books={data.books} settings={data.settings} />}
-      {page === "admissions" && <Admissions courses={data.courses} settings={data.settings} user={user} openAuth={openAuth} goTo={goTo} />}
+      {page === "admissions" && <Admissions courses={data.courses} settings={data.settings} user={user} openAuth={openAuth} goTo={goTo} setUser={setUser} />}
       {page === "gallery" && <Gallery gallery={data.gallery} settings={data.settings} />}
       {page === "contact" && <Contact settings={data.settings} />}
       {page === "payment-callback" && <PaymentCallback user={user} goTo={goTo} />}
@@ -445,6 +445,8 @@ function App() {
           close={() => setAuthOpen(false)}
           setUser={setUser}
           goTo={goTo}
+          courses={data.courses}
+          settings={data.settings}
         />
       )}
     </>
@@ -1228,7 +1230,7 @@ function BookLibrary({ books, settings = {} }) {
   );
 }
 
-function Admissions({ courses, settings, user, openAuth, goTo }) {
+function Admissions({ courses, settings, user, openAuth, goTo, setUser }) {
   const eligibility = settingPipeList(settings, "admission_roles", [
     ["Pastors", "G.O. and resident pastors"],
     ["Evangelists", "Field and outreach ministers"],
@@ -1257,12 +1259,12 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
   ]);
 
   const applicationSteps = settingPipeList(settings, "admission_application_steps", [
-    ["Create Account", "Begin your student application with your basic information."],
-    ["Choose Programme", "Select Certificate, Diploma, Degree or Executive learning stream."],
+    ["Complete Application Form", "Fill the admission form with your personal, academic and ministry information."],
+    ["Choose Programme and Stream", "Select the exact programme and learning stream you want to enroll for."],
+    ["Create Student Account", "Your account is created from the admission form details."],
     ["Complete Payment", "Pay through Paystack or submit bank transfer details for review."],
-    ["Payment Review", "The admissions team confirms payment and application details."],
-    ["Admin Approval", "Approved students receive active portal access."],
-    ["Begin Studies", "Access courses, lessons, live classes and student announcements."]
+    ["Admin Approval", "Approved students receive portal access for their selected programme only."],
+    ["Begin Studies", "Access courses, lessons, live classes and student announcements attached to that programme."]
   ]).map((item, index) => ({ step: String(index + 1).padStart(2, "0"), title: item.title, desc: item.sub }));
 
   const calendar = settingPipeList(settings, "admission_calendar", [
@@ -1279,7 +1281,7 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
       <PageHero
         eyebrow={getSetting(settings, "admission_hero_eyebrow", "Admission and Enrollment")}
         title={getSetting(settings, "admission_hero_title", "Admission is Now Open")}
-        text={getSetting(settings, "admission_hero_text", "Apply for CIBI programmes, complete registration payment, and receive portal access after payment confirmation and admin approval.")}
+        text={getSetting(settings, "admission_hero_text", "Apply for CIBI programmes, choose your learning stream, complete registration payment, and receive portal access after payment confirmation and admin approval.")}
         image={getSetting(settings, "admission_hero_image_url", CIBI_IMAGES.classroom)}
       />
 
@@ -1306,40 +1308,42 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
       </section>
 
       <section className="admission-section container" id="apply">
-        <SectionIntro eyebrow={getSetting(settings, "admission_apply_eyebrow", "Apply Online")} title={getSetting(settings, "admission_apply_title", "Enroll Online Now")} text={getSetting(settings, "admission_apply_text", "Start your application, choose your programme and complete your registration payment.")} />
-        <div className="admission-apply-card">
-          <div className="apply-copy">
-            <Kicker text="Application Access" />
-            <h2>{user?.role === "STUDENT" ? getSetting(settings, "admission_student_payment_title", "Complete Your Payment") : getSetting(settings, "admission_start_title", "Create Your Student Account")}</h2>
-            <p>
-              {getSetting(settings, "admission_start_text", "Students do not get automatic access after registration. Portal access opens only after payment confirmation and admin approval.")}
-            </p>
-            <ul>
-              <li><CheckCircle size={16} /> Register with correct details</li>
-              <li><CheckCircle size={16} /> Select your programme</li>
-              <li><CheckCircle size={16} /> Pay through Paystack or bank transfer</li>
-              <li><CheckCircle size={16} /> Wait for admin approval</li>
-            </ul>
-          </div>
+        <SectionIntro eyebrow={getSetting(settings, "admission_apply_eyebrow", "Apply Online")} title={getSetting(settings, "admission_apply_title", "Enroll Online Now")} text={getSetting(settings, "admission_apply_text", "Complete the application form, select your programme and learning stream, then continue to payment.")} />
 
-          <div className="apply-action-panel">
-            {user?.role === "STUDENT" ? (
+        {user?.role === "STUDENT" ? (
+          <div className="admission-apply-card admission-payment-card">
+            <div className="apply-copy">
+              <Kicker text="Application Submitted" />
+              <h2>{getSetting(settings, "admission_student_payment_title", "Complete Your Payment")}</h2>
+              <p>
+                Your application is attached to the programme you selected during registration. Portal access opens only after payment confirmation and admin approval.
+              </p>
+              <ul>
+                <li><CheckCircle size={16} /> Your programme selection controls your course access</li>
+                <li><CheckCircle size={16} /> Your learning stream is saved for admissions review</li>
+                <li><CheckCircle size={16} /> Your certificate will carry the completed programme name</li>
+                <li><CheckCircle size={16} /> Admin approval is required before portal access</li>
+              </ul>
+            </div>
+
+            <div className="apply-action-panel">
               <PaymentPanel courses={courses} settings={settings} />
-            ) : (
-              <div className="start-application-box">
-                <h3>{getSetting(settings, "admission_start_box_title", "Start Application")}</h3>
-                <p>{getSetting(settings, "admission_start_box_text", "Create your student account first. After registration, you will be directed to complete payment.")}</p>
-                <button className="gold-btn full" onClick={() => openAuth("register")}>Start Application</button>
-                <button className="dark-btn full" onClick={() => openAuth("login")}>Already Registered? Login</button>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
+        ) : isStaffUser(user) ? (
+          <div className="quiet-banner">
+            <strong>Staff account detected.</strong>
+            <p>Student applications should be submitted with a student account. Use the admin dashboard to manage admissions.</p>
+            <button className="gold-btn" type="button" onClick={() => goTo("admin")}>Open Admin Dashboard</button>
+          </div>
+        ) : (
+          <AdmissionApplicationForm courses={courses} settings={settings} setUser={setUser} goTo={goTo} openAuth={openAuth} />
+        )}
       </section>
 
       <section className="admission-band">
         <div className="container">
-          <SectionIntro eyebrow={getSetting(settings, "admission_process_eyebrow", "How It Works")} title={getSetting(settings, "admission_process_title", "Application Process")} text={getSetting(settings, "admission_process_text", "A clear admission path from registration to active student portal access.")} />
+          <SectionIntro eyebrow={getSetting(settings, "admission_process_eyebrow", "How It Works")} title={getSetting(settings, "admission_process_title", "Application Process")} text={getSetting(settings, "admission_process_text", "A clear admission path from application form to active student portal access.")} />
           <div className="application-process-grid">
             {applicationSteps.map((item) => (
               <div className="process-card card-hover" key={item.step}>
@@ -1391,6 +1395,205 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
     </main>
   );
 }
+
+function AdmissionApplicationForm({ courses = [], settings = {}, setUser, goTo, openAuth }) {
+  const availableCourses = courses.filter((course) => course?.published !== false);
+  const learningStreams = settingPoints(settings, "admission_learning_streams", ["Regular Classes", "Executive Classes"]);
+  const firstCourseId = availableCourses[0]?.id || "";
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    country: "Nigeria",
+    password: "",
+    courseId: firstCourseId,
+    learningStream: learningStreams[0] || "Regular Classes",
+    ministryRole: "",
+    yearsInMinistry: "",
+    currentChurch: "",
+    educationalBackground: "",
+    previousMinistryExperience: "",
+    howDidYouHear: "",
+    personalStatement: "",
+    additionalQuestions: ""
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const selectedCourse = availableCourses.find((course) => course.id === Number(form.courseId));
+
+  useEffect(() => {
+    if (!form.courseId && firstCourseId) {
+      setForm((current) => ({ ...current, courseId: firstCourseId }));
+    }
+  }, [firstCourseId]);
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.courseId) {
+      showToast("Please select the programme you are applying for.", "error");
+      return;
+    }
+    if (!form.learningStream) {
+      showToast("Please select your learning stream.", "error");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const result = await api("/auth/register", {
+        method: "POST",
+        body: {
+          ...form,
+          courseId: Number(form.courseId),
+          applicationSource: "ADMISSION_PAGE"
+        }
+      });
+      setToken(null);
+      setUser(result.user);
+      showToast(result.message || "Application submitted. Continue to payment.", "success");
+      goTo("admissions");
+    } catch (error) {
+      showToast(error.message || "Application submission failed", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!availableCourses.length) {
+    return (
+      <div className="quiet-banner admission-no-programme">
+        <strong>No active programme has been added yet.</strong>
+        <p>Admin must add and publish at least one programme before students can submit the admission form.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admission-apply-card admission-form-card">
+      <div className="apply-copy">
+        <Kicker text="Application Form" />
+        <h2>{getSetting(settings, "admission_form_title", "CIBI Student Application Form")}</h2>
+        <p>{getSetting(settings, "admission_form_text", "Fill the form carefully. Your selected programme determines the courses you can access after approval, and the same programme name appears on your certificate after completion.")}</p>
+        <ul>
+          <li><CheckCircle size={16} /> Select one programme before registration</li>
+          <li><CheckCircle size={16} /> Choose Regular or Executive learning stream</li>
+          <li><CheckCircle size={16} /> Courses are released based on the selected programme</li>
+          <li><CheckCircle size={16} /> Certificate carries the completed programme name</li>
+        </ul>
+        {selectedCourse ? (
+          <div className="selected-programme-note">
+            <span>Selected Programme</span>
+            <strong>{selectedCourse.title}</strong>
+            <p>{selectedCourse.duration || "Programme duration"} · {usdFee(selectedCourse) > 0 ? formatUsd(usdFee(selectedCourse)) : "Contact admissions"}</p>
+          </div>
+        ) : null}
+      </div>
+
+      <form className="admin-form admission-full-application-form" onSubmit={submit}>
+        <h3>Personal Information</h3>
+        <div className="two-columns">
+          <label className="content-field">
+            <span>Full name</span>
+            <input placeholder="Enter your full name" value={form.name} onChange={(e) => updateField("name", e.target.value)} required />
+          </label>
+          <label className="content-field">
+            <span>Email address</span>
+            <input type="email" placeholder="you@example.com" value={form.email} onChange={(e) => updateField("email", e.target.value)} required />
+          </label>
+        </div>
+
+        <div className="two-columns">
+          <label className="content-field">
+            <span>Phone number</span>
+            <input placeholder="Phone / WhatsApp number" value={form.phone} onChange={(e) => updateField("phone", e.target.value)} required />
+          </label>
+          <label className="content-field">
+            <span>Country</span>
+            <input placeholder="Country" value={form.country} onChange={(e) => updateField("country", e.target.value)} required />
+          </label>
+        </div>
+
+        <label className="content-field">
+          <span>Create password</span>
+          <input type="password" placeholder="Create a secure password" value={form.password} onChange={(e) => updateField("password", e.target.value)} required minLength={6} />
+        </label>
+
+        <h3>Programme Selection</h3>
+        <div className="two-columns">
+          <label className="content-field">
+            <span>Programme applying for</span>
+            <select value={form.courseId} onChange={(e) => updateField("courseId", e.target.value)} required>
+              {availableCourses.map((course) => (
+                <option value={course.id} key={course.id}>{course.title} — {course.level || "Programme"}</option>
+              ))}
+            </select>
+          </label>
+          <label className="content-field">
+            <span>Learning stream</span>
+            <select value={form.learningStream} onChange={(e) => updateField("learningStream", e.target.value)} required>
+              {learningStreams.map((stream) => <option key={stream} value={stream}>{stream}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <h3>Ministry and Academic Details</h3>
+        <div className="two-columns">
+          <label className="content-field">
+            <span>Current ministry role</span>
+            <input placeholder="Pastor, worker, evangelist, teacher..." value={form.ministryRole} onChange={(e) => updateField("ministryRole", e.target.value)} />
+          </label>
+          <label className="content-field">
+            <span>Years in ministry / church service</span>
+            <input placeholder="e.g 3 years" value={form.yearsInMinistry} onChange={(e) => updateField("yearsInMinistry", e.target.value)} />
+          </label>
+        </div>
+
+        <label className="content-field">
+          <span>Current church / ministry</span>
+          <input placeholder="Name of church or ministry" value={form.currentChurch} onChange={(e) => updateField("currentChurch", e.target.value)} />
+        </label>
+
+        <label className="content-field">
+          <span>Educational background</span>
+          <textarea placeholder="Briefly tell us about your education or previous Bible/ministry training" value={form.educationalBackground} onChange={(e) => updateField("educationalBackground", e.target.value)} />
+        </label>
+
+        <label className="content-field">
+          <span>Previous ministry experience</span>
+          <textarea placeholder="Tell us about your ministry, church service or leadership experience" value={form.previousMinistryExperience} onChange={(e) => updateField("previousMinistryExperience", e.target.value)} />
+        </label>
+
+        <label className="content-field">
+          <span>Personal statement</span>
+          <textarea placeholder="Why do you want to study at CIBI?" value={form.personalStatement} onChange={(e) => updateField("personalStatement", e.target.value)} required />
+        </label>
+
+        <div className="two-columns">
+          <label className="content-field">
+            <span>How did you hear about CIBI?</span>
+            <input placeholder="Church, friend, social media, advert..." value={form.howDidYouHear} onChange={(e) => updateField("howDidYouHear", e.target.value)} />
+          </label>
+          <label className="content-field">
+            <span>Additional questions</span>
+            <input placeholder="Anything you want admissions to know?" value={form.additionalQuestions} onChange={(e) => updateField("additionalQuestions", e.target.value)} />
+          </label>
+        </div>
+
+        <div className="application-form-note">
+          <ShieldCheck size={18} />
+          <p>After submission, you will continue to payment. Portal access opens only after CIBI confirms payment and approves admission.</p>
+        </div>
+
+        <button className="gold-btn full" type="submit" disabled={submitting}>{submitting ? "Submitting Application..." : "Submit Application and Continue to Payment"}</button>
+        <button className="dark-btn full" type="button" onClick={() => openAuth("login")}>Already Applied? Login</button>
+      </form>
+    </div>
+  );
+}
+
 
 function RequirementBox({ title, items }) {
   return (
@@ -3132,14 +3335,37 @@ function StudentQuizCard({ quiz, reloadCourse }) {
 
 function PaymentPanel({ courses, settings }) {
   const [courseId, setCourseId] = useState(courses[0]?.id || "");
+  const [applicationEnrollment, setApplicationEnrollment] = useState(null);
   const [manualReference, setManualReference] = useState("");
   const [paymentProofUrl, setPaymentProofUrl] = useState("");
   const [receiptName, setReceiptName] = useState("");
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const selectedCourse = courses.find((course) => course.id === Number(courseId));
+  const selectedCourse = courses.find((course) => course.id === Number(courseId)) || applicationEnrollment?.course;
+  const lockedToApplication = Boolean(applicationEnrollment?.courseId);
+
+  async function loadApplicationEnrollment() {
+    try {
+      const result = await api("/student/payment-status");
+      const enrollment = (result.enrollments || [])[0] || null;
+      if (enrollment?.courseId) {
+        setApplicationEnrollment(enrollment);
+        setCourseId(enrollment.courseId);
+      }
+    } catch {
+      // Payment status is only available for logged-in students.
+    }
+  }
+
+  useEffect(() => {
+    loadApplicationEnrollment();
+  }, []);
 
   async function payWithPaystack() {
+    if (!courseId) {
+      showToast("Please submit the admission form and select a programme first.", "error");
+      return;
+    }
     try {
       const result = await api("/payments/paystack/initialize", { method: "POST", body: { courseId } });
       window.location.href = result.authorizationUrl;
@@ -3190,6 +3416,10 @@ function PaymentPanel({ courses, settings }) {
 
   async function submitManual(e) {
     e.preventDefault();
+    if (!courseId) {
+      showToast("Please submit the admission form and select a programme first.", "error");
+      return;
+    }
     if (!paymentProofUrl) {
       showToast("Please upload your payment receipt before submitting bank transfer.", "error");
       return;
@@ -3198,22 +3428,42 @@ function PaymentPanel({ courses, settings }) {
       const result = await api("/payments/manual", { method: "POST", body: { courseId, manualReference, paymentProofUrl } });
       setMessage(result.message);
       showToast(result.message, "success");
+      await loadApplicationEnrollment();
     } catch (error) {
       showToast(error.message, "error");
     }
+  }
+
+  if (!selectedCourse) {
+    return (
+      <div className="payment-box premium-payment-box">
+        <div className="quiet-banner">
+          <strong>No programme selected.</strong>
+          <p>Please submit the admission form first so your payment can be attached to the right programme and learning stream.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="payment-box premium-payment-box">
       <div className="payment-box-heading">
         <span>Secure Payment</span>
-        <h3>Select Programme and Complete Payment</h3>
-        <p>Pay instantly with Paystack or submit a bank transfer receipt for admin verification.</p>
+        <h3>Complete Payment for Your Selected Programme</h3>
+        <p>Payment is locked to the programme selected in your application. Pay instantly with Paystack or submit a bank transfer receipt for admin verification.</p>
       </div>
 
-      <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-        {courses.map((course) => <option value={course.id} key={course.id}>{course.title} — {formatUsd(usdFee(course))}</option>)}
-      </select>
+      {lockedToApplication ? (
+        <div className="selected-payment-programme">
+          <span>Application Programme</span>
+          <strong>{selectedCourse.title}</strong>
+          {applicationEnrollment?.learningStream ? <small>Learning Stream: {applicationEnrollment.learningStream}</small> : null}
+        </div>
+      ) : (
+        <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+          {courses.map((course) => <option value={course.id} key={course.id}>{course.title} — {formatUsd(usdFee(course))}</option>)}
+        </select>
+      )}
 
       {selectedCourse && <div className="payment-fee-line"><strong>Fee:</strong> {formatUsd(usdFee(selectedCourse))}<CurrencyConverter amountUsd={usdFee(selectedCourse)} settings={settings} /></div>}
 
@@ -3244,6 +3494,7 @@ function PaymentPanel({ courses, settings }) {
     </div>
   );
 }
+
 
 function PaymentCallback({ goTo }) {
   const [message, setMessage] = useState("Verifying payment...");
@@ -4089,6 +4340,30 @@ function statusBadgeClass(value) {
   return "status-badge";
 }
 
+function parseApplicationDetails(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function applicationDetailRows(details = {}) {
+  return [
+    ["Learning Stream", details.learningStream],
+    ["Ministry Role", details.ministryRole],
+    ["Years in Ministry", details.yearsInMinistry],
+    ["Current Church / Ministry", details.currentChurch],
+    ["Educational Background", details.educationalBackground],
+    ["Previous Ministry Experience", details.previousMinistryExperience],
+    ["How They Heard", details.howDidYouHear],
+    ["Personal Statement", details.personalStatement],
+    ["Additional Questions", details.additionalQuestions]
+  ].filter(([, value]) => value !== undefined && value !== null && String(value).trim());
+}
+
 function StudentsAdmin() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4242,6 +4517,11 @@ function StudentsAdmin() {
                 const canReject = !rejected && !graduated;
                 const canSuspend = !suspended && !graduated;
                 const canGraduate = approved && paymentConfirmed && !graduated;
+                const applicationDetails = parseApplicationDetails(enrollment.applicationJson);
+                const applicationRows = applicationDetailRows({
+                  ...applicationDetails,
+                  learningStream: enrollment.learningStream || applicationDetails.learningStream
+                });
 
                 return (
                   <div className="enrollment-box enrollment-box-polished" key={enrollment.id}>
@@ -4251,10 +4531,28 @@ function StudentsAdmin() {
                         <strong>{enrollment.course?.title || "Course not found"}</strong>
                       </div>
                       <div>
+                        <span>Learning Stream</span>
+                        <strong>{enrollment.learningStream || applicationDetails.learningStream || "Not selected"}</strong>
+                      </div>
+                      <div>
                         <span>Amount</span>
                         <strong>₦{Number(enrollment.amount || 0).toLocaleString()}</strong>
                       </div>
                     </div>
+
+                    {applicationRows.length ? (
+                      <details className="application-details-box">
+                        <summary>View Application Form Details</summary>
+                        <div className="application-details-grid">
+                          {applicationRows.map(([label, value]) => (
+                            <div key={label}>
+                              <span>{label}</span>
+                              <p>{value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
 
                     <div className="enrollment-status-grid">
                       <div><small>Payment</small><span className={statusBadgeClass(enrollment.paymentStatus)}>{formatAdminStatusLabel(enrollment.paymentStatus)}</span></div>
@@ -4861,6 +5159,7 @@ function readFileAsDataUrl(file) {
 
 function CertificateSheet({ certificate, enrollment, settings = {} }) {
   const course = certificate?.course || enrollment?.course || {};
+  const programmeTitle = certificate?.programmeTitle || enrollment?.programmeTitle || course.title || "CIBI Programme";
   const studentName = certificate?.user?.name || enrollment?.user?.name || "Student";
   const certSettings = normalizeCertificateSettings(settings);
   const certificateNumber = certificate?.certificateNumber || "";
@@ -4875,8 +5174,8 @@ function CertificateSheet({ certificate, enrollment, settings = {} }) {
         <h2>Certificate of Completion</h2>
         <p>This certifies that</p>
         <h3>{studentName}</h3>
-        <p>has successfully completed the required course of study in</p>
-        <h4>{course.title || "CIBI Programme"}</h4>
+        <p>has successfully completed the required programme of study in</p>
+        <h4>{programmeTitle}</h4>
         <div className="certificate-sheet-meta">
           <div><small>Certificate No.</small><strong>{certificateNumber || "Pending"}</strong></div>
           <div><small>Date Issued</small><strong>{formatCertificateDate(certificate?.issuedAt)}</strong></div>
@@ -6492,10 +6791,26 @@ function findCountry(value) {
   );
 }
 
-function AuthModal({ mode, setMode, close, setUser, goTo }) {
-  const [form, setForm] = useState({ name: "", email: "", phone: "", country: "Nigeria", password: "" });
+function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], settings = {} }) {
+  const availableCourses = courses.filter((course) => course?.published !== false);
+  const learningStreams = settingPoints(settings, "admission_learning_streams", ["Regular Classes", "Executive Classes"]);
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    country: "Nigeria",
+    password: "",
+    courseId: availableCourses[0]?.id || "",
+    learningStream: learningStreams[0] || "Regular Classes"
+  });
   const selectedCountry = findCountry(form.country);
   const isRegister = mode === "register";
+
+  useEffect(() => {
+    if (isRegister && !form.courseId && availableCourses[0]?.id) {
+      setForm((current) => ({ ...current, courseId: availableCourses[0].id }));
+    }
+  }, [isRegister, availableCourses[0]?.id]);
 
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -6505,11 +6820,22 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
     e.preventDefault();
     try {
       const endpoint = isRegister ? "/auth/register" : "/auth/login";
+      if (isRegister && !form.courseId) {
+        showToast("Please select your programme before creating your student account.", "error");
+        return;
+      }
+      if (isRegister && !form.learningStream) {
+        showToast("Please select your learning stream before creating your student account.", "error");
+        return;
+      }
+
       const payload = isRegister
         ? {
             ...form,
+            courseId: Number(form.courseId),
             country: selectedCountry?.name || form.country,
-            phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : ""
+            phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",
+            applicationSource: "QUICK_REGISTER"
           }
         : { email: form.email, password: form.password };
       const result = await api(endpoint, { method: "POST", body: payload });
@@ -6534,13 +6860,13 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
             <h2>{isRegister ? "Begin Your CIBI Journey" : "Welcome Back"}</h2>
             <p>
               {isRegister
-                ? "Create your student application. Portal access opens after payment confirmation and admin approval."
+                ? "Create your student application. Programme and learning stream are required before payment and admin approval."
                 : "Login securely to continue to your student or admin portal."}
             </p>
             <div className="auth-mini-points">
               <span><CheckCircle size={14} /> Secure portal access</span>
-              <span><CheckCircle size={14} /> Structured Bible learning</span>
-              <span><CheckCircle size={14} /> Live and recorded classes</span>
+              <span><CheckCircle size={14} /> Programme-based course access</span>
+              <span><CheckCircle size={14} /> Certificate carries your completed programme</span>
             </div>
           </aside>
 
@@ -6553,7 +6879,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
             <div className="auth-heading-block">
               <span>{isRegister ? "Student Application" : "Portal Login"}</span>
               <h2>{isRegister ? "Create Application" : "Login"}</h2>
-              <p>{isRegister ? "Use your correct details. You will choose your programme and complete payment after registration." : "Enter your email and password to continue."}</p>
+              <p>{isRegister ? "Use your correct details and choose your programme before payment." : "Enter your email and password to continue."}</p>
             </div>
 
             <form onSubmit={submit} className="auth-form premium-auth-form">
@@ -6594,6 +6920,30 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
                       </div>
                     </label>
                   </div>
+
+                  <label className="auth-field">
+                    <span>Programme</span>
+                    <select value={form.courseId} onChange={(e) => updateField("courseId", e.target.value)} required>
+                      <option value="">Select programme</option>
+                      {availableCourses.map((course) => (
+                        <option key={course.id} value={course.id}>{course.title}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="auth-field">
+                    <span>Learning stream</span>
+                    <select value={form.learningStream} onChange={(e) => updateField("learningStream", e.target.value)} required>
+                      {learningStreams.map((stream) => <option key={stream} value={stream}>{stream}</option>)}
+                    </select>
+                  </label>
+
+                  {!availableCourses.length && (
+                    <div className="quiet-banner small-quiet">
+                      <strong>No active programme yet.</strong>
+                      <p>Admin must publish a programme before student registration can continue.</p>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -6607,7 +6957,8 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
                 <input type="password" placeholder="Enter password" value={form.password} onChange={(e) => updateField("password", e.target.value)} required minLength={6} />
               </label>
 
-              <button className="gold-btn full auth-submit-btn" type="submit">{isRegister ? "Create Application" : "Login Securely"}</button>
+              <button className="gold-btn full auth-submit-btn" type="submit" disabled={isRegister && !availableCourses.length}>{isRegister ? "Create Application" : "Login Securely"}</button>
+              {isRegister ? <button className="dark-btn full" type="button" onClick={() => { close(); goTo("admissions"); }}>Use Full Admission Form</button> : null}
             </form>
           </section>
         </div>
@@ -6615,6 +6966,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo }) {
     </div>
   );
 }
+
 
 function CourseCard({ course, openAuth, user, goTo, settings = {} }) {
   const fee = usdFee(course);

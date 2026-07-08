@@ -806,25 +806,92 @@ app.post(
   validateRequest,
   async (req, res) => {
   try {
-    const { name, email, phone, country, password } = req.body;
+    const {
+      name,
+      email,
+      phone,
+      country,
+      password,
+      courseId,
+      learningStream,
+      applicationSource,
+      ministryRole,
+      yearsInMinistry,
+      currentChurch,
+      educationalBackground,
+      previousMinistryExperience,
+      howDidYouHear,
+      personalStatement,
+      additionalQuestions
+    } = req.body;
+
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email and password are required" });
+    }
+
+    const selectedCourseId = Number(courseId || 0);
+    if (!selectedCourseId) {
+      return res.status(400).json({ message: "Please select the programme you are applying for." });
+    }
+
+    const selectedLearningStream = String(learningStream || "").trim();
+    if (!selectedLearningStream) {
+      return res.status(400).json({ message: "Please select your learning stream." });
+    }
+
+    const course = await prisma.course.findFirst({
+      where: { id: selectedCourseId, published: true }
+    });
+    if (!course) {
+      return res.status(404).json({ message: "Selected programme was not found or is not active." });
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(409).json({ message: "Email already exists. Please login." });
 
     const hashed = await bcrypt.hash(password, 12);
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        phone,
-        country,
-        password: hashed,
-        role: "STUDENT",
-        status: "PENDING_PAYMENT"
-      }
+    const applicationDetails = {
+      applicationSource: String(applicationSource || "ADMISSION_PAGE").slice(0, 80),
+      learningStream: selectedLearningStream,
+      ministryRole: String(ministryRole || "").trim(),
+      yearsInMinistry: String(yearsInMinistry || "").trim(),
+      currentChurch: String(currentChurch || "").trim(),
+      educationalBackground: String(educationalBackground || "").trim(),
+      previousMinistryExperience: String(previousMinistryExperience || "").trim(),
+      howDidYouHear: String(howDidYouHear || "").trim(),
+      personalStatement: String(personalStatement || "").trim(),
+      additionalQuestions: String(additionalQuestions || "").trim()
+    };
+
+    const { user, enrollment } = await prisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
+        data: {
+          name,
+          email,
+          phone,
+          country,
+          password: hashed,
+          role: "STUDENT",
+          status: "PENDING_PAYMENT"
+        }
+      });
+
+      const createdEnrollment = await tx.enrollment.create({
+        data: {
+          userId: createdUser.id,
+          courseId: course.id,
+          amount: course.fee,
+          paymentStatus: "PENDING_PAYMENT",
+          admissionStatus: "AWAITING_PAYMENT",
+          paymentMethod: "NONE",
+          learningStream: selectedLearningStream,
+          applicationJson: JSON.stringify(applicationDetails),
+          applicationSubmittedAt: new Date()
+        },
+        include: { course: true }
+      });
+
+      return { user: createdUser, enrollment: createdEnrollment };
     });
 
     queueEmailNotification({
@@ -833,21 +900,31 @@ app.post(
       heading: "Your CIBI Application Has Started",
       body: `Dear ${user.name},
 
-Your CIBI student account has been created. Please login, select your programme and complete payment to continue your admission process.`,
+Your CIBI student account has been created.
+
+Programme: ${enrollment.course?.title || course.title}
+Learning Stream: ${selectedLearningStream}
+
+Please continue to payment. Portal access opens only after payment confirmation and admin approval.`,
       ctaText: "Continue Application",
       ctaUrl: "/admission"
     });
     queueAdminEmail({
-      subject: "New CIBI student registration",
-      heading: "New Student Registered",
-      body: `${user.name} (${user.email}) has created a student account and may proceed to payment.`,
+      subject: "New CIBI student application",
+      heading: "New Student Application",
+      body: `${user.name} (${user.email}) applied for ${enrollment.course?.title || course.title}.
+
+Learning Stream: ${selectedLearningStream}
+
+The student may proceed to payment.`,
       ctaUrl: "/admin"
     }).catch((error) => console.error("Admin registration email failed:", error.message));
 
     await setAuthCookies(res, user);
     res.status(201).json({
-      message: "Registration created. Please complete payment to continue.",
-      user: publicUser(user)
+      message: "Application submitted. Please complete payment to continue.",
+      user: publicUser(user),
+      enrollment
     });
   } catch (error) {
     res.status(500).json({ message: "Registration failed", error: error.message });
@@ -1264,18 +1341,33 @@ app.post("/api/uploads/assignment-file", requireAuth, requireActiveStudent, asyn
   }
 });
 
+async function getStudentApplicationEnrollment(userId, requestedCourseId = null) {
+  const courseId = requestedCourseId ? Number(requestedCourseId) : null;
+  const where = courseId ? { userId, courseId } : { userId };
+  return prisma.enrollment.findFirst({
+    where,
+    include: { course: true },
+    orderBy: { createdAt: "desc" }
+  });
+}
+
 app.post("/api/payments/manual", requireAuth, async (req, res) => {
   try {
     const { courseId, manualReference, paymentProofUrl } = req.body;
+    if (req.user?.role !== "STUDENT") return res.status(403).json({ message: "Student account required." });
     if (!paymentProofUrl) return res.status(400).json({ message: "Payment receipt is required for bank transfer." });
-    const course = await prisma.course.findUnique({ where: { id: Number(courseId) } });
-    if (!course) return res.status(404).json({ message: "Course not found" });
 
-    const enrollment = await prisma.enrollment.upsert({
-      where: { userId_courseId: { userId: req.user.id, courseId: course.id } },
-      create: {
-        userId: req.user.id,
-        courseId: course.id,
+    const enrollment = await getStudentApplicationEnrollment(req.user.id, courseId);
+    if (!enrollment) {
+      return res.status(400).json({ message: "Please submit the admission form and select a programme before payment." });
+    }
+
+    const course = enrollment.course;
+    if (!course) return res.status(404).json({ message: "Selected programme was not found." });
+
+    const updatedEnrollment = await prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
         amount: course.fee,
         paymentStatus: "MANUAL_PAYMENT_PENDING",
         admissionStatus: "AWAITING_ADMIN_APPROVAL",
@@ -1283,14 +1375,7 @@ app.post("/api/payments/manual", requireAuth, async (req, res) => {
         manualReference,
         paymentProofUrl
       },
-      update: {
-        amount: course.fee,
-        paymentStatus: "MANUAL_PAYMENT_PENDING",
-        admissionStatus: "AWAITING_ADMIN_APPROVAL",
-        paymentMethod: "BANK_TRANSFER",
-        manualReference,
-        paymentProofUrl
-      }
+      include: { course: true }
     });
 
     await prisma.user.update({
@@ -1304,19 +1389,27 @@ app.post("/api/payments/manual", requireAuth, async (req, res) => {
       heading: "Payment Receipt Submitted",
       body: `Dear ${req.user.name},
 
-Your bank transfer receipt for ${course.title} has been submitted. CIBI admin will verify your payment and approve portal access after confirmation.`,
+Your bank transfer receipt for ${course.title} has been submitted.
+
+Learning Stream: ${updatedEnrollment.learningStream || "Not specified"}
+
+CIBI admin will verify your payment and approve portal access after confirmation.`,
       ctaText: "Check Portal Status",
       ctaUrl: "/student"
     });
     queueAdminEmail({
       subject: "New CIBI bank transfer receipt",
       heading: "Payment Receipt Uploaded",
-      body: `${req.user.name} (${req.user.email}) submitted a bank transfer receipt for ${course.title}. Please verify and approve if payment is confirmed.`,
+      body: `${req.user.name} (${req.user.email}) submitted a bank transfer receipt for ${course.title}.
+
+Learning Stream: ${updatedEnrollment.learningStream || "Not specified"}
+
+Please verify and approve if payment is confirmed.`,
       ctaText: "Review Student Payment",
       ctaUrl: "/admin"
     }).catch((error) => console.error("Admin payment email failed:", error.message));
 
-    res.json({ message: "Manual payment submitted. Admin will verify and approve.", enrollment });
+    res.json({ message: "Manual payment submitted. Admin will verify and approve.", enrollment: updatedEnrollment });
   } catch (error) {
     res.status(500).json({ message: "Manual payment submission failed", error: error.message });
   }
@@ -1325,24 +1418,22 @@ Your bank transfer receipt for ${course.title} has been submitted. CIBI admin wi
 app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
   try {
     const { courseId } = req.body;
-    const course = await prisma.course.findUnique({ where: { id: Number(courseId) } });
-    if (!course) return res.status(404).json({ message: "Course not found" });
+    if (req.user?.role !== "STUDENT") return res.status(403).json({ message: "Student account required." });
+
+    const enrollment = await getStudentApplicationEnrollment(req.user.id, courseId);
+    if (!enrollment) {
+      return res.status(400).json({ message: "Please submit the admission form and select a programme before payment." });
+    }
+
+    const course = enrollment.course;
+    if (!course) return res.status(404).json({ message: "Selected programme was not found." });
     if (!process.env.PAYSTACK_SECRET_KEY) return res.status(500).json({ message: "Paystack secret key is missing" });
 
     const reference = `CIBI-${req.user.id}-${course.id}-${Date.now()}`;
 
-    await prisma.enrollment.upsert({
-      where: { userId_courseId: { userId: req.user.id, courseId: course.id } },
-      create: {
-        userId: req.user.id,
-        courseId: course.id,
-        amount: course.fee,
-        paymentStatus: "PENDING_PAYMENT",
-        admissionStatus: "AWAITING_PAYMENT",
-        paymentMethod: "PAYSTACK",
-        paystackReference: reference
-      },
-      update: {
+    await prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
         amount: course.fee,
         paymentStatus: "PENDING_PAYMENT",
         admissionStatus: "AWAITING_PAYMENT",
@@ -1365,7 +1456,8 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
         metadata: {
           userId: req.user.id,
           courseId: course.id,
-          courseTitle: course.title
+          courseTitle: course.title,
+          learningStream: enrollment.learningStream || ""
         }
       })
     });
