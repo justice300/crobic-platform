@@ -7285,3 +7285,216 @@ main .page-hero-content h1,
 }
 
 /* End Phase 4D CIBI typography and timeline refinement */
+
+
+/* Phase 4E Base44 clean correction */
+
+/* Base44-like dark section system */
+.base44-about-page,
+.admission-page,
+.programs-page {
+  background: var(--black) !important;
+}
+
+/* Stop giant headings on internal sections */
+.base44-about-page .section-intro h2,
+.admission-page .section-intro h2,
+.programs-page .section-intro h2 {
+  font-size: clamp(42px, 4.8vw, 76px) !important;
+  line-height: 1.02 !important;
+  color: #ffffff !important;
+}
+
+.base44-about-page .section-intro p,
+.admission-page .section-intro p,
+.programs-page .section-intro p {
+  color: rgba(145, 166, 199, .82) !important;
+  font-size: 16px !important;
+  line-height: 1.7 !important;
+}
+
+/* ABOUT: remove ugly heavy milestone box feel */
+.base44-about-page .about-timeline {
+  max-width: 920px !important;
+  margin: 0 auto !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.base44-about-page .about-timeline-item {
+  display: grid !important;
+  grid-template-columns: 64px 1fr !important;
+  gap: 28px !important;
+  align-items: start !important;
+  padding: 26px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,.09) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.base44-about-page .about-timeline-item:last-child {
+  border-bottom: 0 !important;
+}
+
+.base44-about-page .about-timeline-item i {
+  position: static !important;
+  width: 42px !important;
+  height: 42px !important;
+  margin: 0 auto !important;
+  border: 1px solid var(--gold) !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+}
+
+.base44-about-page .about-timeline-item div {
+  display: grid !important;
+  grid-template-columns: 150px 1fr !important;
+  gap: 28px !important;
+  align-items: start !important;
+}
+
+.base44-about-page .about-timeline-item strong {
+  color: #ffffff !important;
+  font-size: 22px !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  letter-spacing: .02em !important;
+}
+
+.base44-about-page .about-timeline-item p {
+  margin: 0 !important;
+  color: rgba(145,166,199,.82) !important;
+  font-size: 15px !important;
+  line-height: 1.65 !important;
+}
+
+/* ABOUT: clean cards like Base44, not heavy blocks */
+.base44-about-page .about-stat-card,
+.base44-about-page .about-belief-card,
+.base44-about-page .about-mission-vision > div {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+}
+
+.base44-about-page .about-stat-card h3,
+.base44-about-page .about-belief-card h3,
+.base44-about-page .about-mission-vision h3 {
+  color: #ffffff !important;
+  font-size: 22px !important;
+  line-height: 1.18 !important;
+}
+
+.base44-about-page .about-stat-card p,
+.base44-about-page .about-belief-card p,
+.base44-about-page .about-mission-vision p {
+  color: rgba(145,166,199,.82) !important;
+}
+
+/* ADMISSION: make Who Should Apply look like Base44 reference */
+.admission-page .admission-section {
+  background: var(--black) !important;
+  padding: 115px 0 !important;
+}
+
+.admission-page .admission-role-grid {
+  grid-template-columns: repeat(6, 1fr) !important;
+  gap: 20px !important;
+  max-width: 1280px !important;
+  margin: 0 auto !important;
+}
+
+.admission-page .admission-role-card {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+  min-height: 138px !important;
+  padding: 28px 18px !important;
+  text-align: center !important;
+}
+
+.admission-page .admission-role-card h3 {
+  color: #ffffff !important;
+  font-size: 18px !important;
+  line-height: 1.22 !important;
+  margin-bottom: 10px !important;
+}
+
+.admission-page .admission-role-card p {
+  color: rgba(145,166,199,.82) !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+/* PROGRAMS: make Regular / Executive Classes clean like Base44 */
+.programs-page .program-learning-section {
+  background: var(--black) !important;
+  padding: 115px 0 !important;
+}
+
+.programs-page .program-learning-grid {
+  border: 0 !important;
+  gap: 22px !important;
+}
+
+.programs-page .program-learning-grid .path-card {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+  padding: 42px !important;
+}
+
+.programs-page .program-learning-grid .path-card h3 {
+  color: #ffffff !important;
+  font-size: 24px !important;
+}
+
+.programs-page .program-learning-grid .path-card p,
+.programs-page .program-learning-grid .path-card li {
+  color: rgba(145,166,199,.82) !important;
+}
+
+/* Keep off-white cards only where they make sense */
+.programs-page .base44-program-card,
+.programs-page .program-core-note,
+.programs-page .program-currency-panel,
+.programs-page .program-accordion-item,
+.programs-page .program-requirements-box {
+  background: var(--cream) !important;
+  color: var(--text) !important;
+}
+
+/* Mobile */
+@media (max-width: 1100px) {
+  .admission-page .admission-role-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .base44-about-page .about-timeline-item div {
+    grid-template-columns: 120px 1fr !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .admission-page .admission-role-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .base44-about-page .about-timeline-item {
+    grid-template-columns: 42px 1fr !important;
+    gap: 18px !important;
+  }
+
+  .base44-about-page .about-timeline-item div {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .base44-about-page .about-timeline-item strong {
+    white-space: normal !important;
+  }
+}
+
+/* End Phase 4E Base44 clean correction */
