@@ -6520,3 +6520,237 @@ button:disabled {
     font-size: 12px;
   }
 }
+
+
+/* Phase 3 public polish: FAQ, registration CTA, WhatsApp care, contact map */
+.home-faq-section {
+  padding: 120px 0;
+  background: var(--black);
+  color: white;
+  border-top: 1px solid rgba(255,255,255,.07);
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+
+.home-faq-section .section-intro h2 {
+  color: white;
+}
+
+.home-faq-section .section-intro p {
+  color: rgba(255,255,255,.58);
+}
+
+.home-faq-list {
+  max-width: 980px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+.home-faq-item {
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.025);
+}
+
+.home-faq-item.active {
+  border-color: rgba(196,159,100,.45);
+  background: rgba(196,159,100,.055);
+}
+
+.home-faq-item button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: white;
+  padding: 24px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  text-align: left;
+}
+
+.home-faq-item button strong {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 2vw, 24px);
+}
+
+.home-faq-item.active button strong {
+  color: var(--gold);
+}
+
+.home-faq-item p {
+  margin: 0;
+  padding: 0 28px 28px;
+  max-width: 850px;
+  color: #87a5cf;
+  font-size: 16px;
+}
+
+.public-registration-band {
+  background:
+    linear-gradient(135deg, rgba(196,159,100,.14), rgba(7,11,24,.96)),
+    var(--black);
+  color: white;
+  padding: 74px 0;
+  border-top: 1px solid rgba(196,159,100,.24);
+}
+
+.public-registration-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 36px;
+  align-items: center;
+}
+
+.public-registration-inner span {
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: .26em;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.public-registration-inner h2 {
+  color: white;
+  font-size: clamp(32px, 4vw, 54px);
+  margin: 12px 0 14px;
+}
+
+.public-registration-inner p {
+  max-width: 680px;
+  color: rgba(255,255,255,.68);
+  margin: 0;
+}
+
+.public-registration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.whatsapp-care {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #25d366;
+  color: #071018;
+  border: 1px solid rgba(255,255,255,.22);
+  box-shadow: 0 22px 60px rgba(0,0,0,.24);
+  padding: 14px 18px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 11px;
+}
+
+.whatsapp-care:hover {
+  transform: translateY(-2px);
+}
+
+.contact-page-section {
+  display: grid;
+  gap: 42px;
+}
+
+.contact-map-card {
+  display: grid;
+  grid-template-columns: .72fr 1.28fr;
+  gap: 0;
+  background: var(--black);
+  color: white;
+  border: 1px solid rgba(196,159,100,.22);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.contact-map-card > div:first-child {
+  padding: 46px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.contact-map-card span {
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: .24em;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.contact-map-card h2 {
+  color: white;
+  font-size: clamp(30px, 4vw, 52px);
+  margin: 14px 0;
+}
+
+.contact-map-card p {
+  color: rgba(255,255,255,.68);
+  margin-bottom: 24px;
+}
+
+.contact-map-frame {
+  min-height: 430px;
+  background: #101522;
+}
+
+.contact-map-frame iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 430px;
+  border: 0;
+  display: block;
+}
+
+@media (max-width: 980px) {
+  .public-registration-inner,
+  .contact-map-card {
+    grid-template-columns: 1fr;
+  }
+
+  .public-registration-actions {
+    justify-content: flex-start;
+  }
+
+  .contact-map-card > div:first-child {
+    padding: 32px;
+  }
+}
+
+@media (max-width: 620px) {
+  .home-faq-section {
+    padding: 80px 0;
+  }
+
+  .home-faq-item button {
+    padding: 20px;
+  }
+
+  .home-faq-item p {
+    padding: 0 20px 22px;
+  }
+
+  .public-registration-band {
+    padding: 54px 0;
+  }
+
+  .public-registration-actions .big,
+  .public-registration-actions a {
+    width: 100%;
+  }
+
+  .whatsapp-care {
+    right: 14px;
+    bottom: 14px;
+    padding: 13px 14px;
+  }
+
+  .whatsapp-care span {
+    display: none;
+  }
+}

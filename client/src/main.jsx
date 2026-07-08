@@ -63,7 +63,25 @@ const CIBI_IMAGES = {
 };
 
 const SLIDE_DURATION = 6500;
-const fallbackCourses = [];
+const fallbackCourses = () => [];
+
+const CIBI_OFFICIAL_PHONE = "0812 130 0287";
+const CIBI_OFFICIAL_PHONE_INTL = "+2348121300287";
+const CIBI_OFFICIAL_ADDRESS = "Champions Royal Assembly, Chikakore Kubwa, Abuja, Nigeria.";
+const CIBI_WHATSAPP_URL = "https://wa.me/2348121300287?text=Hello%20CIBI%2C%20I%20need%20help%20with%20admission.";
+const CIBI_MAP_EMBED_URL = "https://www.google.com/maps?q=Champions%20Royal%20Assembly%20Chikakore%20Kubwa%20Abuja%20Nigeria&output=embed";
+
+function normalizeCibiPhone(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw || /814\s*943\s*9447|0814\s*943\s*9447|8149439447/.test(raw)) return CIBI_OFFICIAL_PHONE;
+  return raw;
+}
+
+function normalizeCibiAddress(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw || /Kubwa|Abuja|FCT|Champions Royal Assembly/i.test(raw)) return CIBI_OFFICIAL_ADDRESS;
+  return raw;
+}
 
 const DEFAULT_SLIDES = [
   {
@@ -402,7 +420,11 @@ function App() {
         )
       )}
 
+      {!['student', 'admin', 'payment-callback', 'certificate-verification'].includes(page) && (
+        <PublicRegistrationBand goTo={goTo} openAuth={openAuth} settings={data.settings} />
+      )}
       {!['student', 'admin'].includes(page) && <Footer goTo={goTo} settings={data.settings} />}
+      <WhatsAppFloatingButton />
       <NotificationCenter />
 
       {authOpen && (
@@ -531,6 +553,76 @@ function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen 
         </div>
       )}
     </header>
+  );
+}
+
+function WhatsAppFloatingButton() {
+  return (
+    <a className="whatsapp-care" href={CIBI_WHATSAPP_URL} target="_blank" rel="noreferrer" aria-label="Chat with CIBI customer care on WhatsApp">
+      <span className="whatsapp-care-icon">WA</span>
+      <span>Customer Care</span>
+    </a>
+  );
+}
+
+function PublicRegistrationBand({ goTo, openAuth, settings = {} }) {
+  return (
+    <section className="public-registration-band">
+      <div className="container public-registration-inner">
+        <div>
+          <span>{getSetting(settings, "global_registration_kicker", "Admission Open")}</span>
+          <h2>{getSetting(settings, "global_registration_title", "Begin Your CIBI Registration Today")}</h2>
+          <p>{getSetting(settings, "global_registration_text", "Create your student account, choose a programme, complete payment and wait for admission approval before portal access.")}</p>
+        </div>
+        <div className="public-registration-actions">
+          <button className="gold-btn big" onClick={() => openAuth("register")}>Register Now</button>
+          <button className="white-btn big" onClick={() => goTo("admissions")}>Admission Details</button>
+          <a className="ghost-btn big" href={CIBI_WHATSAPP_URL} target="_blank" rel="noreferrer">Chat on WhatsApp</a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HomeFaqSection({ faqs = [], settings = {} }) {
+  const fallback = [
+    { question: "What is CIBI?", answer: "CIBI stands for Champion International Bible Institute, formerly CROBIC. It is the biblical training arm of Champions Royal Assembly." },
+    { question: "Who can apply for admission?", answer: "Admission is open to pastors, evangelists, prophets, Bible teachers, associate ministers, church workers, leaders, academics and professionals." },
+    { question: "What programmes does CIBI offer?", answer: "CIBI offers Foundation Certificate, Diploma, Advanced Diploma and Workers and Leadership Training programmes." },
+    { question: "How do I register?", answer: "Create a student account, choose your programme, complete payment and wait for admin approval before portal access is activated." },
+    { question: "How can I contact CIBI?", answer: `You can contact CIBI customer care on WhatsApp or call ${CIBI_OFFICIAL_PHONE}.` }
+  ];
+
+  const items = (Array.isArray(faqs) && faqs.length ? faqs : fallback)
+    .filter((item) => item?.question || item?.answer)
+    .slice(0, 10);
+
+  const [open, setOpen] = useState(0);
+
+  return (
+    <section className="home-faq-section">
+      <div className="container">
+        <SectionIntro
+          eyebrow={getSetting(settings, "home_faq_eyebrow", "FAQ")}
+          title={getSetting(settings, "home_faq_title", "Frequently Asked Questions")}
+          text={getSetting(settings, "home_faq_text", "Everything you need to know about CIBI programmes and admission.")}
+        />
+        <div className="home-faq-list">
+          {items.map((item, index) => {
+            const active = open === index;
+            return (
+              <div className={active ? "home-faq-item active" : "home-faq-item"} key={item.id || item.question || index}>
+                <button type="button" onClick={() => setOpen(active ? -1 : index)}>
+                  <strong>{item.question || item.title}</strong>
+                  {active ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+                {active && <p>{item.answer || item.body || item.description}</p>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -670,12 +762,7 @@ function Home({ data, goTo, openAuth }) {
         </div>
       </section>
 
-      <section className="preview-section container">
-        <SectionIntro eyebrow={getSetting(s, "home_books_eyebrow", "Book Library")} title={getSetting(s, "home_books_title", "Books available to the public")} text={getSetting(s, "home_books_text", "Visitors can buy books directly through the official Stellar purchase links.")} />
-        <div className="book-grid">
-          {data.books.slice(0, 3).map((book) => <BookCard key={book.id} book={book} />)}
-        </div>
-      </section>
+      <HomeFaqSection faqs={data.faqs} settings={s} />
 
       <section className="cta-section cta-luxury">
         <Kicker text={getSetting(s, "home_cta_kicker", "Admission Open")} center />
@@ -1259,8 +1346,8 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
       <section className="admission-section container">
         <SectionIntro eyebrow={getSetting(settings, "admission_contact_eyebrow", "Get in Touch")} title={getSetting(settings, "admission_contact_title", "Contact Admissions Office")} text={getSetting(settings, "admission_contact_text", "For help with application, payment confirmation or programme selection.")} />
         <div className="contact-grid admission-contact-grid">
-          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone")}</h3><p>{getSetting(settings, "contact_phone", "+234 814 943 9447")}</p></div>
-          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "admission_contact_location_title", "Location")}</h3><p>{getSetting(settings, "admission_contact_location", "Champions Royal Assembly, Kubwa, Abuja")}</p></div>
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone")}</h3><p>{normalizeCibiPhone(getSetting(settings, "contact_phone", CIBI_OFFICIAL_PHONE))}</p></div>
+          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "admission_contact_location_title", "Location")}</h3><p>{normalizeCibiAddress(getSetting(settings, "admission_contact_location", CIBI_OFFICIAL_ADDRESS))}</p></div>
           <div className="content-card contact-card"><Clock /><h3>{getSetting(settings, "admission_contact_hours_title", "Office Hours")}</h3><p>{getSetting(settings, "office_hours", "Monday to Saturday, 9 AM to 5 PM")}</p></div>
         </div>
       </section>
@@ -1307,8 +1394,8 @@ function Contact({ settings = {} }) {
       <PageHero eyebrow={getSetting(settings, "contact_hero_eyebrow", "Contact")} title={getSetting(settings, "contact_hero_title", "Get in Touch with CIBI")} text={getSetting(settings, "contact_hero_text", "Contact the college for admissions, book enquiries, student support and general information.")} image={getSetting(settings, "contact_hero_image_url", CIBI_IMAGES.classroom)} />
       <section className="page container">
         <div className="contact-grid">
-          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone")}</h3><p>{getSetting(settings, "contact_phone", "+234 814 943 9447")}</p></div>
-          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{getSetting(settings, "contact_address", "Kubwa, Abuja, FCT, Nigeria")}</p></div>
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone")}</h3><p>{normalizeCibiPhone(getSetting(settings, "contact_phone", CIBI_OFFICIAL_PHONE))}</p></div>
+          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{normalizeCibiAddress(getSetting(settings, "contact_address", CIBI_OFFICIAL_ADDRESS))}</p></div>
           <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CIBI information.")}</p></div>
         </div>
       </section>
@@ -6539,8 +6626,8 @@ function Footer({ goTo, settings = {} }) {
 
         <div>
           <h4>Contact</h4>
-          <p>{getSetting(settings, "footer_address", getSetting(settings, "contact_address", "Kubwa, Abuja, FCT, Nigeria"))}</p>
-          <p>{getSetting(settings, "footer_phone", getSetting(settings, "contact_phone", "+234 814 943 9447"))}</p>
+          <p>{getSetting(settings, "footer_address", normalizeCibiAddress(getSetting(settings, "contact_address", CIBI_OFFICIAL_ADDRESS)))}</p>
+          <p>{getSetting(settings, "footer_phone", normalizeCibiPhone(getSetting(settings, "contact_phone", CIBI_OFFICIAL_PHONE)))}</p>
           <p>{getSetting(settings, "footer_email", getSetting(settings, "contact_email", "info@crobic.org"))}</p>
         </div>
       </div>
