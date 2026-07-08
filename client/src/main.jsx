@@ -62,26 +62,37 @@ const CIBI_IMAGES = {
   logo: "/crobic-images/cra-logo.png"
 };
 
+const CIBI_PHONE_DISPLAY = "0812 130 0287";
+const CIBI_PHONE_E164 = "2348121300287";
+const CIBI_ADDRESS = "Champions Royal Assembly, Chikakore Kubwa, Abuja, Nigeria.";
+const CIBI_MAP_QUERY = "Champions Royal Assembly, Chikakore Kubwa Abuja Nigeria";
+const CIBI_WHATSAPP_LINK = `https://wa.me/${CIBI_PHONE_E164}?text=${encodeURIComponent("Hello CIBI, I need help with admission.")}`;
+
+const DEFAULT_FAQS = [
+  {
+    question: "What is CIBI?",
+    answer: "CIBI stands for Champion International Bible Institute, formerly CROBIC. It is the biblical training arm of Champions Royal Assembly."
+  },
+  {
+    question: "Who can apply for admission?",
+    answer: "Admission is open to pastors, evangelists, prophets, Bible teachers, associate ministers, church workers, academics, leaders and professionals."
+  },
+  {
+    question: "What programmes does CIBI offer?",
+    answer: "CIBI offers Foundation Certificate, Diploma Certificate, Advanced Diploma Certificate, and Workers and Leadership Training programmes."
+  },
+  {
+    question: "How do I register?",
+    answer: "Click Enroll Now, create your student account, choose your programme, complete payment, and wait for admin approval."
+  },
+  {
+    question: "How can I contact CIBI?",
+    answer: `You can contact CIBI on WhatsApp or phone through ${CIBI_PHONE_DISPLAY}.`
+  }
+];
+
 const SLIDE_DURATION = 6500;
-const fallbackCourses = () => [];
-
-const CIBI_OFFICIAL_PHONE = "0812 130 0287";
-const CIBI_OFFICIAL_PHONE_INTL = "+2348121300287";
-const CIBI_OFFICIAL_ADDRESS = "Champions Royal Assembly, Chikakore Kubwa, Abuja, Nigeria.";
-const CIBI_WHATSAPP_URL = "https://wa.me/2348121300287?text=Hello%20CIBI%2C%20I%20need%20help%20with%20admission.";
-const CIBI_MAP_EMBED_URL = "https://www.google.com/maps?q=Champions%20Royal%20Assembly%20Chikakore%20Kubwa%20Abuja%20Nigeria&output=embed";
-
-function normalizeCibiPhone(value = "") {
-  const raw = String(value || "").trim();
-  if (!raw || /814\s*943\s*9447|0814\s*943\s*9447|8149439447/.test(raw)) return CIBI_OFFICIAL_PHONE;
-  return raw;
-}
-
-function normalizeCibiAddress(value = "") {
-  const raw = String(value || "").trim();
-  if (!raw || /Kubwa|Abuja|FCT|Champions Royal Assembly/i.test(raw)) return CIBI_OFFICIAL_ADDRESS;
-  return raw;
-}
+function fallbackCourses() { return []; }
 
 const DEFAULT_SLIDES = [
   {
@@ -421,10 +432,10 @@ function App() {
       )}
 
       {!['student', 'admin', 'payment-callback', 'certificate-verification'].includes(page) && (
-        <PublicRegistrationBand goTo={goTo} openAuth={openAuth} settings={data.settings} />
+        <SiteRegistrationCTA page={page} goTo={goTo} openAuth={openAuth} settings={data.settings} />
       )}
       {!['student', 'admin'].includes(page) && <Footer goTo={goTo} settings={data.settings} />}
-      <WhatsAppFloatingButton />
+      <FloatingWhatsApp settings={data.settings} />
       <NotificationCenter />
 
       {authOpen && (
@@ -556,48 +567,18 @@ function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen 
   );
 }
 
-function WhatsAppFloatingButton() {
-  return (
-    <a className="whatsapp-care" href={CIBI_WHATSAPP_URL} target="_blank" rel="noreferrer" aria-label="Chat with CIBI customer care on WhatsApp">
-      <span className="whatsapp-care-icon">WA</span>
-      <span>Customer Care</span>
-    </a>
-  );
+
+function getFaqQuestion(item = {}) {
+  return item.question || item.title || "CIBI question";
 }
 
-function PublicRegistrationBand({ goTo, openAuth, settings = {} }) {
-  return (
-    <section className="public-registration-band">
-      <div className="container public-registration-inner">
-        <div>
-          <span>{getSetting(settings, "global_registration_kicker", "Admission Open")}</span>
-          <h2>{getSetting(settings, "global_registration_title", "Begin Your CIBI Registration Today")}</h2>
-          <p>{getSetting(settings, "global_registration_text", "Create your student account, choose a programme, complete payment and wait for admission approval before portal access.")}</p>
-        </div>
-        <div className="public-registration-actions">
-          <button className="gold-btn big" onClick={() => openAuth("register")}>Register Now</button>
-          <button className="white-btn big" onClick={() => goTo("admissions")}>Admission Details</button>
-          <a className="ghost-btn big" href={CIBI_WHATSAPP_URL} target="_blank" rel="noreferrer">Chat on WhatsApp</a>
-        </div>
-      </div>
-    </section>
-  );
+function getFaqAnswer(item = {}) {
+  return item.answer || item.body || item.description || "";
 }
 
 function HomeFaqSection({ faqs = [], settings = {} }) {
-  const fallback = [
-    { question: "What is CIBI?", answer: "CIBI stands for Champion International Bible Institute, formerly CROBIC. It is the biblical training arm of Champions Royal Assembly." },
-    { question: "Who can apply for admission?", answer: "Admission is open to pastors, evangelists, prophets, Bible teachers, associate ministers, church workers, leaders, academics and professionals." },
-    { question: "What programmes does CIBI offer?", answer: "CIBI offers Foundation Certificate, Diploma, Advanced Diploma and Workers and Leadership Training programmes." },
-    { question: "How do I register?", answer: "Create a student account, choose your programme, complete payment and wait for admin approval before portal access is activated." },
-    { question: "How can I contact CIBI?", answer: `You can contact CIBI customer care on WhatsApp or call ${CIBI_OFFICIAL_PHONE}.` }
-  ];
-
-  const items = (Array.isArray(faqs) && faqs.length ? faqs : fallback)
-    .filter((item) => item?.question || item?.answer)
-    .slice(0, 10);
-
-  const [open, setOpen] = useState(0);
+  const [openIndex, setOpenIndex] = useState(0);
+  const list = faqs.length ? faqs : DEFAULT_FAQS;
 
   return (
     <section className="home-faq-section">
@@ -605,18 +586,18 @@ function HomeFaqSection({ faqs = [], settings = {} }) {
         <SectionIntro
           eyebrow={getSetting(settings, "home_faq_eyebrow", "FAQ")}
           title={getSetting(settings, "home_faq_title", "Frequently Asked Questions")}
-          text={getSetting(settings, "home_faq_text", "Everything you need to know about CIBI programmes and admission.")}
+          text={getSetting(settings, "home_faq_text", "Everything you need to know about CIBI programmes, admission and student support.")}
         />
         <div className="home-faq-list">
-          {items.map((item, index) => {
-            const active = open === index;
+          {list.map((item, index) => {
+            const active = openIndex === index;
             return (
-              <div className={active ? "home-faq-item active" : "home-faq-item"} key={item.id || item.question || index}>
-                <button type="button" onClick={() => setOpen(active ? -1 : index)}>
-                  <strong>{item.question || item.title}</strong>
+              <div className={`home-faq-item ${active ? "open" : ""}`} key={item.id || `${getFaqQuestion(item)}-${index}`}>
+                <button type="button" onClick={() => setOpenIndex(active ? -1 : index)}>
+                  <span>{getFaqQuestion(item)}</span>
                   {active ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
-                {active && <p>{item.answer || item.body || item.description}</p>}
+                {active && <p>{getFaqAnswer(item)}</p>}
               </div>
             );
           })}
@@ -626,8 +607,64 @@ function HomeFaqSection({ faqs = [], settings = {} }) {
   );
 }
 
+function SiteRegistrationCTA({ page, goTo, openAuth, settings = {} }) {
+  return (
+    <section className={`site-registration-cta ${page === "admissions" ? "site-registration-cta-admission" : ""}`}>
+      <div className="container site-registration-inner">
+        <div>
+          <span>{getSetting(settings, "global_registration_kicker", "Admission Open")}</span>
+          <h2>{getSetting(settings, "global_registration_title", "Begin Your CIBI Registration")}</h2>
+          <p>{getSetting(settings, "global_registration_text", "Create your student account, choose a programme, complete payment, and receive portal access after confirmation and approval.")}</p>
+        </div>
+        <div className="site-registration-actions">
+          <button className="gold-btn big" type="button" onClick={() => openAuth("register")}>Enroll Now</button>
+          <button className="white-btn big" type="button" onClick={() => goTo("admissions")}>Admission Details</button>
+          <a className="ghost-btn big" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FloatingWhatsApp({ settings = {} }) {
+  return (
+    <a
+      className="floating-whatsapp"
+      href={CIBI_WHATSAPP_LINK}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Chat with CIBI customer care on WhatsApp"
+    >
+      <MessageCircle size={22} />
+      <span>Chat on WhatsApp</span>
+    </a>
+  );
+}
+
+function ContactMap({ address = CIBI_ADDRESS }) {
+  const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(address || CIBI_MAP_QUERY)}&output=embed`;
+  return (
+    <div className="contact-map-card">
+      <div>
+        <span>Visit Us</span>
+        <h2>Find Champions Royal Assembly</h2>
+        <p>{address}</p>
+      </div>
+      <iframe
+        title="Champions Royal Assembly map"
+        src={mapUrl}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        allowFullScreen
+      />
+    </div>
+  );
+}
+
+
 function Home({ data, goTo, openAuth }) {
   const s = data.settings || {};
+  const faqs = (data.faqs || []).length ? data.faqs : DEFAULT_FAQS;
   // CMS SYNC FIX:
   // Each admin slide controls its matching homepage slot by slideOrder.
   // If a slot is missing, only that slot uses the default fallback.
@@ -762,7 +799,7 @@ function Home({ data, goTo, openAuth }) {
         </div>
       </section>
 
-      <HomeFaqSection faqs={data.faqs} settings={s} />
+      <HomeFaqSection faqs={faqs} settings={s} />
 
       <section className="cta-section cta-luxury">
         <Kicker text={getSetting(s, "home_cta_kicker", "Admission Open")} center />
@@ -1346,8 +1383,8 @@ function Admissions({ courses, settings, user, openAuth, goTo }) {
       <section className="admission-section container">
         <SectionIntro eyebrow={getSetting(settings, "admission_contact_eyebrow", "Get in Touch")} title={getSetting(settings, "admission_contact_title", "Contact Admissions Office")} text={getSetting(settings, "admission_contact_text", "For help with application, payment confirmation or programme selection.")} />
         <div className="contact-grid admission-contact-grid">
-          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone")}</h3><p>{normalizeCibiPhone(getSetting(settings, "contact_phone", CIBI_OFFICIAL_PHONE))}</p></div>
-          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "admission_contact_location_title", "Location")}</h3><p>{normalizeCibiAddress(getSetting(settings, "admission_contact_location", CIBI_OFFICIAL_ADDRESS))}</p></div>
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
+          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "admission_contact_location_title", "Location")}</h3><p>{CIBI_ADDRESS}</p></div>
           <div className="content-card contact-card"><Clock /><h3>{getSetting(settings, "admission_contact_hours_title", "Office Hours")}</h3><p>{getSetting(settings, "office_hours", "Monday to Saturday, 9 AM to 5 PM")}</p></div>
         </div>
       </section>
@@ -1392,17 +1429,17 @@ function Contact({ settings = {} }) {
   return (
     <main>
       <PageHero eyebrow={getSetting(settings, "contact_hero_eyebrow", "Contact")} title={getSetting(settings, "contact_hero_title", "Get in Touch with CIBI")} text={getSetting(settings, "contact_hero_text", "Contact the college for admissions, book enquiries, student support and general information.")} image={getSetting(settings, "contact_hero_image_url", CIBI_IMAGES.classroom)} />
-      <section className="page container">
+      <section className="page container contact-page-section">
         <div className="contact-grid">
-          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone")}</h3><p>{normalizeCibiPhone(getSetting(settings, "contact_phone", CIBI_OFFICIAL_PHONE))}</p></div>
-          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{normalizeCibiAddress(getSetting(settings, "contact_address", CIBI_OFFICIAL_ADDRESS))}</p></div>
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
+          <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{CIBI_ADDRESS}</p></div>
           <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CIBI information.")}</p></div>
         </div>
+        <ContactMap address={CIBI_ADDRESS} />
       </section>
     </main>
   );
 }
-
 
 function extractYouTubeVideoId(input = "") {
   const raw = String(input || "").trim();
@@ -5795,8 +5832,9 @@ const websiteContentGroups = [
       ["home_regular_class_title", "Regular Class Title"], ["home_regular_class_text", "Regular Class Text", "textarea"], ["home_regular_class_points", "Regular Class Points (separate with |)", "textarea"],
       ["home_executive_class_title", "Executive Class Title"], ["home_executive_class_text", "Executive Class Text", "textarea"], ["home_executive_class_points", "Executive Class Points (separate with |)", "textarea"],
       ["home_graduate_kicker", "Graduates Kicker"], ["home_graduate_title", "Graduates Title"], ["home_graduate_quote", "Graduates Quote", "textarea"], ["home_graduate_author", "Quote Author"], ["home_graduate_number", "Graduate Number"], ["home_graduate_number_label", "Graduate Number Label"], ["home_graduate_image_url", "Graduates Background Image URL"],
-      ["home_books_eyebrow", "Book Preview Eyebrow"], ["home_books_title", "Book Preview Title"], ["home_books_text", "Book Preview Text", "textarea"],
-      ["home_cta_kicker", "CTA Kicker"], ["home_cta_title", "CTA Title"], ["home_cta_text", "CTA Text", "textarea"], ["home_cta_primary_button", "CTA Primary Button"], ["home_cta_secondary_button", "CTA Secondary Button"]
+      ["home_faq_eyebrow", "FAQ Eyebrow"], ["home_faq_title", "FAQ Title"], ["home_faq_text", "FAQ Intro Text", "textarea"],
+      ["home_cta_kicker", "CTA Kicker"], ["home_cta_title", "CTA Title"], ["home_cta_text", "CTA Text", "textarea"], ["home_cta_primary_button", "CTA Primary Button"], ["home_cta_secondary_button", "CTA Secondary Button"],
+      ["global_registration_kicker", "Global Registration Kicker"], ["global_registration_title", "Global Registration Title"], ["global_registration_text", "Global Registration Text", "textarea"]
     ]
   },
   {
@@ -5869,7 +5907,7 @@ function getContentSection(key) {
   if (key.startsWith("home_programs_")) return "Home Programs Intro";
   if (key.startsWith("home_paths_") || key.startsWith("home_regular_") || key.startsWith("home_executive_")) return "Home Learning Paths";
   if (key.startsWith("home_graduate_")) return "Home Graduates Section";
-  if (key.startsWith("home_books_")) return "Home Book Preview";
+  if (key.startsWith("home_faq_")) return "Home FAQ Section";
   if (key.startsWith("home_cta_")) return "Home Admission CTA";
 
   if (key.startsWith("about_founder_")) return "Founder Section";
@@ -6626,9 +6664,10 @@ function Footer({ goTo, settings = {} }) {
 
         <div>
           <h4>Contact</h4>
-          <p>{getSetting(settings, "footer_address", normalizeCibiAddress(getSetting(settings, "contact_address", CIBI_OFFICIAL_ADDRESS)))}</p>
-          <p>{getSetting(settings, "footer_phone", normalizeCibiPhone(getSetting(settings, "contact_phone", CIBI_OFFICIAL_PHONE)))}</p>
-          <p>{getSetting(settings, "footer_email", getSetting(settings, "contact_email", "info@crobic.org"))}</p>
+          <p>{CIBI_ADDRESS}</p>
+          <p>{CIBI_PHONE_DISPLAY}</p>
+          <p>{getSetting(settings, "footer_email", getSetting(settings, "contact_email", "info@cibionline.org"))}</p>
+          <a className="footer-whatsapp-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">WhatsApp Customer Care</a>
         </div>
       </div>
 

@@ -6522,38 +6522,41 @@ button:disabled {
 }
 
 
-/* Phase 3 public polish: FAQ, registration CTA, WhatsApp care, contact map */
+/* Phase 3 public-site polish: registration CTA, FAQ, WhatsApp, contact map */
 .home-faq-section {
-  padding: 120px 0;
   background: var(--black);
   color: white;
-  border-top: 1px solid rgba(255,255,255,.07);
-  border-bottom: 1px solid rgba(255,255,255,.07);
+  padding: 120px 0;
+  margin-bottom: 100px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  border-bottom: 1px solid rgba(255,255,255,.08);
 }
 
-.home-faq-section .section-intro h2 {
+.home-faq-section .section-intro h2,
+.home-faq-section .section-intro p {
   color: white;
 }
 
 .home-faq-section .section-intro p {
-  color: rgba(255,255,255,.58);
+  color: rgba(255,255,255,.62);
 }
 
 .home-faq-list {
-  max-width: 980px;
+  width: min(980px, 100%);
   margin: 0 auto;
   display: grid;
   gap: 14px;
 }
 
 .home-faq-item {
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.09);
   background: rgba(255,255,255,.025);
+  transition: .35s ease;
 }
 
-.home-faq-item.active {
-  border-color: rgba(196,159,100,.45);
-  background: rgba(196,159,100,.055);
+.home-faq-item.open {
+  border-color: rgba(196,159,100,.38);
+  background: rgba(196,159,100,.045);
 }
 
 .home-faq-item button {
@@ -6561,196 +6564,515 @@ button:disabled {
   border: 0;
   background: transparent;
   color: white;
-  padding: 24px 28px;
+  padding: 26px 30px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 18px;
   text-align: left;
 }
 
-.home-faq-item button strong {
+.home-faq-item button span {
   font-family: var(--font-display);
-  font-size: clamp(18px, 2vw, 24px);
+  font-size: clamp(18px, 2vw, 25px);
+  font-weight: 700;
 }
 
-.home-faq-item.active button strong {
+.home-faq-item.open button span {
   color: var(--gold);
 }
 
 .home-faq-item p {
-  margin: 0;
-  padding: 0 28px 28px;
-  max-width: 850px;
+  margin: -4px 30px 28px;
   color: #87a5cf;
-  font-size: 16px;
+  max-width: 920px;
 }
 
-.public-registration-band {
+.site-registration-cta {
   background:
-    linear-gradient(135deg, rgba(196,159,100,.14), rgba(7,11,24,.96)),
-    var(--black);
+    linear-gradient(135deg, rgba(7,11,24,.94), rgba(12,20,35,.96)),
+    radial-gradient(circle at top right, rgba(196,159,100,.18), transparent 35%);
   color: white;
-  padding: 74px 0;
-  border-top: 1px solid rgba(196,159,100,.24);
+  padding: 78px 0;
+  border-top: 1px solid rgba(196,159,100,.2);
+  border-bottom: 1px solid rgba(196,159,100,.2);
 }
 
-.public-registration-inner {
+.site-registration-inner {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 36px;
   align-items: center;
+  gap: 34px;
 }
 
-.public-registration-inner span {
+.site-registration-inner span {
   color: var(--gold);
   text-transform: uppercase;
-  letter-spacing: .26em;
+  letter-spacing: .28em;
   font-size: 10px;
   font-weight: 900;
 }
 
-.public-registration-inner h2 {
+.site-registration-inner h2 {
   color: white;
-  font-size: clamp(32px, 4vw, 54px);
   margin: 12px 0 14px;
+  font-size: clamp(30px, 4vw, 54px);
 }
 
-.public-registration-inner p {
+.site-registration-inner p {
+  color: rgba(255,255,255,.66);
   max-width: 680px;
-  color: rgba(255,255,255,.68);
   margin: 0;
 }
 
-.public-registration-actions {
+.site-registration-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 12px;
+  justify-content: flex-end;
 }
 
-.whatsapp-care {
+.site-registration-actions .ghost-btn {
+  border-color: rgba(255,255,255,.18);
+}
+
+.floating-whatsapp {
   position: fixed;
   right: 22px;
   bottom: 22px;
-  z-index: 80;
+  z-index: 90;
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: #25d366;
-  color: #071018;
-  border: 1px solid rgba(255,255,255,.22);
-  box-shadow: 0 22px 60px rgba(0,0,0,.24);
+  background: #128c3e;
+  color: white;
   padding: 14px 18px;
+  border-radius: 999px;
+  box-shadow: 0 18px 44px rgba(0,0,0,.24);
   font-weight: 900;
+  font-size: 12px;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  letter-spacing: .12em;
-  font-size: 11px;
 }
 
-.whatsapp-care:hover {
+.floating-whatsapp:hover {
   transform: translateY(-2px);
+  background: #0f7a36;
 }
 
 .contact-page-section {
   display: grid;
-  gap: 42px;
+  gap: 34px;
+}
+
+.contact-card-link,
+.footer-whatsapp-link {
+  display: inline-flex;
+  margin-top: 14px;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .18em;
 }
 
 .contact-map-card {
   display: grid;
-  grid-template-columns: .72fr 1.28fr;
+  grid-template-columns: .75fr 1.25fr;
   gap: 0;
-  background: var(--black);
-  color: white;
-  border: 1px solid rgba(196,159,100,.22);
+  background: white;
+  border: 1px solid var(--line);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
 
-.contact-map-card > div:first-child {
-  padding: 46px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.contact-map-card > div {
+  padding: 44px;
+  background: var(--black);
+  color: white;
 }
 
 .contact-map-card span {
   color: var(--gold);
   text-transform: uppercase;
-  letter-spacing: .24em;
+  letter-spacing: .28em;
   font-size: 10px;
   font-weight: 900;
 }
 
 .contact-map-card h2 {
   color: white;
-  font-size: clamp(30px, 4vw, 52px);
-  margin: 14px 0;
+  font-size: clamp(28px, 3.4vw, 48px);
+  margin: 14px 0 18px;
 }
 
 .contact-map-card p {
   color: rgba(255,255,255,.68);
-  margin-bottom: 24px;
 }
 
-.contact-map-frame {
-  min-height: 430px;
-  background: #101522;
-}
-
-.contact-map-frame iframe {
+.contact-map-card iframe {
   width: 100%;
-  height: 100%;
-  min-height: 430px;
+  min-height: 420px;
   border: 0;
-  display: block;
+  filter: saturate(.9) contrast(1.02);
 }
 
-@media (max-width: 980px) {
-  .public-registration-inner,
+@media (max-width: 1080px) {
+  .site-registration-inner,
   .contact-map-card {
     grid-template-columns: 1fr;
   }
 
-  .public-registration-actions {
+  .site-registration-actions {
     justify-content: flex-start;
-  }
-
-  .contact-map-card > div:first-child {
-    padding: 32px;
   }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 720px) {
   .home-faq-section {
-    padding: 80px 0;
+    padding: 82px 0;
+    margin-bottom: 74px;
   }
 
   .home-faq-item button {
-    padding: 20px;
+    padding: 22px 20px;
   }
 
   .home-faq-item p {
-    padding: 0 20px 22px;
+    margin: -2px 20px 22px;
   }
 
-  .public-registration-band {
-    padding: 54px 0;
+  .site-registration-cta {
+    padding: 58px 0;
   }
 
-  .public-registration-actions .big,
-  .public-registration-actions a {
+  .site-registration-actions,
+  .site-registration-actions .gold-btn,
+  .site-registration-actions .white-btn,
+  .site-registration-actions .ghost-btn {
     width: 100%;
   }
 
-  .whatsapp-care {
+  .floating-whatsapp {
     right: 14px;
     bottom: 14px;
-    padding: 13px 14px;
+    padding: 13px 15px;
   }
 
-  .whatsapp-care span {
+  .floating-whatsapp span {
     display: none;
   }
+
+  .contact-map-card > div {
+    padding: 30px 24px;
+  }
+
+  .contact-map-card iframe {
+    min-height: 340px;
+  }
 }
+
+@media (max-width: 520px) {
+  .home-program-showcase-grid,
+  .program-showcase-grid,
+  .admission-role-grid,
+  .contact-grid,
+  .gallery-grid,
+  .book-grid,
+  .course-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hero-actions,
+  .cta-section div {
+    width: 100%;
+  }
+
+  .hero-actions .gold-btn,
+  .hero-actions .white-btn,
+  .cta-section .gold-btn,
+  .cta-section .white-btn {
+    width: 100%;
+  }
+}
+
+
+/* Phase 4 CIBI professional polish */
+
+/* Remove old duplicate CTA blocks. The new global registration section remains. */
+.cta-section.cta-luxury,
+.program-final-cta {
+  display: none !important;
+}
+
+/* Cleaner WhatsApp support button */
+.floating-whatsapp {
+  right: 24px !important;
+  bottom: 24px !important;
+  background: #128c3e !important;
+  color: #ffffff !important;
+  border-radius: 999px !important;
+  padding: 13px 17px !important;
+  gap: 9px !important;
+  font-size: 12px !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 18px 48px rgba(7, 11, 24, .26) !important;
+}
+
+.floating-whatsapp svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* Make public pages feel like one premium system */
+.base44-about-page,
+.programs-page,
+.admission-page,
+main {
+  background: var(--cream);
+}
+
+.page-hero {
+  min-height: 50vh !important;
+  padding: 145px 0 82px !important;
+}
+
+.page-hero-overlay {
+  background:
+    linear-gradient(180deg, rgba(7,11,24,.66), rgba(7,11,24,.92)),
+    linear-gradient(90deg, rgba(7,11,24,.88), rgba(7,11,24,.38)) !important;
+}
+
+.page-hero-content {
+  max-width: 900px !important;
+}
+
+.page-hero-content h1 {
+  font-size: clamp(44px, 6vw, 82px) !important;
+}
+
+/* Home programs: lighter, cleaner, consistent with homepage */
+.program-section {
+  background:
+    linear-gradient(180deg, #fbf7ef 0%, #f8f3e9 100%) !important;
+  padding: 110px 0 115px !important;
+  margin-bottom: 105px !important;
+  border-top: 1px solid rgba(17,24,39,.08) !important;
+  border-bottom: 1px solid rgba(17,24,39,.08) !important;
+}
+
+.home-program-showcase-grid {
+  gap: 24px !important;
+  align-items: stretch !important;
+}
+
+.home-program-showcase-grid .program-showcase-card {
+  background: #ffffff !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(17,24,39,.1) !important;
+  border-top: 3px solid var(--gold) !important;
+  box-shadow: 0 24px 70px rgba(7,11,24,.08) !important;
+  padding: 34px 26px 30px !important;
+  min-height: 365px !important;
+}
+
+.home-program-showcase-grid .program-showcase-card h3 {
+  color: var(--text) !important;
+}
+
+.home-program-showcase-grid .program-showcase-card p,
+.home-program-showcase-grid .program-card-info small {
+  color: var(--muted) !important;
+}
+
+.home-program-showcase-grid .program-showcase-card > span {
+  background: rgba(196,159,100,.1) !important;
+  color: var(--gold) !important;
+  border: 1px solid rgba(196,159,100,.22) !important;
+}
+
+.home-program-showcase-grid .program-card-cert {
+  display: none !important;
+}
+
+/* About page consistency */
+.base44-about-page {
+  color: var(--text) !important;
+}
+
+.base44-about-page .about-founder-section,
+.about-beliefs-section,
+.about-milestones-section,
+.about-mission-vision {
+  color: var(--text) !important;
+}
+
+.about-founder-copy h2,
+.about-church-section h2,
+.about-beliefs-section h2,
+.about-milestones-section h2,
+.about-mission-vision h3 {
+  color: var(--text) !important;
+}
+
+.about-founder-copy p,
+.about-belief-card p,
+.about-timeline-item p,
+.about-mission-vision p,
+.about-stat-card p {
+  color: var(--muted) !important;
+}
+
+.about-church-section {
+  background: rgba(255,255,255,.56) !important;
+  border-top: 1px solid rgba(17,24,39,.08) !important;
+  border-bottom: 1px solid rgba(17,24,39,.08) !important;
+}
+
+.about-stat-card,
+.about-belief-card,
+.about-timeline-item,
+.about-mission-vision > div {
+  background: #ffffff !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(17,24,39,.1) !important;
+  box-shadow: 0 20px 60px rgba(7,11,24,.06) !important;
+}
+
+/* Programs page consistency */
+.programs-page {
+  color: var(--text) !important;
+}
+
+.program-overview-section,
+.program-curriculum-section,
+.program-learning-section,
+.program-requirements-section,
+.program-converter-section {
+  background: var(--cream) !important;
+  color: var(--text) !important;
+  border-color: rgba(17,24,39,.08) !important;
+}
+
+.program-overview-section .section-intro h2,
+.program-curriculum-section .section-intro h2,
+.program-requirements-section .section-intro h2,
+.program-learning-section .section-intro h2 {
+  color: var(--text) !important;
+}
+
+.program-overview-section .section-intro p,
+.program-curriculum-section .section-intro p,
+.program-requirements-section .section-intro p,
+.program-learning-section .section-intro p {
+  color: var(--muted) !important;
+}
+
+.base44-program-card {
+  background: #ffffff !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(17,24,39,.1) !important;
+  border-top: 3px solid var(--gold) !important;
+  box-shadow: 0 24px 70px rgba(7,11,24,.08) !important;
+}
+
+.base44-program-card h3 {
+  color: var(--text) !important;
+}
+
+.base44-program-card p,
+.base44-program-card small {
+  color: var(--muted) !important;
+}
+
+.program-accordion-item,
+.program-requirements-box,
+.program-currency-panel,
+.path-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(17,24,39,.1) !important;
+  box-shadow: 0 18px 55px rgba(7,11,24,.06) !important;
+}
+
+/* Admission page consistency */
+.admission-page {
+  color: var(--text) !important;
+}
+
+.admission-band {
+  background: rgba(255,255,255,.58) !important;
+  border-top: 1px solid rgba(17,24,39,.08) !important;
+  border-bottom: 1px solid rgba(17,24,39,.08) !important;
+}
+
+.admission-role-card,
+.requirement-box,
+.process-card,
+.fee-card,
+.calendar-card,
+.contact-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(17,24,39,.1) !important;
+  box-shadow: 0 18px 55px rgba(7,11,24,.06) !important;
+}
+
+/* Make the new registration section feel intentional, not random */
+.site-registration-cta {
+  background:
+    radial-gradient(circle at top right, rgba(196,159,100,.18), transparent 34%),
+    linear-gradient(135deg, #070b18 0%, #111827 100%) !important;
+  padding: 76px 0 !important;
+  border-top: 1px solid rgba(196,159,100,.28) !important;
+  border-bottom: 1px solid rgba(196,159,100,.28) !important;
+}
+
+.site-registration-inner {
+  width: min(1180px, calc(100% - 40px)) !important;
+}
+
+.site-registration-actions .white-btn,
+.site-registration-actions .ghost-btn {
+  min-width: 190px !important;
+}
+
+/* Mobile improvements */
+@media (max-width: 1180px) {
+  .home-program-showcase-grid,
+  .base44-program-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .home-program-showcase-grid,
+  .base44-program-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .site-registration-inner {
+    grid-template-columns: 1fr !important;
+  }
+
+  .site-registration-actions {
+    justify-content: flex-start !important;
+  }
+
+  .site-registration-actions .gold-btn,
+  .site-registration-actions .white-btn,
+  .site-registration-actions .ghost-btn {
+    width: 100% !important;
+  }
+
+  .floating-whatsapp {
+    right: 14px !important;
+    bottom: 14px !important;
+    padding: 13px !important;
+  }
+
+  .floating-whatsapp span {
+    display: none !important;
+  }
+}
+
+/* End Phase 4 CIBI professional polish */
