@@ -6821,31 +6821,166 @@ button:disabled {
 
 
 
-/* Phase 5 Base44 clean system */
 
-/* Clean Base44 heading scale: not giant */
-main .section-intro h2,
-.base44-about-page .section-intro h2,
-.programs-page .section-intro h2,
-.admission-page .section-intro h2,
-.home-faq-section .section-intro h2 {
-  font-size: clamp(36px, 4.2vw, 60px) !important;
-  line-height: 1.1 !important;
-  letter-spacing: -0.025em !important;
+
+
+/* Phase 6 Global typography system */
+
+/*
+  One typography source of truth.
+  Change font sizes here, not section by section.
+*/
+:root {
+  --display-font: var(--font-display);
+
+  --type-hero: clamp(42px, 5.2vw, 68px);
+  --type-section: clamp(34px, 4.3vw, 58px);
+  --type-title: clamp(24px, 2.6vw, 36px);
+  --type-card-title: clamp(17px, 1.6vw, 23px);
+  --type-small-title: 15px;
+
+  --type-body-lg: 18px;
+  --type-body: 15px;
+  --type-body-sm: 13px;
+  --type-label: 10px;
+
+  --leading-heading: 1.08;
+  --leading-body: 1.7;
+  --heading-track: -0.025em;
+}
+
+/* Base font foundation */
+body {
+  font-family: var(--font-body) !important;
+  font-size: var(--type-body) !important;
+  line-height: var(--leading-body) !important;
+}
+
+/* All headings inherit one display language */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display) !important;
+  line-height: var(--leading-heading) !important;
+  letter-spacing: var(--heading-track) !important;
   font-weight: 600 !important;
 }
 
-main .page-hero-content h1,
-.base44-about-page .page-hero-content h1,
-.programs-page .page-hero-content h1,
-.admission-page .page-hero-content h1 {
-  font-size: clamp(40px, 4.8vw, 64px) !important;
+/* Page hero titles */
+.hero-content h1,
+.page-hero-content h1,
+.student-decision-gate h1,
+.gate h1 {
+  font-size: var(--type-hero) !important;
+  line-height: 1.05 !important;
+}
+
+/* Section headings */
+.section-intro h2,
+.cta-section h2,
+.site-registration-inner h2,
+.quote-card h2,
+.about-founder-copy h2,
+.about-church-section h2,
+.about-beliefs-section h2,
+.about-milestones-section h2,
+.about-classroom-content h2,
+.apply-copy h2,
+.program-final-cta h2,
+.learning-room-header h2,
+.student-tab-heading h2,
+.support-head h2,
+.content-manager-title h2,
+.auth-heading-block h2,
+.auth-brand-panel h2 {
+  font-size: var(--type-section) !important;
   line-height: 1.08 !important;
-  letter-spacing: -0.025em !important;
-  font-weight: 600 !important;
 }
 
-/* Dark Base44 public pages */
+/* Medium titles */
+.learning-room-header h2,
+.portal-header h1,
+.content-manager-title h2 {
+  font-size: var(--type-title) !important;
+}
+
+/* Card titles */
+.feature-card h3,
+.content-card h3,
+.path-card h3,
+.course-card h3,
+.book-card h3,
+.about-stat-card h3,
+.about-belief-card h3,
+.about-mission-vision h3,
+.base44-program-card h3,
+.program-showcase-card h3,
+.admission-role-card h3,
+.program-accordion-item strong,
+.requirement-box h3,
+.process-card h3,
+.fee-card h3,
+.calendar-card h3,
+.classroom-box h3,
+.student-dashboard-panel h3,
+.admin-section h3,
+.payment-box h3,
+.contact-map-card h2 {
+  font-size: var(--type-card-title) !important;
+  line-height: 1.18 !important;
+}
+
+/* Body copy */
+p,
+li {
+  font-size: var(--type-body) !important;
+  line-height: var(--leading-body) !important;
+}
+
+/* Subtitles and descriptive copy */
+.section-intro p,
+.page-hero-content p,
+.hero-content > p:not(.eyebrow):not(.framed),
+.site-registration-inner p,
+.about-founder-copy p,
+.about-classroom-content p:not(.eyebrow),
+.program-final-cta p,
+.quote-card blockquote {
+  font-size: var(--type-body-lg) !important;
+  line-height: 1.72 !important;
+}
+
+/* Labels / eyebrow text */
+.eyebrow,
+.kicker small,
+.base44-program-card > span,
+.program-showcase-card > span,
+.site-registration-inner span,
+.contact-map-card span,
+.section-mini-head span,
+.content-editor-header span,
+.payment-box-heading span {
+  font-size: var(--type-label) !important;
+  letter-spacing: .28em !important;
+  font-family: var(--font-body) !important;
+  font-weight: 900 !important;
+}
+
+/* Buttons should stay consistent */
+.gold-btn,
+.dark-btn,
+.white-btn,
+.ghost-btn,
+.text-link,
+.program-detail-link,
+.floating-whatsapp {
+  font-family: var(--font-body) !important;
+  font-size: 11px !important;
+  letter-spacing: .18em !important;
+  font-weight: 900 !important;
+}
+
+/* Public page background consistency */
 .base44-about-page,
 .programs-page,
 .admission-page {
@@ -6853,246 +6988,87 @@ main .page-hero-content h1,
   color: #ffffff !important;
 }
 
-.base44-about-page .section-intro p,
-.programs-page .section-intro p,
-.admission-page .section-intro p {
-  color: rgba(145,166,199,.82) !important;
-  font-size: 16px !important;
-  line-height: 1.7 !important;
+/* Public page paragraph color consistency */
+.base44-about-page p,
+.programs-page p,
+.admission-page p,
+.home-faq-section p {
+  color: rgba(145, 166, 199, .82) !important;
 }
 
-/* About cards: clean dark, thin border, no heavy box */
-.base44-about-page .about-stat-card,
-.base44-about-page .about-belief-card,
-.base44-about-page .about-mission-vision > div {
-  background: rgba(255,255,255,.025) !important;
-  border: 1px solid rgba(255,255,255,.09) !important;
-  box-shadow: none !important;
+/* Keep white/off-white sections readable */
+.program-learning-section p,
+.program-learning-section li,
+.program-converter-section p,
+.program-section p,
+.learning-paths p,
+.contact-page-section p {
+  color: var(--muted) !important;
 }
 
-.base44-about-page .about-stat-card h3,
-.base44-about-page .about-belief-card h3,
-.base44-about-page .about-mission-vision h3 {
-  color: #ffffff !important;
-  font-size: clamp(18px, 1.8vw, 24px) !important;
-  line-height: 1.18 !important;
+/* About stat cards should follow global typography, not giant local text */
+.base44-about-page .about-stat-card {
+  min-height: 220px !important;
+  padding: 34px 24px !important;
 }
 
-.base44-about-page .about-stat-card p,
-.base44-about-page .about-belief-card p,
-.base44-about-page .about-mission-vision p {
-  color: rgba(145,166,199,.82) !important;
+.base44-about-page .about-stat-card h3 {
+  font-size: var(--type-card-title) !important;
+  margin-bottom: 9px !important;
 }
 
-.base44-about-page .about-stat-card svg,
-.base44-about-page .about-stat-card span svg {
-  color: var(--gold) !important;
-  opacity: 1 !important;
-  visibility: visible !important;
+.base44-about-page .about-stat-card p {
+  font-size: var(--type-body-sm) !important;
+  line-height: 1.55 !important;
 }
 
-/* Exact Base44 timeline: dot + one text block */
-.base44-about-page .about-milestones-section {
-  background: var(--black) !important;
-  padding: 105px 0 145px !important;
-  border-top: 1px solid rgba(255,255,255,.06) !important;
+/* Certificate guard: do not let global website typography destroy certificate layout */
+.certificate-sheet h2 {
+  font-size: 58px !important;
+  line-height: 1 !important;
 }
 
-.base44-about-page .about-milestones-section .section-intro {
-  margin-bottom: 76px !important;
+.certificate-sheet h3 {
+  font-size: clamp(32px, 4vw, 50px) !important;
+  line-height: 1.05 !important;
 }
 
-.base44-about-page .about-timeline {
-  width: min(760px, calc(100% - 48px)) !important;
-  max-width: 760px !important;
-  margin: 0 auto !important;
-  position: relative !important;
-  display: grid !important;
-  gap: 0 !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
+.certificate-sheet h4 {
+  font-size: 42px !important;
+  line-height: 1 !important;
 }
 
-.base44-about-page .about-timeline::before {
-  content: "" !important;
-  position: absolute !important;
-  left: 23px !important;
-  top: 23px !important;
-  bottom: 23px !important;
-  width: 1px !important;
-  background: rgba(255,255,255,.12) !important;
-}
-
-.base44-about-page .about-timeline-item {
-  display: grid !important;
-  grid-template-columns: 56px minmax(0, 1fr) !important;
-  gap: 20px !important;
-  align-items: start !important;
-  min-height: 108px !important;
-  padding: 0 0 34px !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  position: relative !important;
-}
-
-.base44-about-page .about-timeline-item::before {
-  display: none !important;
-}
-
-.base44-about-page .about-timeline-item:last-child {
-  padding-bottom: 0 !important;
-}
-
-.base44-about-page .about-timeline-item i {
-  position: relative !important;
-  inset: auto !important;
-  width: 46px !important;
-  height: 46px !important;
-  margin: 0 !important;
-  border-radius: 50% !important;
-  border: 1px solid var(--gold) !important;
-  background: var(--black) !important;
-  display: block !important;
-  z-index: 2 !important;
-}
-
-.base44-about-page .about-timeline-item i::after {
-  content: "" !important;
-  position: absolute !important;
-  width: 9px !important;
-  height: 9px !important;
-  border-radius: 50% !important;
-  background: var(--gold) !important;
-  left: 50% !important;
-  top: 50% !important;
-  transform: translate(-50%, -50%) !important;
-}
-
-.base44-about-page .about-timeline-item div {
-  display: block !important;
-  padding-top: 4px !important;
-}
-
-.base44-about-page .about-timeline-item strong {
-  display: block !important;
-  color: var(--gold) !important;
-  font-family: var(--font-body) !important;
-  font-size: 15px !important;
-  line-height: 1.25 !important;
-  font-weight: 800 !important;
-  letter-spacing: .04em !important;
-  white-space: normal !important;
-  margin-bottom: 8px !important;
-}
-
-.base44-about-page .about-timeline-item p {
-  margin: 0 !important;
-  padding: 0 !important;
-  color: rgba(145,166,199,.82) !important;
-  font-size: 14px !important;
-  line-height: 1.6 !important;
-  max-width: 560px !important;
-}
-
-/* Admission and program dark cards like Base44 */
-.admission-page .admission-section,
-.admission-page .admission-band,
-.programs-page .program-learning-section,
-.programs-page .program-curriculum-section,
-.programs-page .program-requirements-section {
-  background: var(--black) !important;
-  color: #ffffff !important;
-}
-
-.admission-page .admission-role-card,
-.programs-page .program-learning-grid .path-card,
-.programs-page .program-accordion-item,
-.programs-page .program-requirements-box {
-  background: rgba(255,255,255,.025) !important;
-  border: 1px solid rgba(255,255,255,.09) !important;
-  box-shadow: none !important;
-  color: #ffffff !important;
-}
-
-.admission-page .admission-role-card h3,
-.programs-page .program-learning-grid .path-card h3,
-.programs-page .program-accordion-item strong,
-.programs-page .program-requirements-box h3 {
-  color: #ffffff !important;
-}
-
-.admission-page .admission-role-card p,
-.programs-page .program-learning-grid .path-card p,
-.programs-page .program-learning-grid .path-card li,
-.programs-page .program-accordion-item small,
-.programs-page .program-accordion-body p,
-.programs-page .program-requirements-box p {
-  color: rgba(145,166,199,.82) !important;
-}
-
-/* Keep icons visible */
-.admission-page svg,
-.programs-page svg,
-.base44-about-page svg {
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* WhatsApp stays clean */
-.floating-whatsapp {
-  position: fixed !important;
-  right: 24px !important;
-  bottom: 24px !important;
-  z-index: 90 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  background: #128c3e !important;
-  color: #ffffff !important;
-  border-radius: 999px !important;
-  padding: 14px 20px !important;
-  font-size: 12px !important;
-  font-weight: 900 !important;
-  text-transform: uppercase !important;
-  letter-spacing: .09em !important;
-}
-
-/* Mobile */
+/* Mobile global scale */
 @media (max-width: 720px) {
-  main .section-intro h2,
-  .base44-about-page .section-intro h2,
-  .programs-page .section-intro h2,
-  .admission-page .section-intro h2 {
-    font-size: 36px !important;
+  :root {
+    --type-hero: 40px;
+    --type-section: 36px;
+    --type-title: 28px;
+    --type-card-title: 20px;
+    --type-body-lg: 16px;
+    --type-body: 14px;
   }
 
-  main .page-hero-content h1,
-  .base44-about-page .page-hero-content h1,
-  .programs-page .page-hero-content h1,
-  .admission-page .page-hero-content h1 {
-    font-size: 38px !important;
+  .hero-content h1,
+  .page-hero-content h1,
+  .student-decision-gate h1,
+  .gate h1 {
+    font-size: var(--type-hero) !important;
   }
 
-  .base44-about-page .about-timeline {
-    width: min(100% - 32px, 760px) !important;
-  }
-
-  .base44-about-page .about-timeline-item {
-    grid-template-columns: 52px minmax(0, 1fr) !important;
-    gap: 16px !important;
-  }
-
-  .floating-whatsapp {
-    right: 14px !important;
-    bottom: 14px !important;
-    padding: 13px 14px !important;
-  }
-
-  .floating-whatsapp span {
-    display: none !important;
+  .section-intro h2,
+  .cta-section h2,
+  .site-registration-inner h2,
+  .quote-card h2,
+  .about-founder-copy h2,
+  .about-church-section h2,
+  .about-beliefs-section h2,
+  .about-milestones-section h2,
+  .about-classroom-content h2,
+  .apply-copy h2,
+  .program-final-cta h2 {
+    font-size: var(--type-section) !important;
   }
 }
 
-/* End Phase 5 Base44 clean system */
+/* End Phase 6 Global typography system */
