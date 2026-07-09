@@ -8023,3 +8023,89 @@ small {
     color: var(--gold) !important;
   }
 }
+/* CIBI mobile stats fix: keep cream background, arrange 2 columns */
+@media (max-width: 768px) {
+  .stats,
+  .stats.stats-flat {
+    background: #f5efe5 !important;
+    color: #070b18 !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    padding: 34px 22px !important;
+    margin: 0 !important;
+    border-top: 1px solid rgba(7, 11, 24, 0.08) !important;
+    border-bottom: 1px solid rgba(7, 11, 24, 0.08) !important;
+  }
+
+  .stats div,
+  .stats.stats-flat div {
+    min-height: 132px !important;
+    padding: 30px 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    border: 0 !important;
+    border-color: rgba(7, 11, 24, 0.12) !important;
+    background: transparent !important;
+  }
+
+  .stats div:nth-child(odd),
+  .stats.stats-flat div:nth-child(odd) {
+    border-right: 1px solid rgba(7, 11, 24, 0.12) !important;
+  }
+
+  .stats div:nth-child(n + 3),
+  .stats.stats-flat div:nth-child(n + 3) {
+    border-top: 1px solid rgba(7, 11, 24, 0.12) !important;
+  }
+
+  .stats strong,
+  .stats.stats-flat strong {
+    color: #070b18 !important;
+    font-family: Georgia, 'Times New Roman', serif !important;
+    font-size: clamp(2rem, 8vw, 2.8rem) !important;
+    line-height: 1 !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.04em !important;
+    margin: 0 0 16px !important;
+  }
+
+  .stats span,
+  .stats.stats-flat span {
+    color: #6f7b8d !important;
+    font-size: 0.74rem !important;
+    line-height: 1.35 !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.28em !important;
+    text-transform: uppercase !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .stats,
+  .stats.stats-flat {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .stats div,
+  .stats.stats-flat div {
+    min-height: 118px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .stats strong,
+  .stats.stats-flat strong {
+    font-size: 2rem !important;
+  }
+
+  .stats span,
+  .stats.stats-flat span {
+    font-size: 0.66rem !important;
+    letter-spacing: 0.22em !important;
+  }
+}
