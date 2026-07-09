@@ -8109,3 +8109,73 @@ small {
     letter-spacing: 0.22em !important;
   }
 }
+/* CIBI brand name one-line fix
+   Add this to the bottom of client/src/styles.css */
+
+.navbar .brand,
+.nav-inner .brand {
+  flex: 0 0 auto !important;
+  min-width: 410px !important;
+  max-width: 460px !important;
+}
+
+.navbar .brand-copy,
+.nav-inner .brand-copy {
+  min-width: 0 !important;
+}
+
+.navbar .brand-copy strong,
+.nav-inner .brand-copy strong {
+  font-weight: 900 !important;
+  letter-spacing: .32em !important;
+}
+
+.navbar .brand-copy small,
+.nav-inner .brand-copy small {
+  display: block !important;
+  white-space: nowrap !important;
+  width: max-content !important;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+  letter-spacing: .13em !important;
+  font-weight: 800 !important;
+}
+
+.navbar .brand-copy em,
+.nav-inner .brand-copy em {
+  white-space: nowrap !important;
+}
+
+@media (min-width: 901px) {
+  .navbar .nav-inner {
+    gap: 24px !important;
+  }
+
+  .navbar .desktop-nav {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+    gap: clamp(18px, 2.1vw, 36px) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .navbar .brand,
+  .nav-inner .brand {
+    min-width: 0 !important;
+    max-width: calc(100vw - 105px) !important;
+  }
+
+  .navbar .brand-copy small,
+  .nav-inner .brand-copy small {
+    white-space: nowrap !important;
+    width: auto !important;
+    max-width: calc(100vw - 170px) !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    font-size: clamp(8px, 1.8vw, 10px) !important;
+    letter-spacing: .08em !important;
+  }
+}
