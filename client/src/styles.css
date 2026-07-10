@@ -8860,3 +8860,68 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
   }
 }
 
+
+
+/* CIBI register modal: fixed left panel, scrollable form only */
+.auth-modal-premium {
+  overflow: hidden !important;
+}
+
+.auth-modal-premium .auth-modal-grid {
+  max-height: calc(100vh - 52px) !important;
+  overflow: hidden !important;
+  align-items: stretch !important;
+}
+
+.auth-modal-premium .auth-brand-panel {
+  position: sticky !important;
+  top: 0 !important;
+  height: calc(100vh - 52px) !important;
+  min-height: 620px !important;
+  overflow: hidden !important;
+  align-self: stretch !important;
+}
+
+.auth-modal-premium .auth-form-panel {
+  max-height: calc(100vh - 52px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  scrollbar-width: thin !important;
+}
+
+.auth-modal-premium .auth-form-panel::-webkit-scrollbar {
+  width: 7px;
+}
+
+.auth-modal-premium .auth-form-panel::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.06);
+}
+
+.auth-modal-premium .auth-form-panel::-webkit-scrollbar-thumb {
+  background: rgba(196, 159, 100, 0.55);
+}
+
+@media (max-width: 860px) {
+  .auth-modal-premium,
+  .auth-modal-premium .auth-modal-grid {
+    overflow: auto !important;
+  }
+
+  .auth-modal-premium .auth-brand-panel {
+    position: relative !important;
+    height: auto !important;
+    min-height: 280px !important;
+  }
+
+  .auth-modal-premium .auth-form-panel {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-modal-premium .auth-brand-panel {
+    display: none !important;
+  }
+}

@@ -1449,7 +1449,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
     name: "",
     email: "",
     phone: "",
-    country: "Nigeria",
+    country: "",
     password: "",
     courseId: firstCourseId,
     learningStream: learningStreams[0] || "Regular Classes",
@@ -6937,12 +6937,11 @@ const COUNTRY_OPTIONS = [
 
 function findCountry(value) {
   const text = String(value || "").trim().toLowerCase();
-  if (!text) return COUNTRY_OPTIONS[0];
+  if (!text) return null;
   return (
     COUNTRY_OPTIONS.find((item) => item.name.toLowerCase() === text || item.code.toLowerCase() === text) ||
     COUNTRY_OPTIONS.find((item) => item.name.toLowerCase().startsWith(text)) ||
-    COUNTRY_OPTIONS.find((item) => item.name.toLowerCase().includes(text)) ||
-    COUNTRY_OPTIONS[0]
+    COUNTRY_OPTIONS.find((item) => item.name.toLowerCase().includes(text)) || null
   );
 }
 
@@ -6953,7 +6952,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
     name: "",
     email: "",
     phone: "",
-    country: "Nigeria",
+    country: "",
     password: "",
     courseId: availableCourses[0]?.id || "",
     learningStream: learningStreams[0] || "Regular Classes"
