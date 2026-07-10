@@ -8762,3 +8762,101 @@ small {
     height: 96px !important;
   }
 }
+
+/* =========================================================
+   CIBI FORCE REGISTER MODAL SELECT FIX - CSS ONLY
+   This targets the top-nav Register modal only visually.
+   It does not touch backend, database, or JavaScript logic.
+   ========================================================= */
+body .auth-backdrop .auth-modal-premium .auth-form-panel form.premium-auth-form select,
+body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form select,
+body .auth-backdrop .auth-modal-premium .auth-field select,
+body .modal-backdrop.auth-backdrop .auth-modal-premium select,
+body .modal-backdrop .auth-modal-premium select {
+  display: block !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 58px !important;
+  min-height: 58px !important;
+  margin: 0 !important;
+  padding: 0 52px 0 17px !important;
+  border: 1px solid rgba(17, 24, 39, 0.12) !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  background-color: #f8f3e9 !important;
+  color: #070b18 !important;
+  box-shadow: none !important;
+  font-family: var(--font-body) !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 58px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(7, 11, 24, 0.72) 50%),
+    linear-gradient(135deg, rgba(7, 11, 24, 0.72) 50%, transparent 50%),
+    linear-gradient(to right, rgba(17, 24, 39, 0.10), rgba(17, 24, 39, 0.10)) !important;
+  background-position:
+    calc(100% - 24px) 50%,
+    calc(100% - 17px) 50%,
+    calc(100% - 48px) 50% !important;
+  background-size: 7px 7px, 7px 7px, 1px 30px !important;
+  background-repeat: no-repeat !important;
+}
+
+body .auth-backdrop .auth-modal-premium .auth-form-panel form.premium-auth-form select:focus,
+body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form select:focus,
+body .auth-backdrop .auth-modal-premium .auth-field select:focus,
+body .modal-backdrop.auth-backdrop .auth-modal-premium select:focus,
+body .modal-backdrop .auth-modal-premium select:focus {
+  border-color: rgba(196, 159, 100, 0.72) !important;
+  background-color: #fffaf1 !important;
+  box-shadow: 0 0 0 4px rgba(196, 159, 100, 0.12) !important;
+}
+
+body .auth-backdrop .auth-modal-premium .auth-form-panel form.premium-auth-form select option,
+body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form select option,
+body .auth-backdrop .auth-modal-premium .auth-field select option,
+body .modal-backdrop.auth-backdrop .auth-modal-premium select option,
+body .modal-backdrop .auth-modal-premium select option {
+  color: #070b18 !important;
+  background: #ffffff !important;
+  font-family: var(--font-body) !important;
+  font-size: 15px !important;
+}
+
+/* Keep all Register modal field heights consistent */
+body .auth-backdrop .auth-modal-premium .auth-form-panel form.premium-auth-form .auth-field input,
+body .auth-backdrop .auth-modal-premium .auth-form-panel form.premium-auth-form .phone-input-wrap,
+body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .auth-field input,
+body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .phone-input-wrap {
+  height: 58px !important;
+  min-height: 58px !important;
+  border-radius: 0 !important;
+}
+
+body .auth-backdrop .auth-modal-premium .auth-form-panel form.premium-auth-form .phone-input-wrap b,
+body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .phone-input-wrap b {
+  height: 58px !important;
+  min-height: 58px !important;
+  min-width: 76px !important;
+  justify-content: center !important;
+}
+
+@media (max-width: 560px) {
+  body .auth-backdrop .auth-modal-premium .auth-form-panel form.premium-auth-form select,
+  body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form select,
+  body .auth-backdrop .auth-modal-premium .auth-field select,
+  body .modal-backdrop.auth-backdrop .auth-modal-premium select,
+  body .modal-backdrop .auth-modal-premium select {
+    height: 56px !important;
+    min-height: 56px !important;
+    line-height: 56px !important;
+  }
+}
+
