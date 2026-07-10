@@ -6958,7 +6958,16 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
     learningStream: learningStreams[0] || "Regular Classes"
   });
   const selectedCountry = findCountry(form.country);
+  const [countryMenuOpen, setCountryMenuOpen] = useState(false);
   const isRegister = mode === "register";
+  const countrySearchText = String(form.country || "").trim().toLowerCase();
+  const countryMatches = countrySearchText
+    ? COUNTRY_OPTIONS.filter((country) =>
+        country.name.toLowerCase().includes(countrySearchText) ||
+        country.code.toLowerCase().includes(countrySearchText) ||
+        country.dialCode.includes(countrySearchText)
+      )
+    : COUNTRY_OPTIONS;
 
   useEffect(() => {
     if (isRegister && !form.courseId && availableCourses[0]?.id) {
@@ -7046,21 +7055,55 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                   </label>
 
                   <div className="auth-two-cols">
-                    <label className="auth-field">
+                    <div className="auth-field country-combobox-field">
                       <span>Country</span>
-                      <input
-                        list="crobic-country-options"
-                        placeholder="Start typing country"
-                        value={form.country}
-                        onChange={(e) => updateField("country", e.target.value)}
-                        required
-                      />
-                      <datalist id="crobic-country-options">
-                        {COUNTRY_OPTIONS.map((country) => (
-                          <option key={country.code} value={country.name}>{country.dialCode}</option>
-                        ))}
-                      </datalist>
-                    </label>
+                      <div className="country-combobox">
+                        <input
+                          placeholder="Select or type country"
+                          value={form.country}
+                          onFocus={() => setCountryMenuOpen(true)}
+                          onBlur={() => window.setTimeout(() => setCountryMenuOpen(false), 160)}
+                          onChange={(e) => {
+                            updateField("country", e.target.value);
+                            setCountryMenuOpen(true);
+                          }}
+                          aria-label="Country"
+                          aria-expanded={countryMenuOpen}
+                          aria-controls="cibi-country-menu"
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="country-combobox-toggle"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setCountryMenuOpen((open) => !open)}
+                          aria-label="Show countries"
+                        >
+                          <ChevronDown size={18} />
+                        </button>
+
+                        {countryMenuOpen && (
+                          <div className="country-combobox-menu" id="cibi-country-menu">
+                            {countryMatches.length ? countryMatches.map((country) => (
+                              <button
+                                type="button"
+                                key={country.code}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  updateField("country", country.name);
+                                  setCountryMenuOpen(false);
+                                }}
+                              >
+                                <strong>{country.name}</strong>
+                                <small>{country.dialCode}</small>
+                              </button>
+                            )) : (
+                              <div className="country-combobox-empty">No country found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     <label className="auth-field">
                       <span>Phone number</span>

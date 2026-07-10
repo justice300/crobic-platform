@@ -8925,3 +8925,104 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     display: none !important;
   }
 }
+
+
+/* CIBI register modal searchable country dropdown */
+.country-combobox-field {
+  position: relative !important;
+}
+
+.country-combobox {
+  position: relative !important;
+  width: 100% !important;
+}
+
+.country-combobox input {
+  width: 100% !important;
+  min-height: 56px !important;
+  border: 1px solid rgba(17, 24, 39, 0.12) !important;
+  background: #f8f3e9 !important;
+  color: var(--black) !important;
+  padding: 0 58px 0 17px !important;
+  outline: none !important;
+  border-radius: 0 !important;
+}
+
+.country-combobox input:focus {
+  border-color: rgba(196, 159, 100, 0.68) !important;
+  box-shadow: 0 0 0 4px rgba(196, 159, 100, 0.12) !important;
+  background: #fffaf1 !important;
+}
+
+.country-combobox-toggle {
+  position: absolute !important;
+  right: 0 !important;
+  top: 0 !important;
+  width: 56px !important;
+  height: 56px !important;
+  border: 0 !important;
+  border-left: 1px solid rgba(17, 24, 39, 0.12) !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  display: grid !important;
+  place-items: center !important;
+  z-index: 2 !important;
+}
+
+.country-combobox-menu {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: calc(100% + 8px) !important;
+  z-index: 80 !important;
+  max-height: 260px !important;
+  overflow-y: auto !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(17, 24, 39, 0.14) !important;
+  box-shadow: 0 22px 60px rgba(7, 11, 24, 0.18) !important;
+  padding: 8px !important;
+}
+
+.country-combobox-menu button {
+  width: 100% !important;
+  border: 0 !important;
+  background: transparent !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  padding: 13px 12px !important;
+  text-align: left !important;
+  color: var(--black) !important;
+}
+
+.country-combobox-menu button:hover {
+  background: rgba(196, 159, 100, 0.12) !important;
+}
+
+.country-combobox-menu strong {
+  font-size: 14px !important;
+  color: var(--black) !important;
+}
+
+.country-combobox-menu small {
+  color: var(--gold) !important;
+  font-weight: 900 !important;
+}
+
+.country-combobox-empty {
+  padding: 14px 12px !important;
+  color: var(--muted) !important;
+  font-size: 13px !important;
+}
+
+.country-combobox-menu::-webkit-scrollbar {
+  width: 7px;
+}
+
+.country-combobox-menu::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.06);
+}
+
+.country-combobox-menu::-webkit-scrollbar-thumb {
+  background: rgba(196, 159, 100, 0.55);
+}
