@@ -6959,8 +6959,9 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
   });
   const selectedCountry = findCountry(form.country);
   const [countryMenuOpen, setCountryMenuOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
   const isRegister = mode === "register";
-  const countrySearchText = String(form.country || "").trim().toLowerCase();
+  const countrySearchText = String(countrySearch || "").trim().toLowerCase();
   const countryMatches = countrySearchText
     ? COUNTRY_OPTIONS.filter((country) =>
         country.name.toLowerCase().includes(countrySearchText) ||
@@ -7060,11 +7061,14 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                       <div className="country-combobox">
                         <input
                           placeholder="Select or type country"
-                          value={form.country}
-                          onFocus={() => setCountryMenuOpen(true)}
+                          value={countryMenuOpen ? countrySearch : form.country}
+                          onFocus={() => {
+                            setCountrySearch("");
+                            setCountryMenuOpen(true);
+                          }}
                           onBlur={() => window.setTimeout(() => setCountryMenuOpen(false), 160)}
                           onChange={(e) => {
-                            updateField("country", e.target.value);
+                            setCountrySearch(e.target.value);
                             setCountryMenuOpen(true);
                           }}
                           aria-label="Country"
@@ -7076,7 +7080,10 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                           type="button"
                           className="country-combobox-toggle"
                           onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => setCountryMenuOpen((open) => !open)}
+                          onClick={() => {
+                            setCountrySearch("");
+                            setCountryMenuOpen((open) => !open);
+                          }}
                           aria-label="Show countries"
                         >
                           <ChevronDown size={18} />
@@ -7091,6 +7098,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                                 onMouseDown={(e) => {
                                   e.preventDefault();
                                   updateField("country", country.name);
+                                  setCountrySearch("");
                                   setCountryMenuOpen(false);
                                 }}
                               >
