@@ -1477,11 +1477,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
 
   async function submit(e) {
     e.preventDefault();
-    if (!form.courseId) {
-      showToast("Please select the programme you are applying for.", "error");
-      return;
-    }
-    if (!form.learningStream) {
+    const resolvedCourseId = form.courseId || availableCourses?.[0]?.id || ""; if (!resolvedCourseId) { showToast("Please select the programme you are applying for.", "error"); return; } if (!form.learningStream) {
       showToast("Please select your learning stream.", "error");
       return;
     }
@@ -1492,8 +1488,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
         method: "POST",
         body: {
           ...form,
-          programmeId: Number(form.courseId),
-          courseId: Number(form.courseId),
+          programmeId: Number(resolvedCourseId), courseId: Number(resolvedCourseId),
           applicationSource: "ADMISSION_PAGE"
         }
       });
@@ -6996,8 +6991,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
       const payload = isRegister
         ? {
             ...form,
-            programmeId: Number(form.courseId),
-            courseId: Number(form.courseId),
+            programmeId: Number(resolvedCourseId), courseId: Number(resolvedCourseId),
             country: selectedCountry?.name || form.country,
             phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",
             applicationSource: "QUICK_REGISTER"
