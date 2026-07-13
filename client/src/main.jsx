@@ -158,6 +158,25 @@ function formatUsd(amount) {
   return `$${Number(amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
+function isTwelveMonthDiplomaFee(course) {
+  const title = String(course?.title || "").toLowerCase();
+  const level = String(course?.level || "").toLowerCase();
+  const fee = usdFee(course);
+  return fee === 190 && (title.includes("diploma") || level.includes("diploma")) && !title.includes("advanced") && !level.includes("advanced");
+}
+
+function programmeFeeText(course) {
+  const fee = usdFee(course);
+  if (fee <= 0) return "Contact Us";
+  return isTwelveMonthDiplomaFee(course) ? `${formatUsd(fee)} (12 months)` : formatUsd(fee);
+}
+
+function programmePaymentFeeText(course) {
+  const fee = usdFee(course);
+  if (fee <= 0) return "Contact Us";
+  return isTwelveMonthDiplomaFee(course) ? `${formatUsd(fee)} (12-month payment)` : formatUsd(fee);
+}
+
 function parseRates(settings = {}) {
   return String(settings.currency_rates || "NGN|1500\nGHS|12\nKES|130\nZAR|18\nEUR|0.92\nGBP|0.78")
     .split(/\n|,/)
@@ -1186,7 +1205,7 @@ function ProgramCourseCard({ course, openAuth, user, goTo, settings = {}, showDe
       <span>{course.level || "Programme"}</span>
       <h3>{course.title}</h3>
       <div className="program-card-info"><Clock size={15} /> <small>Duration: {course.duration || course.level || "Flexible"}</small></div>
-      <div className="program-card-info"><CreditCard size={15} /> <small>Fee: {fee > 0 ? formatUsd(fee) : "Contact Us"}</small></div>
+      <div className="program-card-info"><CreditCard size={15} /> <small>Fee: {programmeFeeText(course)}</small></div>
       <p>{course.audience || course.description}</p>
       {showDetails ? (
         <button type="button" className="program-detail-link" onClick={() => goTo("programs")}>View Details <ArrowRight size={14} /></button>
@@ -1396,7 +1415,7 @@ function Admissions({ courses, programmes = [], settings, user, openAuth, goTo, 
           {feeProgrammes.map((programme, index) => (
             <div className="fee-card admission-base44-fee-card" key={programme.id || programme.title}>
               <span>{admissionFeeLabel(programme, index)}</span>
-              <h3>{usdFee(programme) > 0 ? formatUsd(usdFee(programme)) : "Contact"}</h3>
+              <h3>{programmeFeeText(programme).replace("Contact Us", "Contact")}</h3>
               <p>{programme.duration || "Flexible"}</p>
             </div>
           ))}
@@ -3503,11 +3522,11 @@ function PaymentPanel({ programmes = [], courses = [], settings }) {
         </div>
       ) : (
         <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-          {availableProgrammes.map((course) => <option value={course.id} key={course.id}>{course.title} — {formatUsd(usdFee(course))}</option>)}
+          {availableProgrammes.map((course) => <option value={course.id} key={course.id}>{course.title} — {programmeFeeText(course)}</option>)}
         </select>
       )}
 
-      {selectedCourse && <div className="payment-fee-line"><strong>Fee:</strong> {formatUsd(usdFee(selectedCourse))}<CurrencyConverter amountUsd={usdFee(selectedCourse)} settings={settings} /></div>}
+      {selectedCourse && <div className="payment-fee-line"><strong>Fee:</strong> {programmePaymentFeeText(selectedCourse)}<CurrencyConverter amountUsd={usdFee(selectedCourse)} settings={settings} /></div>}
 
       <button className="gold-btn full" type="button" onClick={payWithPaystack}>Pay Now with Paystack</button>
 
@@ -7170,7 +7189,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
 
 function CourseCard({ course, openAuth, user, goTo, settings = {} }) {
   const fee = usdFee(course);
-  return <div className="course-card"><img src={course.imageUrl || CIBI_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{fee > 0 && <strong>{formatUsd(fee)}</strong>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
+  return <div className="course-card"><img src={course.imageUrl || CIBI_IMAGES.classroom} alt={course.title} /><div><span>{course.level}</span><h3>{course.title}</h3><div className="meta-line"><Clock size={13} /> <small>{course.duration || course.level || "Program"}</small></div><p>{course.description}</p>{fee > 0 && <strong>{programmeFeeText(course)}</strong>}<button className="gold-btn full" onClick={() => user ? goTo("admissions") : openAuth("register")}>Apply for Course <ArrowRight size={14} /></button></div></div>;
 }
 function BookCard({ book }) { return <div className="book-card"><img src={book.imageUrl || CIBI_IMAGES.logo} alt={book.title} /><div><span>{book.category}</span><h3>{book.title}</h3><p>{book.description}</p><strong>{book.price}</strong><a className="gold-btn full" href={book.buyLink} target="_blank" rel="noreferrer">Buy Book</a></div></div>; }
 function Feature({ icon, title, text }) { return <div className="feature-card"><div className="icon-box">{icon}</div><h3>{title}</h3><p>{text}</p></div>; }
