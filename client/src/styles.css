@@ -9026,3 +9026,42 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
 .country-combobox-menu::-webkit-scrollbar-thumb {
   background: rgba(196, 159, 100, 0.55);
 }
+
+
+/* Contact page final polish */
+.floating-whatsapp {
+  width: 58px !important;
+  height: 58px !important;
+  min-width: 58px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.floating-whatsapp span {
+  display: none !important;
+}
+
+.floating-whatsapp svg {
+  width: 25px !important;
+  height: 25px !important;
+}
+
+.contact-map-card-with-image > div:first-child {
+  position: relative !important;
+  overflow: hidden !important;
+  background-image:
+    linear-gradient(90deg, rgba(6,10,22,.88), rgba(6,10,22,.74)),
+    url('https://media.cibionline.org/ChatGPT%20Image%20Jul%2013%2C%202026%2C%2004_20_21%20PM.png') !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+
+.contact-card .contact-card-link[href^='mailto:'] {
+  display: inline-flex !important;
+  margin-top: 14px !important;
+  color: var(--gold) !important;
+  font-weight: 800 !important;
+  letter-spacing: .04em !important;
+}

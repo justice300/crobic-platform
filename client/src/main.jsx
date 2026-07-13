@@ -659,7 +659,7 @@ function FloatingWhatsApp({ settings = {} }) {
       aria-label="Chat with CIBI customer care on WhatsApp"
     >
       <MessageCircle size={22} />
-      <span>Chat on WhatsApp</span>
+      
     </a>
   );
 }
@@ -667,7 +667,7 @@ function FloatingWhatsApp({ settings = {} }) {
 function ContactMap({ address = CIBI_ADDRESS }) {
   const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(address || CIBI_MAP_QUERY)}&output=embed`;
   return (
-    <div className="contact-map-card">
+    <div className="contact-map-card contact-map-card-with-image">
       <div>
         <span>Visit Us</span>
         <h2>Find Champions Royal Assembly</h2>
@@ -1696,7 +1696,7 @@ function Contact({ settings = {} }) {
         <div className="contact-grid">
           <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
           <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{CIBI_ADDRESS}</p></div>
-          <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CIBI information.")}</p></div>
+          <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CIBI information.")}</p><a className="contact-card-link" href="mailto:info@cibionline.org">{getSetting(settings, "contact_email", "info@cibionline.org")}</a></div>
         </div>
         <ContactMap address={CIBI_ADDRESS} />
       </section>
