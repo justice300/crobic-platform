@@ -9065,3 +9065,11 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
   font-weight: 800 !important;
   letter-spacing: .04em !important;
 }
+/* Reduce text visibility inside contact map background image */
+.contact-map-card-with-image > div:first-child {
+  background-image:
+    linear-gradient(90deg, rgba(6,10,22,.96), rgba(6,10,22,.9)),
+    url('https://media.cibionline.org/ChatGPT%20Image%20Jul%2013%2C%202026%2C%2004_20_21%20PM.png') !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
