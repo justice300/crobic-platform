@@ -9312,3 +9312,55 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
 .premium-bank-box a {
   color: #111827 !important;
 }
+
+/* Admission payment section contrast fixes */
+.admission-payment-card .currency-converter-box strong,
+.apply-action-panel .currency-converter-box strong,
+.payment-box .currency-converter-box strong {
+  color: #ffffff !important;
+}
+
+.admission-payment-card .currency-converter-box b,
+.apply-action-panel .currency-converter-box b,
+.payment-box .currency-converter-box b {
+  color: #c49f64 !important;
+}
+
+.bank-box,
+.bank-box *,
+.manual-bank-box,
+.manual-bank-box *,
+.payment-bank-details,
+.payment-bank-details * {
+  color: #070b18 !important;
+}
+
+.bank-box h4,
+.manual-bank-box h4,
+.payment-bank-details h4 {
+  color: #070b18 !important;
+  opacity: 1 !important;
+}
+
+.bank-box strong,
+.manual-bank-box strong,
+.payment-bank-details strong {
+  color: #070b18 !important;
+}
+
+.currency-converter-box small {
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+
+.currency-converter-box small::before {
+  content: "Prices are based on the current school-approved exchange rate. ";
+}
+
+.currency-converter-box small {
+  font-size: 0 !important;
+}
+
+.currency-converter-box small::before {
+  font-size: 12px !important;
+  line-height: 1.6 !important;
+}
