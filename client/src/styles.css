@@ -9249,3 +9249,66 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Admission page polish: lighter page hero, centered copy, and readable payment boxes */
+.page-hero-bg {
+  opacity: .96 !important;
+  filter: saturate(1.05) contrast(1.04) !important;
+}
+
+.page-hero-overlay {
+  background:
+    linear-gradient(180deg, rgba(7,11,24,.58), rgba(7,11,24,.34), rgba(7,11,24,.78)),
+    linear-gradient(90deg, rgba(7,11,24,.58), rgba(7,11,24,.16), rgba(7,11,24,.52)) !important;
+}
+
+.page-hero-content {
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.page-hero-content .kicker {
+  justify-content: center !important;
+}
+
+.page-hero-content p {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  text-align: center !important;
+  max-width: 760px !important;
+}
+
+.selected-payment-programme {
+  display: grid !important;
+  gap: 6px !important;
+  margin: 24px 0 !important;
+}
+
+.selected-payment-programme span,
+.selected-payment-programme strong,
+.selected-payment-programme small {
+  display: block !important;
+}
+
+.premium-bank-box,
+.admission-apply-card .premium-bank-box {
+  background: #f8f3e9 !important;
+  border: 1px solid rgba(196, 159, 100, 0.38) !important;
+  color: #111827 !important;
+}
+
+.premium-bank-box h4,
+.premium-bank-box strong {
+  color: #111827 !important;
+}
+
+.premium-bank-box p {
+  color: #374151 !important;
+}
+
+.premium-bank-box p span,
+.premium-bank-box a {
+  color: #111827 !important;
+}

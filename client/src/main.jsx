@@ -273,6 +273,17 @@ function showConfirm({
   });
 }
 
+function cleanCibiPageText(value = "") {
+  return String(value || "").replace(/CROBIC programmes/gi, "CIBI programmes");
+}
+
+function scrollToAdmissionPayment() {
+  window.setTimeout(() => {
+    const target = document.getElementById("apply");
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 350);
+}
+
 function NotificationCenter() {
   const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
@@ -1529,6 +1540,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
       setUser(result.user);
       showToast(result.message || "Application submitted. Continue to payment.", "success");
       goTo("admissions");
+      scrollToAdmissionPayment();
     } catch (error) {
       showToast(error.message || "Application submission failed", "error");
     } finally {
@@ -7120,7 +7132,9 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
       setToken(null);
       setUser(result.user);
       close();
-      goTo(isStaffUser(result.user) ? "admin" : result.user.status === "ACTIVE" ? "student" : "admissions");
+      const nextPage = isStaffUser(result.user) ? "admin" : result.user.status === "ACTIVE" ? "student" : "admissions";
+      goTo(nextPage);
+      if (nextPage === "admissions") scrollToAdmissionPayment();
     } catch (error) {
       showToast(error.message, "error");
     }
@@ -7306,7 +7320,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
               )}
 
               <button className="gold-btn full auth-submit-btn" type="submit" disabled={isRegister && !availableCourses.length}>{isRegister ? "Create Application" : "Login Securely"}</button>
-              {isRegister ? <button className="dark-btn full" type="button" onClick={() => { close(); goTo("admissions"); }}>Use Full Admission Form</button> : null}
+              {isRegister ? <button className="dark-btn full" type="button" onClick={() => { close(); goTo("admissions"); scrollToAdmissionPayment(); }}>Use Full Admission Form</button> : null}
             </form>
           </section>
         </div>
@@ -7324,7 +7338,10 @@ function BookCard({ book }) { return <div className="book-card"><img src={book.i
 function Feature({ icon, title, text }) { return <div className="feature-card"><div className="icon-box">{icon}</div><h3>{title}</h3><p>{text}</p></div>; }
 function SectionIntro({ eyebrow, title, text }) { return <div className="section-intro"><Kicker text={eyebrow} center /><h2>{title}</h2><p>{text}</p><div className="gold-divider"><span /></div></div>; }
 function Kicker({ text, center }) { return <div className={center ? "kicker kicker-center" : "kicker"}><span /> <small>{text}</small> <span /></div>; }
-function PageHero({ eyebrow, title, text, image }) { return <section className="page-hero"><div className="page-hero-bg" style={{ backgroundImage: `url(${image})` }} /><div className="page-hero-overlay" /><div className="container page-hero-content"><Kicker text={eyebrow} /><h1>{title}</h1><p>{text}</p></div></section>; }
+function PageHero({ eyebrow, title, text, image }) {
+  const cleanText = cleanCibiPageText(text);
+  return <section className="page-hero"><div className="page-hero-bg" style={{ backgroundImage: `url(${image})` }} /><div className="page-hero-overlay" /><div className="container page-hero-content"><Kicker text={eyebrow} /><h1>{title}</h1><p>{cleanText}</p></div></section>;
+}
 function DashboardCard({ icon, label, value }) { return <div className="dashboard-card"><div className="icon-box">{icon}</div><span>{label}</span><strong>{value}</strong></div>; }
 function Step({ number, title, text }) { return <div className="step"><strong>{number}</strong><h3>{title}</h3><p>{text}</p></div>; }
 function PathCard({ icon, title, text, points }) { return <div className="path-card"><div className="icon-box">{icon}</div><h3>{title}</h3><div className="short-gold-line" /><p>{text}</p><small>Ideal For</small><ul>{points.map((point) => <li key={point}><span />{point}</li>)}</ul></div>; }
