@@ -1470,6 +1470,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
     phone: "",
     country: "",
     password: "",
+    confirmPassword: "",
     courseId: firstCourseId,
     learningStream: learningStreams[0] || "Regular Classes",
     ministryRole: "",
@@ -7182,10 +7183,39 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                 <input type="email" placeholder="you@example.com" value={form.email} onChange={(e) => updateField("email", e.target.value)} required />
               </label>
 
-              <label className="auth-field">
+              <label className="auth-field auth-password-field">
                 <span>Password</span>
-                <input type="password" placeholder="Enter password" value={form.password} onChange={(e) => updateField("password", e.target.value)} required minLength={6} />
+                <div className="password-input-wrap">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter password"
+                    value={form.password}
+                    onChange={(e) => updateField("password", e.target.value)}
+                    required
+                  />
+                  <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Toggle password visibility">
+                    {showPassword ? "??" : "??"}
+                  </button>
+                </div>
               </label>
+
+              {isRegister && (
+                <label className="auth-field auth-password-field">
+                  <span>Confirm password</span>
+                  <div className="password-input-wrap">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Confirm password"
+                      value={form.confirmPassword}
+                      onChange={(e) => updateField("confirmPassword", e.target.value)}
+                      required
+                    />
+                    <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} aria-label="Toggle confirm password visibility">
+                      {showConfirmPassword ? "??" : "??"}
+                    </button>
+                  </div>
+                </label>
+              )}
 
               <button className="gold-btn full auth-submit-btn" type="submit" disabled={isRegister && !availableCourses.length}>{isRegister ? "Create Application" : "Login Securely"}</button>
               {isRegister ? <button className="dark-btn full" type="button" onClick={() => { close(); goTo("admissions"); }}>Use Full Admission Form</button> : null}
