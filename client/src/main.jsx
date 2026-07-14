@@ -6949,6 +6949,10 @@ const COUNTRY_OPTIONS = [
   { name: "India", code: "IN", dialCode: "+91" }
 ];
 
+function getProgrammeOptionId(item = {}) {
+  return item?.id ?? item?.programmeId ?? item?.courseId ?? "";
+}
+
 function findCountry(value) {
   const text = String(value || "").trim().toLowerCase();
   if (!text) return null;
@@ -6974,6 +6978,8 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
   const selectedCountry = findCountry(form.country);
   const [countryMenuOpen, setCountryMenuOpen] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const isRegister = mode === "register";
   const countrySearchText = String(countrySearch || "").trim().toLowerCase();
   const countryMatches = countrySearchText
@@ -7006,10 +7012,15 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
         showToast("Please select your learning stream before creating your student account.", "error");
         return;
       }
+      if (isRegister && form.password !== form.confirmPassword) {
+        showToast("Passwords do not match.", "error");
+        return;
+      }
 
+      const { confirmPassword, ...safeForm } = form;
       const payload = isRegister
         ? {
-            ...form,
+            ...safeForm,
             programmeId: Number(form.courseId), courseId: Number(form.courseId),
             country: selectedCountry?.name || form.country,
             phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",

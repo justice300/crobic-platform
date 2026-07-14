@@ -9089,3 +9089,28 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
   background-size: cover !important;
   background-position: center !important;
 }
+/* Register password show/hide field */
+.password-input-wrap {
+  display: flex !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  background: #f8f3e9 !important;
+  border: 1px solid rgba(17, 24, 39, 0.12) !important;
+}
+
+.password-input-wrap input {
+  flex: 1 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.password-input-wrap button {
+  min-width: 78px !important;
+  border: 0 !important;
+  border-left: 1px solid rgba(17, 24, 39, 0.12) !important;
+  background: transparent !important;
+  color: #c49f64 !important;
+  font-weight: 900 !important;
+  letter-spacing: .08em !important;
+  cursor: pointer !important;
+}
