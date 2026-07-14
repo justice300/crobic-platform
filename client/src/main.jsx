@@ -1507,7 +1507,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
         method: "POST",
         body: {
           ...form,
-          programmeId: Number(resolvedCourseId), courseId: Number(resolvedCourseId),
+          programmeId: Number(form.courseId), courseId: Number(form.courseId),
           applicationSource: "ADMISSION_PAGE"
         }
       });
@@ -7010,7 +7010,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
       const payload = isRegister
         ? {
             ...form,
-            programmeId: Number(resolvedCourseId), courseId: Number(resolvedCourseId),
+            programmeId: Number(form.courseId), courseId: Number(form.courseId),
             country: selectedCountry?.name || form.country,
             phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",
             applicationSource: "QUICK_REGISTER"
