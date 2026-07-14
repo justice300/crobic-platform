@@ -942,6 +942,17 @@ function programmeDisplayList(programmes = [], courses = [], settings = {}) {
   return mergeProgrammeCourses(courses, settings);
 }
 
+function registrationProgrammeList(programmes = [], courses = []) {
+  const realProgrammes = Array.isArray(programmes) ? programmes.filter((item) => item?.id && Number(item.id) > 0 && item?.published !== false) : [];
+  if (realProgrammes.length) return realProgrammes;
+  return Array.isArray(courses) ? courses.filter((item) => item?.id && Number(item.id) > 0 && item?.published !== false) : [];
+}
+
+function registrationProgrammePayloadId(item = {}) {
+  const id = Number(item?.id || 0);
+  return id > 0 ? id : 0;
+}
+
 function isCorporateProgramme(programme = {}) {
   const text = `${programme.level || ""} ${programme.title || ""} ${programme.slot || ""}`.toLowerCase();
   return /worker|corporate|leadership training/.test(text);
@@ -1461,9 +1472,9 @@ function Admissions({ courses, programmes = [], settings, user, openAuth, goTo, 
 }
 
 function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}, setUser, goTo, openAuth }) {
-  const availableCourses = programmeDisplayList(programmes, courses, settings);
+  const availableCourses = registrationProgrammeList(programmes, courses);
   const learningStreams = settingPoints(settings, "admission_learning_streams", ["Regular Classes", "Executive Classes"]);
-  const firstCourseId = availableCourses[0]?.id || "";
+  const firstCourseId = availableCourses[0]?.id ? String(availableCourses[0].id) : "";
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -1484,6 +1495,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
   });
   const [submitting, setSubmitting] = useState(false);
   const selectedCourse = availableCourses.find((course) => String(course.id) === String(form.courseId));
+  const selectedProgrammeId = registrationProgrammePayloadId(selectedCourse);
 
   useEffect(() => {
     if (!form.courseId && firstCourseId) {
@@ -1497,7 +1509,8 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
 
   async function submit(e) {
     e.preventDefault();
-    if (!form.courseId) { showToast("Please select the programme you are applying for.", "error"); return; } if (!form.learningStream) {
+    if (!selectedProgrammeId) { showToast("Please select the programme you are applying for.", "error"); return; }
+    if (!form.learningStream) {
       showToast("Please select your learning stream.", "error");
       return;
     }
@@ -1508,7 +1521,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
         method: "POST",
         body: {
           ...form,
-          programmeId: selectedProgrammeId, courseId: selectedProgrammeId,
+          programmeId: selectedProgrammeId,
           applicationSource: "ADMISSION_PAGE"
         }
       });
@@ -1588,7 +1601,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
             <span>Programme applying for</span>
             <select value={String(form.courseId || "")} onChange={(e) => updateField("courseId", e.target.value)} required>
               {availableCourses.map((course) => (
-                <option value={course.id} key={course.id}>{course.title} — {course.level || "Programme"}</option>
+                <option value={String(course.id)} key={course.id}>{course.title} — {course.level || "Programme"}</option>
               ))}
             </select>
           </label>
@@ -2499,6 +2512,13 @@ function StudentPortal({ user, setUser, goTo }) {
           <a className="gold-btn" href={dashboard.settings.student_whatsapp_group_link} target="_blank" rel="noreferrer">Student WhatsApp Group</a>
         </div>
 
+        {dashboard.enrollments.some((item) => item.studentPaymentNotice) && (
+          <div className="student-payment-notice">
+            <strong>Payment Notice</strong>
+            <p>{dashboard.enrollments.find((item) => item.studentPaymentNotice)?.studentPaymentNoticeMessage || "Your programme payment needs attention. Please contact CIBI admin."}</p>
+          </div>
+        )}
+
         {activeEnrollment ? (
           <LearningCourseView
             enrollment={activeEnrollment}
@@ -3395,15 +3415,15 @@ function StudentQuizCard({ quiz, reloadCourse }) {
 }
 
 function PaymentPanel({ programmes = [], courses = [], settings }) {
-  const availableProgrammes = programmeDisplayList(programmes, courses, settings);
-  const [courseId, setCourseId] = useState(availableProgrammes[0]?.id || "");
+  const availableProgrammes = registrationProgrammeList(programmes, courses);
+  const [courseId, setCourseId] = useState(availableProgrammes[0]?.id ? String(availableProgrammes[0].id) : "");
   const [applicationEnrollment, setApplicationEnrollment] = useState(null);
   const [manualReference, setManualReference] = useState("");
   const [paymentProofUrl, setPaymentProofUrl] = useState("");
   const [receiptName, setReceiptName] = useState("");
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const selectedCourse = availableProgrammes.find((course) => course.id === Number(courseId)) || applicationEnrollment?.programme || applicationEnrollment?.course;
+  const selectedCourse = availableProgrammes.find((course) => String(course.id) === String(courseId)) || applicationEnrollment?.programme || applicationEnrollment?.course;
   const lockedToApplication = Boolean(applicationEnrollment?.programmeId || applicationEnrollment?.courseId);
 
   async function loadApplicationEnrollment() {
@@ -3412,7 +3432,7 @@ function PaymentPanel({ programmes = [], courses = [], settings }) {
       const enrollment = (result.enrollments || [])[0] || null;
       if (enrollment?.programmeId || enrollment?.courseId) {
         setApplicationEnrollment(enrollment);
-        setCourseId(enrollment.programmeId || enrollment.courseId);
+        setCourseId(String(enrollment.programmeId || enrollment.courseId));
       }
     } catch {
       // Payment status is only available for logged-in students.
@@ -3429,7 +3449,7 @@ function PaymentPanel({ programmes = [], courses = [], settings }) {
       return;
     }
     try {
-      const result = await api("/payments/paystack/initialize", { method: "POST", body: { programmeId: Number(courseId), courseId: Number(courseId) } });
+      const result = await api("/payments/paystack/initialize", { method: "POST", body: { programmeId: Number(courseId) } });
       window.location.href = result.authorizationUrl;
     } catch (error) {
       showToast(error.message, "error");
@@ -3487,7 +3507,7 @@ function PaymentPanel({ programmes = [], courses = [], settings }) {
       return;
     }
     try {
-      const result = await api("/payments/manual", { method: "POST", body: { programmeId: Number(courseId), courseId: Number(courseId), manualReference, paymentProofUrl } });
+      const result = await api("/payments/manual", { method: "POST", body: { programmeId: Number(courseId), manualReference, paymentProofUrl } });
       setMessage(result.message);
       showToast(result.message, "success");
       await loadApplicationEnrollment();
@@ -3523,7 +3543,7 @@ function PaymentPanel({ programmes = [], courses = [], settings }) {
         </div>
       ) : (
         <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-          {availableProgrammes.map((course) => <option value={course.id} key={course.id}>{course.title} — {programmeFeeText(course)}</option>)}
+          {availableProgrammes.map((course) => <option value={String(course.id)} key={course.id}>{course.title} — {programmeFeeText(course)}</option>)}
         </select>
       )}
 
@@ -3702,7 +3722,7 @@ function UsersRolesAdmin() {
             {staff.map((user) => <option key={user.id} value={user.id}>{user.name} — {formatPortalStatus(user.role)}</option>)}
           </select>
           <select value={accessForm.courseId} onChange={(e) => setAccessForm({ ...accessForm, courseId: e.target.value })}>
-            {(data.courses || []).map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
+            {(data.courses || []).map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
           </select>
           <button className="dark-btn" type="submit">Grant Course Access</button>
         </form>
@@ -3803,7 +3823,7 @@ function StudentGroupsAdmin() {
       <form className="admin-form phase2-card" onSubmit={createGroups}>
         <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
           <option value="">Select course</option>
-          {(data.courses || []).map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
+          {(data.courses || []).map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
         </select>
         <input type="number" min="1" placeholder="Students per group" value={form.groupSize} onChange={(e) => setForm({ ...form, groupSize: Number(e.target.value || 10) })} />
         <input placeholder="Group task title" value={form.taskTitle} onChange={(e) => setForm({ ...form, taskTitle: e.target.value })} />
@@ -4007,7 +4027,7 @@ function AssessmentsAdmin() {
           <h3>Add Assignment</h3>
           <select value={assignmentForm.courseId} onChange={(e) => setAssignmentForm({ ...assignmentForm, courseId: e.target.value, moduleId: "", lessonId: "" })} required>
             <option value="">Select course</option>
-            {courseOptions().map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
+            {courseOptions().map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
           </select>
           <div className="form-row">
             <select value={assignmentForm.moduleId} onChange={(e) => setAssignmentForm({ ...assignmentForm, moduleId: e.target.value, lessonId: "" })}>
@@ -4041,7 +4061,7 @@ function AssessmentsAdmin() {
           <h3>Add Quiz</h3>
           <select value={quizForm.courseId} onChange={(e) => setQuizForm({ ...quizForm, courseId: e.target.value, moduleId: "", lessonId: "" })} required>
             <option value="">Select course</option>
-            {courseOptions().map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
+            {courseOptions().map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
           </select>
           <div className="form-row">
             <select value={quizForm.moduleId} onChange={(e) => setQuizForm({ ...quizForm, moduleId: e.target.value, lessonId: "" })}>
@@ -4479,6 +4499,35 @@ function StudentsAdmin() {
     }
   }
 
+  async function accessAction(enrollment, actionName, extra = {}) {
+    const prompts = {
+      "send-payment-notice": { title: "Send payment notice?", message: "The student will see a payment notice inside the portal.", confirmText: "Send Notice" },
+      "hide-payment-notice": { title: "Hide payment notice?", message: "The payment notice will be removed from the student portal.", confirmText: "Hide Notice" },
+      "mark-payment-due": { title: "Mark payment due?", message: "Admin will see this as payment due. Student will not see notice until you send it.", confirmText: "Mark Due" },
+      "block-access": { title: "Block student access?", message: "This will block the student's course access and show a notice.", confirmText: "Block Access", danger: true },
+      "restore-access": { title: "Restore access?", message: "This will restore course access and hide payment notice.", confirmText: "Restore" },
+      "confirm-next-payment": { title: "Confirm next payment?", message: "This will confirm payment and refresh the student's access period.", confirmText: "Confirm Payment" }
+    };
+
+    if (actionName === "promote-level") {
+      const current = enrollment.currentLevelStage || "100 Level";
+      const next = window.prompt("Enter next level/stage for this student:", current === "100 Level" ? "200 Level" : current);
+      if (!next) return;
+      extra.currentLevelStage = next;
+    }
+
+    const copy = prompts[actionName] || { title: "Update access?", message: "Continue with this action?", confirmText: "Continue" };
+    if (!(await showConfirm(copy))) return;
+
+    try {
+      const result = await api(`/admin/enrollments/${enrollment.id}/access`, { method: "PATCH", body: { action: actionName, ...extra } });
+      showToast(result.message || "Access updated", "success");
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not update access", "error");
+    }
+  }
+
   async function action(enrollment, actionName) {
     const actionCopy = {
       approve: {
@@ -4624,6 +4673,20 @@ function StudentsAdmin() {
                       <div><small>Reference</small><strong>{enrollment.paystackReference || enrollment.manualReference || "None"}</strong></div>
                     </div>
 
+                    <div className="enrollment-access-grid">
+                      <div><small>Access</small><strong>{formatAdminStatusLabel(enrollment.accessStatus || "ACTIVE")}</strong></div>
+                      <div><small>Current Level</small><strong>{enrollment.currentLevelStage || "Not set"}</strong></div>
+                      <div><small>Paid Until</small><strong>{enrollment.paidUntil ? new Date(enrollment.paidUntil).toLocaleDateString() : "Not set"}</strong></div>
+                      <div><small>Student Notice</small><strong>{enrollment.studentPaymentNotice ? "Visible" : "Hidden"}</strong></div>
+                    </div>
+
+                    {enrollment.studentPaymentNotice ? (
+                      <div className="admin-payment-notice-preview">
+                        <strong>Student payment notice</strong>
+                        <p>{enrollment.studentPaymentNoticeMessage || "Payment notice is visible to this student."}</p>
+                      </div>
+                    ) : null}
+
                     <div className="payment-proof-row">
                       {enrollment.paymentProofUrl ? (
                         <a className="proof-btn" href={enrollment.paymentProofUrl} target="_blank" rel="noreferrer">View Payment Receipt</a>
@@ -4637,6 +4700,12 @@ function StudentsAdmin() {
                       {canReject ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "reject")}>Reject</button> : null}
                       {canSuspend ? <button className="dark-btn" type="button" onClick={() => action(enrollment, "suspend")}>Suspend</button> : null}
                       {canGraduate ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "graduate")}>Graduate</button> : null}
+                      <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "promote-level")}>Promote Level</button>
+                      <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "mark-payment-due")}>Mark Payment Due</button>
+                      <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "send-payment-notice")}>Send Payment Notice</button>
+                      {enrollment.studentPaymentNotice ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "hide-payment-notice")}>Hide Notice</button> : null}
+                      <button className="gold-btn" type="button" onClick={() => accessAction(enrollment, "confirm-next-payment")}>Confirm Next Payment</button>
+                      <button className="dark-btn" type="button" onClick={() => accessAction(enrollment, enrollment.accessStatus === "BLOCKED" ? "restore-access" : "block-access")}>{enrollment.accessStatus === "BLOCKED" ? "Restore Access" : "Block Access"}</button>
                       {graduated ? <span className="status-badge status-good">Graduated</span> : null}
                     </div>
                   </div>
@@ -4654,7 +4723,7 @@ const bookFields = [
   ["title", "Book title"], ["author", "Author"], ["category", "Category"], ["price", "Price e.g ₦8,500"], ["buyLink", "Stellar purchase link"], ["imageUrl", "Book cover image URL"], ["description", "Description", "textarea"]
 ];
 const programmeFields = [
-  ["title", "Programme title"], ["level", "Level e.g Foundation"], ["duration", "Duration e.g 12 Months"], ["feeUsd", "Fee in USD e.g 50", "number"], ["currency", "Currency e.g USD"], ["fee", "Local payment backup e.g 75000", "number"], ["certification", "Certificate name"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]
+  ["title", "Programme title"], ["level", "Level e.g Foundation"], ["duration", "Duration e.g 12 Months"], ["feeUsd", "Fee in USD e.g 50", "number"], ["currency", "Currency e.g USD"], ["fee", "Local payment backup e.g 75000", "number"], ["paymentPlan", "Payment plan: ONE_TIME, YEARLY or CONTACT_ADMIN"], ["paymentCycleMonths", "Payment cycle months e.g 12", "number"], ["defaultLevelStage", "Default student level/stage e.g 100 Level"], ["certification", "Certificate name"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]
 ];
 const courseFields = [
   ["title", "Course title"], ["level", "Level"], ["duration", "Duration e.g 12 Months"], ["feeUsd", "Fee in USD e.g 50", "number"], ["currency", "Currency e.g USD"], ["fee", "Local payment backup e.g 75000", "number"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]
@@ -4803,7 +4872,7 @@ function SlidesAdmin({ reloadPublic }) {
 
 
 function CoursesAdmin({ reloadPublic }) {
-  const empty = { programmeId: "", title: "", level: "Course", duration: "", feeUsd: 0, currency: "USD", fee: 0, imageUrl: "", description: "" };
+  const empty = { programmeId: "", title: "", level: "Course", levelStage: "", generalForAllProgrammes: false, duration: "", feeUsd: 0, currency: "USD", fee: 0, imageUrl: "", description: "" };
   const [items, setItems] = useState([]);
   const [programmes, setProgrammes] = useState([]);
   const [form, setForm] = useState(empty);
@@ -4824,6 +4893,8 @@ function CoursesAdmin({ reloadPublic }) {
       title: item.title || "",
       level: item.level || "Course",
       duration: item.duration || "",
+      levelStage: item.levelStage || "",
+      generalForAllProgrammes: Boolean(item.generalForAllProgrammes),
       feeUsd: Number(item.feeUsd || 0),
       currency: item.currency || "USD",
       fee: Number(item.fee || 0),
@@ -4841,11 +4912,17 @@ function CoursesAdmin({ reloadPublic }) {
 
   async function submit(e) {
     e.preventDefault();
-    if (!form.programmeId) {
-      showToast("Create/select a programme before adding a course.", "error");
+    if (!form.programmeId && !form.generalForAllProgrammes) {
+      showToast("Create/select a programme before adding a course, or mark the course as general for all programmes.", "error");
       return;
     }
-    const payload = { ...form, programmeId: Number(form.programmeId), feeUsd: Number(form.feeUsd || 0), fee: Number(form.fee || 0) };
+    const payload = {
+      ...form,
+      programmeId: form.generalForAllProgrammes ? null : Number(form.programmeId),
+      generalForAllProgrammes: Boolean(form.generalForAllProgrammes),
+      feeUsd: Number(form.feeUsd || 0),
+      fee: Number(form.fee || 0)
+    };
     if (editingId) await api(`/admin/courses/${editingId}`, { method: "PATCH", body: payload });
     else await api("/admin/courses", { method: "POST", body: payload });
     cancelEdit();
@@ -4868,12 +4945,17 @@ function CoursesAdmin({ reloadPublic }) {
       <p className="admin-helper-text">Create programmes first, then attach each course to the correct programme. Student access follows the programme selected on the Admission page.</p>
       {!programmes.length && <div className="quiet-banner"><strong>No programme yet.</strong><p>Add programmes from the Programmes tab before adding courses.</p></div>}
       <form className="admin-form" onSubmit={submit}>
-        <select value={form.programmeId} onChange={(e) => setForm({ ...form, programmeId: e.target.value })} required>
+        <select value={form.programmeId} onChange={(e) => setForm({ ...form, programmeId: e.target.value })} required={!form.generalForAllProgrammes} disabled={form.generalForAllProgrammes}>
           <option value="">Select programme</option>
           {programmes.map((programme) => <option key={programme.id} value={programme.id}>{programme.title}</option>)}
         </select>
         <input placeholder="Course title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <input placeholder="Level" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} required />
+        <input placeholder="Level/Stage e.g 100 Level, 200 Level, General" value={form.levelStage} onChange={(e) => setForm({ ...form, levelStage: e.target.value })} />
+        <label className="admin-checkbox-row">
+          <input type="checkbox" checked={Boolean(form.generalForAllProgrammes)} onChange={(e) => setForm({ ...form, generalForAllProgrammes: e.target.checked, programmeId: e.target.checked ? "" : form.programmeId })} />
+          <span>General compulsory course for all programmes</span>
+        </label>
         <input placeholder="Duration e.g 12 Weeks" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} />
         <div className="form-row two-columns">
           <input type="number" placeholder="Fee in USD, optional" value={form.feeUsd} onChange={(e) => setForm({ ...form, feeUsd: e.target.value })} />
@@ -4892,7 +4974,7 @@ function CoursesAdmin({ reloadPublic }) {
           <div key={item.id} className="admin-list-item">
             <div>
               <strong>{item.title}</strong>
-              <p>{item.programme?.title || "No programme attached"} · {item.level}</p>
+              <p>{item.generalForAllProgrammes ? "General for all programmes" : item.programme?.title || "No programme attached"} · {item.level}{item.levelStage ? ` · ${item.levelStage}` : ""}</p>
             </div>
             <div>
               <button className="ghost-btn" type="button" onClick={() => startEdit(item)}>Edit</button>
@@ -5180,7 +5262,7 @@ function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null 
       <div className="admin-form builder-course-select">
         <select value={selectedCourseId} onChange={(e) => { setSelectedCourseId(e.target.value); resetModuleForm(); resetLessonForm(1, ""); setPreviewLesson(null); }}>
           <option value="">Select programme/course</option>
-          {courses.map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
+          {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
         </select>
       </div>
 
@@ -6201,7 +6283,7 @@ function LiveAdmin({ reloadPublic }) {
       <form className="admin-form live-start-form" onSubmit={start}>
         <select value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value })}>
           <option value="">General live class for all students</option>
-          {courses.map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
+          {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
         </select>
         <input placeholder="Live class title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <input placeholder="Embeddable live/video link or iframe code" value={form.liveUrl} onChange={(e) => setForm({ ...form, liveUrl: e.target.value })} required />
@@ -6966,7 +7048,7 @@ function findCountry(value) {
 }
 
 function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programmes = [], settings = {} }) {
-  const availableCourses = programmeDisplayList(programmes, courses, settings);
+  const availableCourses = registrationProgrammeList(programmes, courses);
   const learningStreams = settingPoints(settings, "admission_learning_streams", ["Regular Classes", "Executive Classes"]);
   const [form, setForm] = useState({
     name: "",
@@ -6974,6 +7056,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
     phone: "",
     country: "",
     password: "",
+    confirmPassword: "",
     courseId: availableCourses[0]?.id ? String(availableCourses[0].id) : "",
     learningStream: learningStreams[0] || "Regular Classes"
   });
@@ -7006,11 +7089,8 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
     e.preventDefault();
     try {
       const endpoint = isRegister ? "/auth/register" : "/auth/login";
-      const selectedProgramme = availableCourses.find((course) =>
-        String(getProgrammeOptionId(course)) === String(form.courseId) ||
-        String(course?.title || "") === String(form.courseId)
-      );
-      const selectedProgrammeId = Number(getProgrammeOptionId(selectedProgramme) || form.courseId);
+      const selectedProgramme = availableCourses.find((course) => String(course.id) === String(form.courseId));
+      const selectedProgrammeId = registrationProgrammePayloadId(selectedProgramme);
 
       if (isRegister && (!selectedProgrammeId || Number.isNaN(selectedProgrammeId))) {
         showToast("Please select the programme you are applying for.", "error");
@@ -7030,7 +7110,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
       const payload = isRegister
         ? {
             ...safeForm,
-            programmeId: selectedProgrammeId, courseId: selectedProgrammeId,
+            programmeId: selectedProgrammeId,
             country: selectedCountry?.name || form.country,
             phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",
             applicationSource: "QUICK_REGISTER"
@@ -7165,7 +7245,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                     <select value={String(form.courseId || "")} onChange={(e) => updateField("courseId", e.target.value)} required>
                       <option value="">Select programme</option>
                       {availableCourses.map((course) => (
-                        <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>
+                        <option key={course.id} value={String(course.id)}>{course.title}</option>
                       ))}
                     </select>
                   </label>
@@ -7202,7 +7282,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                     required
                   />
                   <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Toggle password visibility">
-                    {showPassword ? "??" : "??"}
+                    {showPassword ? "HIDE" : "SHOW"}
                   </button>
                 </div>
               </label>
@@ -7219,7 +7299,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                       required
                     />
                     <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} aria-label="Toggle confirm password visibility">
-                      {showConfirmPassword ? "??" : "??"}
+                      {showConfirmPassword ? "HIDE" : "SHOW"}
                     </button>
                   </div>
                 </label>

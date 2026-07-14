@@ -9149,3 +9149,103 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
   letter-spacing: .12em !important;
   color: #c49f64 !important;
 }
+
+
+/* Programme access, payment notice, and password control polish */
+.password-input-wrap {
+  display: flex !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  background: #f8f3e9 !important;
+  border: 1px solid rgba(17, 24, 39, 0.12) !important;
+}
+
+.password-input-wrap input {
+  flex: 1 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.password-input-wrap button {
+  width: 76px !important;
+  min-width: 76px !important;
+  border: 0 !important;
+  border-left: 1px solid rgba(17, 24, 39, 0.12) !important;
+  background: transparent !important;
+  color: #c49f64 !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .12em !important;
+}
+
+.admin-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(196, 159, 100, 0.08);
+  border: 1px solid rgba(196, 159, 100, 0.22);
+  padding: 14px 16px;
+  color: var(--black);
+  font-weight: 800;
+}
+
+.admin-checkbox-row input {
+  width: auto !important;
+  accent-color: var(--gold);
+}
+
+.enrollment-access-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.enrollment-access-grid > div,
+.admin-payment-notice-preview,
+.student-payment-notice {
+  background: rgba(196, 159, 100, 0.1);
+  border: 1px solid rgba(196, 159, 100, 0.24);
+  padding: 14px;
+}
+
+.enrollment-access-grid small {
+  display: block;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-size: 10px;
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.admin-payment-notice-preview {
+  margin: 12px 0;
+}
+
+.admin-payment-notice-preview p,
+.student-payment-notice p {
+  margin: 6px 0 0;
+}
+
+.student-payment-notice {
+  margin-bottom: 24px;
+  background: #fff8e8;
+}
+
+.student-payment-notice strong {
+  color: var(--black);
+  font-size: 16px;
+}
+
+@media (max-width: 900px) {
+  .enrollment-access-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .enrollment-access-grid {
+    grid-template-columns: 1fr;
+  }
+}

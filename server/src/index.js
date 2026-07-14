@@ -265,7 +265,7 @@ async function canManageCourse(req, courseId) {
   if (staffCanSeeAllCourses(req.user)) return true;
   if (!isLecturerOnly(req.user)) return false;
   const access = await prisma.courseLecturerAccess.findUnique({
-    where: { courseId_lecturerId: { courseId: Number(courseId), lecturerId: req.user.id } }
+    where: { courseId_lecturerId: { courseId: courseId ? Number(courseId) : null, lecturerId: req.user.id } }
   });
   return Boolean(access);
 }
@@ -287,7 +287,7 @@ function isPowerAdmin(user) {
 async function isAssignedLecturer(user, courseId) {
   if (user?.role !== "LECTURER") return false;
   const access = await prisma.courseLecturerAccess.findUnique({
-    where: { courseId_lecturerId: { courseId: Number(courseId), lecturerId: user.id } }
+    where: { courseId_lecturerId: { courseId: courseId ? Number(courseId) : null, lecturerId: user.id } }
   });
   return Boolean(access);
 }
@@ -303,19 +303,21 @@ async function canAccessCourseContent(user, courseId) {
   if (isPowerAdmin(user)) return true;
   if (await isAssignedLecturer(user, id)) return true;
   if (user.role === "STUDENT") {
-    const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true } });
+    const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true } });
     if (!course) return false;
     const enrollment = await prisma.enrollment.findFirst({
       where: {
         userId: user.id,
         admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+        accessStatus: { not: "BLOCKED" },
         OR: [
           { courseId: id },
+          course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
           course.programmeId ? { programmeId: course.programmeId } : { id: -1 }
         ]
       }
     });
-    return Boolean(enrollment);
+    return canEnrollmentUseCourse(enrollment, course);
   }
   return false;
 }
@@ -335,18 +337,38 @@ function clientCourseUrl(courseId) {
 }
 
 async function enrolledStudentsForCourse(courseId) {
-  return prisma.user.findMany({
+  const id = Number(courseId || 0);
+  if (!id) {
+    return prisma.user.findMany({
+      where: { role: "STUDENT", enrollments: { some: { admissionStatus: { in: ["APPROVED", "GRADUATED"] }, accessStatus: { not: "BLOCKED" } } } },
+      select: { id: true, name: true, email: true }
+    });
+  }
+
+  const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true } });
+  if (!course) return [];
+
+  const users = await prisma.user.findMany({
     where: {
       role: "STUDENT",
       enrollments: {
         some: {
-          courseId: Number(courseId),
-          admissionStatus: { in: ["APPROVED", "GRADUATED"] }
+          admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+          accessStatus: { not: "BLOCKED" },
+          OR: [
+            { courseId: id },
+            course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
+            course.programmeId ? { programmeId: course.programmeId } : { id: -1 }
+          ]
         }
       }
     },
-    select: { id: true, name: true, email: true }
+    include: { enrollments: true }
   });
+
+  return users
+    .filter((user) => user.enrollments.some((enrollment) => canEnrollmentUseCourse(enrollment, course)))
+    .map((user) => ({ id: user.id, name: user.name, email: user.email }));
 }
 
 async function createCourseNotifications({ courseId, users, title, message, url, type = "INFO" }) {
@@ -354,7 +376,7 @@ async function createCourseNotifications({ courseId, users, title, message, url,
   return prisma.notification.createMany({
     data: users.map((user) => ({
       userId: user.id,
-      courseId: Number(courseId),
+      courseId: courseId ? Number(courseId) : null,
       title,
       message,
       url,
@@ -365,6 +387,7 @@ async function createCourseNotifications({ courseId, users, title, message, url,
 
 
 function normaliseProgrammePayload(body = {}) {
+  const paymentPlan = String(body.paymentPlan || "ONE_TIME").trim().toUpperCase() || "ONE_TIME";
   return {
     title: String(body.title || "").trim(),
     level: String(body.level || "Programme").trim(),
@@ -375,6 +398,9 @@ function normaliseProgrammePayload(body = {}) {
     feeUsd: Math.max(0, Number(body.feeUsd || 0)),
     currency: String(body.currency || "USD").trim() || "USD",
     certification: body.certification ? String(body.certification).trim() : null,
+    paymentPlan,
+    paymentCycleMonths: body.paymentCycleMonths ? Number(body.paymentCycleMonths) : null,
+    defaultLevelStage: body.defaultLevelStage ? String(body.defaultLevelStage).trim() : null,
     published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on"
   };
 }
@@ -390,6 +416,8 @@ function normaliseCoursePayload(body = {}) {
     fee: Math.max(0, Number(body.fee || 0)),
     feeUsd: Math.max(0, Number(body.feeUsd || 0)),
     currency: String(body.currency || "USD").trim() || "USD",
+    generalForAllProgrammes: body.generalForAllProgrammes === true || body.generalForAllProgrammes === "true" || body.generalForAllProgrammes === "on",
+    levelStage: body.levelStage ? String(body.levelStage).trim() : null,
     published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on"
   };
 }
@@ -402,6 +430,96 @@ function programmeFeeAmount(programmeOrCourse = {}) {
 
 function programmeDisplayTitle(enrollment = {}) {
   return enrollment.programme?.title || enrollment.course?.programme?.title || enrollment.course?.title || "Selected programme";
+}
+
+function canEnrollmentUseCourse(enrollment = {}, course = {}) {
+  if (!enrollment || !course) return false;
+  if (enrollment.accessStatus === "BLOCKED") return false;
+  if (course.generalForAllProgrammes) return true;
+  if (enrollment.courseId && course.id === enrollment.courseId) return true;
+  if (enrollment.programmeId && course.programmeId === enrollment.programmeId) {
+    const enrollmentStage = String(enrollment.currentLevelStage || "").trim().toLowerCase();
+    const courseStage = String(course.levelStage || "").trim().toLowerCase();
+    return !courseStage || courseStage === "general" || !enrollmentStage || courseStage === enrollmentStage;
+  }
+  return false;
+}
+
+function defaultEnrollmentAccessData(programme = {}, now = new Date()) {
+  const cycle = Number(programme?.paymentCycleMonths || 0) || null;
+  const paidUntil = cycle ? new Date(now.getTime() + cycle * 30 * 24 * 60 * 60 * 1000) : null;
+  return {
+    currentLevelStage: programme?.defaultLevelStage || "100 Level",
+    accessStatus: "ACTIVE",
+    paymentPlan: programme?.paymentPlan || (cycle ? "YEARLY" : "ONE_TIME"),
+    paymentCycleMonths: cycle,
+    paidUntil,
+    nextPaymentDueAt: paidUntil
+  };
+}
+
+const DEFAULT_CIBI_PROGRAMMES = [
+  {
+    title: "Foundation Certificate Program",
+    level: "Foundation",
+    duration: "6 Months",
+    description: "Foundational biblical training covering prophetic ministry, evangelism, digital literacy, and minister character development.",
+    feeUsd: 59,
+    fee: 0,
+    currency: "USD",
+    certification: "Foundation Certificate",
+    paymentPlan: "ONE_TIME",
+    paymentCycleMonths: null,
+    defaultLevelStage: "Foundation"
+  },
+  {
+    title: "Diploma Certificate Program in Theology and Leadership",
+    level: "Diploma",
+    duration: "24 Months",
+    description: "Comprehensive theological training for pastors, evangelists, prophets, and Bible teachers.",
+    feeUsd: 190,
+    fee: 0,
+    currency: "USD",
+    certification: "Diploma Certificate in Theology and Leadership",
+    paymentPlan: "YEARLY",
+    paymentCycleMonths: 12,
+    defaultLevelStage: "100 Level"
+  },
+  {
+    title: "Advanced Diploma Certificate Program in Theology and Leadership",
+    level: "Advanced",
+    duration: "12 Months",
+    description: "Advanced study in deliverance, prophetic ministry, biblical business, and principles of raising leaders.",
+    feeUsd: 198,
+    fee: 0,
+    currency: "USD",
+    certification: "Advanced Diploma Certificate in Theology and Leadership",
+    paymentPlan: "ONE_TIME",
+    paymentCycleMonths: null,
+    defaultLevelStage: "Advanced"
+  },
+  {
+    title: "Workers and Leadership Training Program",
+    level: "Corporate",
+    duration: "Flexible",
+    description: "Churches and organizations training their workers and leaders.",
+    feeUsd: 0,
+    fee: 0,
+    currency: "USD",
+    certification: "Workers and Leadership Training Certificate",
+    paymentPlan: "CONTACT_ADMIN",
+    paymentCycleMonths: null,
+    defaultLevelStage: "General"
+  }
+];
+
+async function ensureDefaultProgrammes() {
+  const count = await prisma.programme.count();
+  if (count > 0) return;
+  await prisma.programme.createMany({
+    data: DEFAULT_CIBI_PROGRAMMES.map((programme) => ({ ...programme, published: true }))
+  });
+  console.log("Default CIBI programmes created.");
 }
 
 function parseApplicationJson(value = "") {
@@ -459,6 +577,7 @@ function expandProgrammeCourseEnrollments(enrollments = []) {
     const programmeCourses = enrollment.programme?.courses || [];
     if (enrollment.programmeId && programmeCourses.length) {
       for (const course of programmeCourses) {
+        if (!canEnrollmentUseCourse(enrollment, course)) continue;
         rows.push({
           ...enrollment,
           courseId: course.id,
@@ -466,7 +585,7 @@ function expandProgrammeCourseEnrollments(enrollments = []) {
           programmeTitle: enrollment.programme.title
         });
       }
-    } else if (enrollment.course) {
+    } else if (enrollment.course && canEnrollmentUseCourse(enrollment, enrollment.course)) {
       rows.push({ ...enrollment, programmeTitle: programmeDisplayTitle(enrollment) });
     }
   }
@@ -844,15 +963,17 @@ function isLessonUnlocked(course, targetLessonId) {
 
 async function getStudentLearningCourse(userId, courseId) {
   const id = Number(courseId);
-  const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true } });
+  const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true } });
   if (!course) return null;
 
   const enrollment = await prisma.enrollment.findFirst({
     where: {
       userId,
       admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+      accessStatus: { not: "BLOCKED" },
       OR: [
         { courseId: id },
+        course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
         course.programmeId ? { programmeId: course.programmeId } : { id: -1 }
       ]
     },
@@ -863,7 +984,7 @@ async function getStudentLearningCourse(userId, courseId) {
     }
   });
 
-  if (!enrollment) return null;
+  if (!enrollment || !canEnrollmentUseCourse(enrollment, course)) return null;
 
   const learningCourse = await prisma.course.findUnique({
     where: { id },
@@ -1020,6 +1141,7 @@ app.post(
         }
       });
 
+      const accessData = defaultEnrollmentAccessData(programme || course);
       const createdEnrollment = await tx.enrollment.create({
         data: {
           userId: createdUser.id,
@@ -1030,6 +1152,7 @@ app.post(
           admissionStatus: "AWAITING_PAYMENT",
           paymentMethod: "NONE",
           learningStream: selectedLearningStream,
+          ...accessData,
           applicationJson: JSON.stringify(applicationDetails),
           applicationSubmittedAt: new Date()
         },
@@ -1200,9 +1323,9 @@ app.get("/api/public/bootstrap", async (req, res) => {
 });
 
 app.get("/api/student/dashboard", requireAuth, requireActiveStudent, async (req, res) => {
-  const [enrollments, announcements, liveSession, settingsRows] = await Promise.all([
+  const [enrollments, generalCourses, announcements, liveSession, settingsRows] = await Promise.all([
     prisma.enrollment.findMany({
-      where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
+      where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] }, accessStatus: { not: "BLOCKED" } },
       include: {
         certificate: true,
         programme: {
@@ -1212,6 +1335,7 @@ app.get("/api/student/dashboard", requireAuth, requireActiveStudent, async (req,
       },
       orderBy: { createdAt: "desc" }
     }),
+    prisma.course.findMany({ where: { published: true, generalForAllProgrammes: true }, include: studentCourseInclude(req.user.id), orderBy: { title: "asc" } }),
     prisma.announcement.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
     prisma.liveSession.findFirst({ where: { active: true }, orderBy: { updatedAt: "desc" } }),
     prisma.setting.findMany()
@@ -1221,7 +1345,8 @@ app.get("/api/student/dashboard", requireAuth, requireActiveStudent, async (req,
   for (const enrollment of enrollments) {
     const programmeCourses = enrollment.programme?.courses || [];
     if (enrollment.programmeId && programmeCourses.length) {
-      for (const course of programmeCourses) {
+      const allowedCourses = [...programmeCourses, ...generalCourses.filter((course) => !programmeCourses.some((item) => item.id === course.id))].filter((course) => canEnrollmentUseCourse(enrollment, course));
+      for (const course of allowedCourses) {
         const summary = calculateCourseCompletionForUser(course, enrollment.userId);
         expandedEnrollments.push({
           ...enrollment,
@@ -1499,6 +1624,7 @@ app.post("/api/payments/manual", requireAuth, async (req, res) => {
     if (!programme && !course) return res.status(404).json({ message: "Programme not found" });
 
     const amount = programmeFeeAmount(programme || course);
+    const accessData = defaultEnrollmentAccessData(programme || course);
     const enrollment = programme
       ? await prisma.enrollment.upsert({
           where: { userId_programmeId: { userId: req.user.id, programmeId: programme.id } },
@@ -1510,7 +1636,8 @@ app.post("/api/payments/manual", requireAuth, async (req, res) => {
             admissionStatus: "AWAITING_ADMIN_APPROVAL",
             paymentMethod: "BANK_TRANSFER",
             manualReference,
-            paymentProofUrl
+            paymentProofUrl,
+            ...accessData
           },
           update: {
             amount,
@@ -1532,7 +1659,8 @@ app.post("/api/payments/manual", requireAuth, async (req, res) => {
             admissionStatus: "AWAITING_ADMIN_APPROVAL",
             paymentMethod: "BANK_TRANSFER",
             manualReference,
-            paymentProofUrl
+            paymentProofUrl,
+            ...accessData
           },
           update: {
             amount,
@@ -1590,6 +1718,7 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
     const targetPrefix = programme ? "P" : "C";
     const reference = `CIBI-${req.user.id}-${targetPrefix}${targetId}-${Date.now()}`;
     const amount = programmeFeeAmount(programme || course);
+    const accessData = defaultEnrollmentAccessData(programme || course);
 
     const enrollment = programme
       ? await prisma.enrollment.upsert({
@@ -1601,7 +1730,8 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
             paymentStatus: "PENDING_PAYMENT",
             admissionStatus: "AWAITING_PAYMENT",
             paymentMethod: "PAYSTACK",
-            paystackReference: reference
+            paystackReference: reference,
+            ...accessData
           },
           update: {
             amount,
@@ -1620,7 +1750,8 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
             paymentStatus: "PENDING_PAYMENT",
             admissionStatus: "AWAITING_PAYMENT",
             paymentMethod: "PAYSTACK",
-            paystackReference: reference
+            paystackReference: reference,
+            ...accessData
           },
           update: {
             amount,
@@ -2710,14 +2841,15 @@ app.get("/api/admin/overview", requireAuth, requireAdmin, async (req, res) => {
   const courseRows = await prisma.course.findMany({ where: courseWhere, select: { id: true } });
   const courseIds = courseRows.map((course) => course.id);
   const enrollmentWhere = staffCanSeeAllCourses(req.user) ? {} : { OR: [{ courseId: { in: courseIds } }, { programme: { courses: { some: { id: { in: courseIds } } } } }] };
-  const [students, books, pendingEnrollments, openSupport, certificates] = await Promise.all([
+  const [students, books, pendingEnrollments, openSupport, certificates, paymentDue] = await Promise.all([
     prisma.user.count({ where: { role: "STUDENT", enrollments: staffCanSeeAllCourses(req.user) ? undefined : { some: { courseId: { in: courseIds } } } } }),
     prisma.book.count(),
     prisma.enrollment.count({ where: { ...enrollmentWhere, admissionStatus: "AWAITING_ADMIN_APPROVAL" } }),
     prisma.appeal.count({ where: { status: { in: ["OPEN", "WAITING_ADMIN", "UNDER_REVIEW"] } } }),
-    prisma.certificate.count({ where: staffCanSeeAllCourses(req.user) ? { status: "ISSUED" } : { status: "ISSUED", courseId: { in: courseIds } } })
+    prisma.certificate.count({ where: staffCanSeeAllCourses(req.user) ? { status: "ISSUED" } : { status: "ISSUED", courseId: { in: courseIds } } }),
+    prisma.enrollment.count({ where: { ...enrollmentWhere, OR: [{ accessStatus: "PAYMENT_DUE" }, { nextPaymentDueAt: { lte: new Date() } }] } })
   ]);
-  res.json({ students, books, courses: courseRows.length, pendingEnrollments, openSupport, certificates });
+  res.json({ students, books, courses: courseRows.length, pendingEnrollments, openSupport, certificates, paymentDue });
 });
 
 app.get("/api/admin/students", requireAuth, requireAdmin, async (req, res) => {
@@ -2828,7 +2960,7 @@ app.patch("/api/admin/enrollments/:id/status", requireAuth, requireAdmin, async 
 
 ${next.message}
 
-Programme: ${enrollment.course?.title || updated.course?.title || "CIBI programme"}`,
+Programme: ${programmeDisplayTitle({ ...enrollment, ...updated })}`,
         ctaText: "Open Student Portal",
         ctaUrl: "/student"
       });
@@ -2836,6 +2968,100 @@ Programme: ${enrollment.course?.title || updated.course?.title || "CIBI programm
     res.json({ ...updated, message: next.message });
   } catch (error) {
     res.status(500).json({ message: "Status update failed", error: error.message });
+  }
+});
+
+
+app.patch("/api/admin/enrollments/:id/access", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const enrollment = await prisma.enrollment.findUnique({
+      where: { id: Number(req.params.id) },
+      include: { user: true, programme: true, course: true }
+    });
+    if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
+
+    const action = String(req.body?.action || "").trim();
+    const data = {};
+    let message = "Enrollment access updated.";
+
+    if (action === "send-payment-notice") {
+      data.studentPaymentNotice = true;
+      data.studentPaymentNoticeMessage = String(req.body?.message || "Your next programme payment is due. Please contact CIBI admin for payment instructions.").trim();
+      data.studentPaymentNoticeSentAt = new Date();
+      data.accessStatus = enrollment.accessStatus === "BLOCKED" ? "BLOCKED" : "PAYMENT_DUE";
+      message = "Payment notice sent to student portal.";
+    } else if (action === "hide-payment-notice") {
+      data.studentPaymentNotice = false;
+      data.studentPaymentNoticeMessage = null;
+      data.studentPaymentNoticeSentAt = null;
+      message = "Payment notice hidden from student.";
+    } else if (action === "mark-payment-due") {
+      data.accessStatus = "PAYMENT_DUE";
+      data.nextPaymentDueAt = req.body?.nextPaymentDueAt ? new Date(req.body.nextPaymentDueAt) : enrollment.nextPaymentDueAt || new Date();
+      message = "Student marked as payment due. Student notice is still hidden until admin sends it.";
+    } else if (action === "block-access") {
+      data.accessStatus = "BLOCKED";
+      data.studentPaymentNotice = true;
+      data.studentPaymentNoticeMessage = String(req.body?.message || "Your programme access is currently on hold. Please contact CIBI admin.").trim();
+      data.studentPaymentNoticeSentAt = new Date();
+      message = "Student access blocked and notice shown.";
+    } else if (action === "restore-access") {
+      data.accessStatus = "ACTIVE";
+      data.studentPaymentNotice = false;
+      data.studentPaymentNoticeMessage = null;
+      data.studentPaymentNoticeSentAt = null;
+      message = "Student access restored.";
+    } else if (action === "promote-level") {
+      const nextLevel = String(req.body?.currentLevelStage || "").trim();
+      if (!nextLevel) return res.status(400).json({ message: "Next level/stage is required." });
+      data.currentLevelStage = nextLevel;
+      data.accessStatus = "ACTIVE";
+      message = `Student promoted to ${nextLevel}.`;
+    } else if (action === "confirm-next-payment") {
+      const cycle = Number(req.body?.paymentCycleMonths || enrollment.paymentCycleMonths || enrollment.programme?.paymentCycleMonths || 0);
+      const paidUntil = req.body?.paidUntil
+        ? new Date(req.body.paidUntil)
+        : cycle
+          ? new Date(Date.now() + cycle * 30 * 24 * 60 * 60 * 1000)
+          : enrollment.paidUntil;
+      data.accessStatus = "ACTIVE";
+      data.paymentStatus = "PAYMENT_CONFIRMED";
+      data.paidUntil = paidUntil || null;
+      data.nextPaymentDueAt = paidUntil || null;
+      data.studentPaymentNotice = false;
+      data.studentPaymentNoticeMessage = null;
+      data.studentPaymentNoticeSentAt = null;
+      message = "Next payment confirmed and access is active.";
+    } else {
+      return res.status(400).json({ message: "Invalid enrollment access action." });
+    }
+
+    const updated = await prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data,
+      include: { user: true, programme: true, course: { include: { programme: true } } }
+    });
+
+    if (["send-payment-notice", "block-access", "promote-level", "confirm-next-payment"].includes(action) && updated.user?.email) {
+      queueEmailNotification({
+        to: updated.user.email,
+        subject: "CIBI programme access update",
+        heading: "Programme Access Update",
+        body: `Dear ${updated.user.name},
+
+${message}
+
+Programme: ${programmeDisplayTitle(updated)}
+Current Level/Stage: ${updated.currentLevelStage || "Not set"}`,
+        ctaText: "Open Student Portal",
+        ctaUrl: "/student"
+      });
+    }
+
+    await logAdminActivity(req, { action: `ENROLLMENT_ACCESS_${action.toUpperCase().replace(/-/g, "_")}`, entityType: "Enrollment", entityId: enrollment.id, details: { student: enrollment.user?.email, programme: programmeDisplayTitle(updated), currentLevelStage: updated.currentLevelStage, accessStatus: updated.accessStatus } });
+    res.json({ message, enrollment: updated });
+  } catch (error) {
+    res.status(500).json({ message: "Enrollment access update failed", error: error.message });
   }
 });
 
@@ -3726,6 +3952,26 @@ app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) =>
     }
   });
   await logAdminActivity(req, { action: "STARTED_LIVE_CLASS", entityType: "LiveSession", entityId: live.id, details: { title: live.title, courseId: live.courseId } });
+
+  const students = await enrolledStudentsForCourse(finalCourseId);
+  await createCourseNotifications({
+    courseId: finalCourseId,
+    users: students,
+    title: finalCourseId ? "Your CIBI class is live now" : "CIBI general live class is live now",
+    message: `${title} has started. Join now.`,
+    url: liveUrl,
+    type: "LIVE_CLASS"
+  });
+
+  sendTransactionalEmail({
+    to: students.map((student) => student.email).filter(Boolean),
+    subject: finalCourseId ? "Your CIBI class is live now" : "CIBI general live class is live now",
+    title: "Your CIBI Class Is Live",
+    html: goLiveEmailHtml({ course: null, lecturer: req.user, title, description, liveUrl, startedAt: live.createdAt }),
+    buttonText: "JOIN NOW",
+    buttonUrl: liveUrl
+  }).catch((error) => console.error("Admin live email failed:", error.message));
+
   res.status(201).json(live);
 });
 
@@ -3739,6 +3985,7 @@ app.use(productionErrorHandler);
 
 let server;
 seedDatabase()
+  .then(() => ensureDefaultProgrammes())
   .then(() => {
     server = app.listen(PORT, () => console.log(`CIBI API running on http://localhost:${PORT}`));
   })

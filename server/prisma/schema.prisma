@@ -99,6 +99,9 @@ model Programme {
   feeUsd        Float    @default(0)
   currency      String   @default("USD")
   certification String?
+  paymentPlan   String   @default("ONE_TIME")
+  paymentCycleMonths Int?
+  defaultLevelStage String?
   published     Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -119,6 +122,8 @@ model Course {
   fee         Int      @default(0)
   feeUsd      Float    @default(0)
   currency    String   @default("USD")
+  generalForAllProgrammes Boolean @default(false)
+  levelStage  String?
   published   Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -195,6 +200,16 @@ model Enrollment {
   manualReference   String?
   paymentProofUrl   String?
   learningStream    String?
+  currentLevelStage String?
+  accessStatus      String          @default("ACTIVE")
+  paidUntil         DateTime?
+  paymentCycleMonths Int?
+  nextPaymentDueAt DateTime?
+  paymentPlan       String          @default("ONE_TIME")
+  studentPaymentNotice Boolean      @default(false)
+  studentPaymentNoticeMessage String?
+  studentPaymentNoticeSentAt DateTime?
+  graceUntil        DateTime?
   applicationJson   String?
   applicationSubmittedAt DateTime?
   approvedAt        DateTime?
