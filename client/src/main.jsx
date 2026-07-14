@@ -3635,12 +3635,12 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 
   return (
     <main className="portal-page">
-      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Website Content", "Programmes", "Courses", "Currency Settings", "Users & Roles", "Students", "Books", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Students", "Programmes", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
+      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Website Content", "Programmes", "Courses", "Currency Settings", "Users & Roles", "Admissions", "Books", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Admissions", "Programmes", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
       <div className="portal-main">
         <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CIBI Management</h1></div></div>
         {tab === "overview" && <Overview overview={overview} />}
         {tab === "users & roles" && <UsersRolesAdmin />}
-        {tab === "students" && <StudentsAdmin />}
+        {(tab === "students" || tab === "admissions") && <StudentsAdmin />}
         {tab === "books" && <CrudAdmin title="Books" path="books" reloadPublic={reloadPublic} fields={bookFields} />}
         {tab === "programmes" && <CrudAdmin title="Programmes" path="programmes" reloadPublic={reloadPublic} fields={programmeFields} />}
         {tab === "courses" && <CoursesAdmin reloadPublic={reloadPublic} />}
@@ -4498,11 +4498,15 @@ function applicationDetailRows(details = {}) {
   ].filter(([, value]) => value !== undefined && value !== null && String(value).trim());
 }
 
+
 function StudentsAdmin() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingStudentId, setEditingStudentId] = useState(null);
   const [studentForm, setStudentForm] = useState({ name: "", email: "", phone: "", country: "" });
+  const [activeDesk, setActiveDesk] = useState("payment");
+  const [openEnrollmentId, setOpenEnrollmentId] = useState("");
+  const [filters, setFilters] = useState({ search: "", programme: "all", level: "all" });
 
   async function load() {
     try {
@@ -4617,185 +4621,272 @@ function StudentsAdmin() {
     }
   }
 
+  const enrollmentRows = students.flatMap((student) => {
+    const enrollments = student.enrollments || [];
+    if (!enrollments.length) {
+      return [{
+        id: `student-${student.id}`,
+        student,
+        enrollment: null,
+        programmeTitle: "No programme selected",
+        programmeMeta: "No enrollment record yet",
+        level: "Not set",
+        searchText: `${student.name} ${student.email} ${student.phone || ""}`.toLowerCase()
+      }];
+    }
+
+    return enrollments.map((enrollment) => {
+      const programmeTitle = getEnrollmentProgrammeTitle(enrollment);
+      const programmeMeta = getEnrollmentProgrammeMeta(enrollment);
+      const level = enrollment.currentLevelStage || enrollment.course?.levelStage || enrollment.programme?.defaultLevelStage || enrollment.course?.level || "Not set";
+      return {
+        id: enrollment.id,
+        student,
+        enrollment,
+        programmeTitle,
+        programmeMeta,
+        level,
+        searchText: `${student.name} ${student.email} ${student.phone || ""} ${programmeTitle} ${level} ${enrollment.learningStream || ""} ${enrollment.paymentReference || ""}`.toLowerCase()
+      };
+    });
+  });
+
+  function rowDesk(row) {
+    const enrollment = row.enrollment;
+    if (!enrollment) return "applications";
+    const payment = String(enrollment.paymentStatus || "");
+    const admission = String(enrollment.admissionStatus || "");
+    const access = String(enrollment.accessStatus || "");
+    if (["REJECTED", "SUSPENDED", "GRADUATED"].includes(admission) || ["SUSPENDED", "GRADUATED"].includes(String(row.student.status || ""))) return "closed";
+    if (access === "PAYMENT_DUE" || enrollment.studentPaymentNotice) return "due";
+    if (admission === "APPROVED" && payment === "PAYMENT_CONFIRMED") return "approved";
+    if (["MANUAL_PAYMENT_PENDING", "PENDING_PAYMENT", "AWAITING_PAYMENT"].includes(payment) || enrollment.paymentProofUrl) return "payment";
+    return "applications";
+  }
+
+  const deskTabs = [
+    { key: "payment", label: "Payment Verification", help: "Receipts and payments waiting for admin review." },
+    { key: "applications", label: "New Applications", help: "Students who registered but are not fully approved yet." },
+    { key: "approved", label: "Approved Students", help: "Active students already approved for learning access." },
+    { key: "due", label: "Payment Due", help: "Students marked by admin for next payment or notice." },
+    { key: "closed", label: "Closed Records", help: "Rejected, suspended and graduated records." },
+    { key: "all", label: "All Records", help: "Search every student and enrollment." }
+  ];
+
+  const deskCounts = deskTabs.reduce((acc, item) => {
+    acc[item.key] = item.key === "all" ? enrollmentRows.length : enrollmentRows.filter((row) => rowDesk(row) === item.key).length;
+    return acc;
+  }, {});
+
+  const programmeOptions = [...new Set(enrollmentRows.map((row) => row.programmeTitle).filter(Boolean))];
+  const levelOptions = [...new Set(enrollmentRows.map((row) => row.level).filter(Boolean))];
+
+  const filteredRows = enrollmentRows.filter((row) => {
+    const deskMatch = activeDesk === "all" || rowDesk(row) === activeDesk;
+    const searchMatch = !filters.search || row.searchText.includes(filters.search.toLowerCase());
+    const programmeMatch = filters.programme === "all" || row.programmeTitle === filters.programme;
+    const levelMatch = filters.level === "all" || row.level === filters.level;
+    return deskMatch && searchMatch && programmeMatch && levelMatch;
+  });
+
+  const activeDeskCopy = deskTabs.find((item) => item.key === activeDesk) || deskTabs[0];
+
   return (
-    <section className="admin-section students-admin-polished">
-      <div className="content-editor-header students-admin-header admin-ux-hero">
+    <section className="admin-section lms-admin-desk">
+      <div className="lms-desk-hero">
         <div>
-          <span>Admissions Workflow</span>
-          <h2>Students, Payments and Access</h2>
-          <p>Use this page in order: review the student, confirm payment, approve admission, manage access level, then send payment notices only when admin decides.</p>
+          <span>Standard LMS Workflow</span>
+          <h2>Admissions, Payments and Student Access</h2>
+          <p>Records are separated into clear desks. Review payments in Payment Verification, keep approved learners in Approved Students, and open each record only when you need to act.</p>
         </div>
         <button className="gold-btn" type="button" onClick={load}>Refresh</button>
       </div>
 
-      <div className="admin-workflow-guide">
-        <div><span>01</span><strong>Check Application</strong><p>Confirm the student details, selected programme and learning stream.</p></div>
-        <div><span>02</span><strong>Review Payment</strong><p>Open the receipt, then approve payment only after it is verified.</p></div>
-        <div><span>03</span><strong>Open Access</strong><p>Approve admission and set the correct level, such as 100 Level or 200 Level.</p></div>
-        <div><span>04</span><strong>Control Notices</strong><p>Students only see payment warnings after admin sends the notice.</p></div>
+      <div className="lms-desk-tabs" role="tablist" aria-label="Admissions workflow">
+        {deskTabs.map((item) => (
+          <button
+            type="button"
+            key={item.key}
+            className={activeDesk === item.key ? "active-lms-desk-tab" : ""}
+            onClick={() => {
+              setActiveDesk(item.key);
+              setOpenEnrollmentId("");
+            }}
+          >
+            <strong>{item.label}</strong>
+            <span>{deskCounts[item.key] || 0}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="lms-desk-toolbar">
+        <div>
+          <strong>{activeDeskCopy.label}</strong>
+          <p>{activeDeskCopy.help}</p>
+        </div>
+        <div className="lms-desk-filters">
+          <input
+            value={filters.search}
+            onChange={(e) => setFilters((current) => ({ ...current, search: e.target.value }))}
+            placeholder="Search name, email, phone, programme or reference"
+          />
+          <select value={filters.programme} onChange={(e) => setFilters((current) => ({ ...current, programme: e.target.value }))}>
+            <option value="all">All programmes</option>
+            {programmeOptions.map((programme) => <option key={programme} value={programme}>{programme}</option>)}
+          </select>
+          <select value={filters.level} onChange={(e) => setFilters((current) => ({ ...current, level: e.target.value }))}>
+            <option value="all">All levels</option>
+            {levelOptions.map((level) => <option key={level} value={level}>{level}</option>)}
+          </select>
+        </div>
       </div>
 
       {loading ? <p>Loading students...</p> : null}
 
-      {!loading && !students.length ? (
-        <div className="quiet-banner"><strong>No students yet.</strong><p>New student applications will appear here after registration.</p></div>
+      {!loading && !filteredRows.length ? (
+        <div className="quiet-banner">
+          <strong>No record in this desk.</strong>
+          <p>Use another desk or clear the filters to see more students.</p>
+        </div>
       ) : null}
 
-      <div className="student-list admissions-list-polished">
-        {students.map((student) => {
-          const enrollments = student.enrollments || [];
+      <div className="lms-student-record-list">
+        {filteredRows.map((row) => {
+          const { student, enrollment } = row;
+          const isOpen = String(openEnrollmentId) === String(row.id);
+          const applicationDetails = parseApplicationDetails(enrollment?.applicationJson);
+          const applicationRows = applicationDetailRows({
+            ...applicationDetails,
+            learningStream: enrollment?.learningStream || applicationDetails.learningStream
+          });
+          const paymentConfirmed = enrollment?.paymentStatus === "PAYMENT_CONFIRMED";
+          const approved = enrollment?.admissionStatus === "APPROVED";
+          const rejected = enrollment?.admissionStatus === "REJECTED";
+          const suspended = enrollment?.admissionStatus === "SUSPENDED";
+          const graduated = enrollment?.admissionStatus === "GRADUATED";
+          const canApprove = enrollment && !graduated && (!approved || !paymentConfirmed);
+          const canReject = enrollment && !rejected && !graduated;
+          const canSuspend = enrollment && !suspended && !graduated;
+          const canGraduate = enrollment && approved && paymentConfirmed && !graduated;
+
           return (
-            <div className="student-card admission-student-card" key={student.id}>
-              <div className="student-card-top">
-                <div>
-                  <h3>{student.name}</h3>
-                  <p>{student.email} · {student.phone || "No phone"}</p>
+            <article className="lms-student-record" key={row.id}>
+              <button className="lms-record-summary" type="button" onClick={() => setOpenEnrollmentId(isOpen ? "" : row.id)}>
+                <div className="lms-record-person">
+                  <strong>{student.name || "Unnamed student"}</strong>
+                  <span>{student.email} · {student.phone || "No phone"}</span>
                 </div>
-                <div className="student-card-actions-top">
-                  <span className={statusBadgeClass(student.status)}>{formatAdminStatusLabel(student.status)}</span>
-                  <button className="edit-btn" type="button" onClick={() => startEditStudent(student)}>Edit Details</button>
+                <div className="lms-record-programme">
+                  <small>Programme</small>
+                  <b>{row.programmeTitle}</b>
                 </div>
-              </div>
+                <div className="lms-record-statuses">
+                  <span className={statusBadgeClass(enrollment?.paymentStatus || student.status)}>{formatAdminStatusLabel(enrollment?.paymentStatus || student.status)}</span>
+                  <span className={statusBadgeClass(enrollment?.admissionStatus || student.status)}>{formatAdminStatusLabel(enrollment?.admissionStatus || "No Admission")}</span>
+                </div>
+                <ChevronDown className={isOpen ? "lms-chevron-open" : ""} size={20} />
+              </button>
 
-              {editingStudentId === student.id ? (
-                <form className="admin-form admin-student-edit-form" onSubmit={saveStudentDetails}>
-                  <div className="form-row two-columns">
-                    <input placeholder="Full name" value={studentForm.name} onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })} required />
-                    <input type="email" placeholder="Email address" value={studentForm.email} onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })} required />
+              {isOpen ? (
+                <div className="lms-record-details">
+                  <div className="lms-detail-grid">
+                    <div><small>Learning Stream</small><strong>{enrollment?.learningStream || applicationDetails.learningStream || "Not selected"}</strong></div>
+                    <div><small>Current Level</small><strong>{row.level}</strong></div>
+                    <div><small>Amount</small><strong>{enrollment ? formatAdminAmount(enrollment) : "No payment"}</strong></div>
+                    <div><small>Access</small><strong>{formatAdminStatusLabel(enrollment?.accessStatus || student.status)}</strong></div>
+                    <div><small>Paid Until</small><strong>{enrollment?.paidUntil ? new Date(enrollment.paidUntil).toLocaleDateString() : "Not set"}</strong></div>
+                    <div><small>Student Notice</small><strong>{enrollment?.studentPaymentNotice ? "Visible" : "Hidden"}</strong></div>
                   </div>
-                  <div className="form-row two-columns">
-                    <input placeholder="Phone number" value={studentForm.phone} onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })} />
-                    <input placeholder="Country" value={studentForm.country} onChange={(e) => setStudentForm({ ...studentForm, country: e.target.value })} />
-                  </div>
-                  <div className="form-row">
-                    <button className="gold-btn" type="submit">Save Student Details</button>
-                    <button className="ghost-btn admin-cancel-btn" type="button" onClick={cancelEditStudent}>Cancel</button>
-                  </div>
-                  <p className="empty-small">Status is controlled by approve, reject, suspend and graduate actions. This form only updates personal details.</p>
-                </form>
-              ) : null}
 
-              {!enrollments.length ? <p className="empty-small">This student has not selected a programme or submitted payment yet.</p> : null}
+                  {editingStudentId === student.id ? (
+                    <form className="admin-form lms-student-edit-form" onSubmit={saveStudentDetails}>
+                      <div className="form-row two-columns">
+                        <input placeholder="Full name" value={studentForm.name} onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })} required />
+                        <input type="email" placeholder="Email address" value={studentForm.email} onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })} required />
+                      </div>
+                      <div className="form-row two-columns">
+                        <input placeholder="Phone number" value={studentForm.phone} onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })} />
+                        <input placeholder="Country" value={studentForm.country} onChange={(e) => setStudentForm({ ...studentForm, country: e.target.value })} />
+                      </div>
+                      <div className="form-row">
+                        <button className="gold-btn" type="submit">Save Student Details</button>
+                        <button className="ghost-btn admin-cancel-btn" type="button" onClick={cancelEditStudent}>Cancel</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button className="edit-btn" type="button" onClick={() => startEditStudent(student)}>Edit Student Details</button>
+                  )}
 
-              {enrollments.map((enrollment) => {
-                const paymentConfirmed = enrollment.paymentStatus === "PAYMENT_CONFIRMED";
-                const approved = enrollment.admissionStatus === "APPROVED";
-                const rejected = enrollment.admissionStatus === "REJECTED";
-                const suspended = enrollment.admissionStatus === "SUSPENDED";
-                const graduated = enrollment.admissionStatus === "GRADUATED";
-                const canApprove = !graduated && (!approved || !paymentConfirmed);
-                const canReject = !rejected && !graduated;
-                const canSuspend = !suspended && !graduated;
-                const canGraduate = approved && paymentConfirmed && !graduated;
-                const applicationDetails = parseApplicationDetails(enrollment.applicationJson);
-                const applicationRows = applicationDetailRows({
-                  ...applicationDetails,
-                  learningStream: enrollment.learningStream || applicationDetails.learningStream
-                });
+                  {applicationRows.length ? (
+                    <details className="lms-application-details">
+                      <summary>Application Form Details</summary>
+                      <div className="application-details-grid">
+                        {applicationRows.map(([label, value]) => (
+                          <div key={label}>
+                            <span>{label}</span>
+                            <p>{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
 
-                return (
-                  <div className="enrollment-box enrollment-box-polished" key={enrollment.id}>
-                    <div className="enrollment-summary-row">
-                      <div>
-                        <span>Programme</span>
-                        <strong>{getEnrollmentProgrammeTitle(enrollment)}</strong>
-                        <small>{getEnrollmentProgrammeMeta(enrollment)}</small>
-                      </div>
-                      <div>
-                        <span>Learning Stream</span>
-                        <strong>{enrollment.learningStream || applicationDetails.learningStream || "Not selected"}</strong>
-                      </div>
-                      <div>
-                        <span>Amount</span>
-                        <strong>{formatAdminAmount(enrollment)}</strong>
-                        <small>Amount recorded from payment submission</small>
-                      </div>
+                  {enrollment?.studentPaymentNotice ? (
+                    <div className="admin-payment-notice-preview">
+                      <strong>Student payment notice</strong>
+                      <p>{enrollment.studentPaymentNoticeMessage || "Payment notice is visible to this student."}</p>
                     </div>
+                  ) : null}
 
-                    {applicationRows.length ? (
-                      <details className="application-details-box">
-                        <summary>View Application Form Details</summary>
-                        <div className="application-details-grid">
-                          {applicationRows.map(([label, value]) => (
-                            <div key={label}>
-                              <span>{label}</span>
-                              <p>{value}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    ) : null}
-
-                    <div className="enrollment-status-grid">
-                      <div><small>Payment</small><span className={statusBadgeClass(enrollment.paymentStatus)}>{formatAdminStatusLabel(enrollment.paymentStatus)}</span></div>
-                      <div><small>Admission</small><span className={statusBadgeClass(enrollment.admissionStatus)}>{formatAdminStatusLabel(enrollment.admissionStatus)}</span></div>
-                      <div><small>Method</small><strong>{formatAdminStatusLabel(enrollment.paymentMethod)}</strong></div>
-                      <div><small>Reference</small><strong>{enrollment.paystackReference || enrollment.manualReference || "None"}</strong></div>
-                    </div>
-
-                    <div className="enrollment-access-grid">
-                      <div><small>Access</small><strong>{formatAdminStatusLabel(enrollment.accessStatus || "ACTIVE")}</strong></div>
-                      <div><small>Current Level</small><strong>{enrollment.currentLevelStage || "Not set"}</strong></div>
-                      <div><small>Paid Until</small><strong>{enrollment.paidUntil ? new Date(enrollment.paidUntil).toLocaleDateString() : "Not set"}</strong></div>
-                      <div><small>Student Notice</small><strong>{enrollment.studentPaymentNotice ? "Visible" : "Hidden"}</strong></div>
-                    </div>
-
-                    {enrollment.studentPaymentNotice ? (
-                      <div className="admin-payment-notice-preview">
-                        <strong>Student payment notice</strong>
-                        <p>{enrollment.studentPaymentNoticeMessage || "Payment notice is visible to this student."}</p>
-                      </div>
-                    ) : null}
-
-                    <div className="payment-proof-row">
-                      {enrollment.paymentProofUrl ? (
-                        <a className="proof-btn" href={enrollment.paymentProofUrl} target="_blank" rel="noreferrer">View Payment Receipt</a>
+                  <div className="lms-workflow-columns">
+                    <div>
+                      <h4>Payment Verification</h4>
+                      <p>Use this after checking Paystack or the bank transfer receipt.</p>
+                      {enrollment?.paymentProofUrl ? (
+                        <a className="proof-btn" href={enrollment.paymentProofUrl} target="_blank" rel="noreferrer">View Receipt</a>
                       ) : (
                         <span className="no-proof-note">No receipt uploaded</span>
                       )}
+                      <div className="student-action-row">
+                        {canApprove ? <button className="gold-btn" type="button" onClick={() => action(enrollment, "approve")}>Approve & Open Portal</button> : null}
+                        {enrollment ? <button className="gold-btn" type="button" onClick={() => accessAction(enrollment, "confirm-next-payment")}>Confirm Next Payment</button> : null}
+                        {enrollment ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "mark-payment-due")}>Mark Payment Due</button> : null}
+                      </div>
                     </div>
 
-                    <div className="admin-action-groups">
-                      <div>
-                        <h4>Payment Review</h4>
-                        <p>Use after checking the receipt or Paystack reference.</p>
-                        <div className="student-action-row">
-                          {canApprove ? <button className="gold-btn" type="button" onClick={() => action(enrollment, "approve")}>Approve & Confirm Payment</button> : null}
-                          <button className="gold-btn" type="button" onClick={() => accessAction(enrollment, "confirm-next-payment")}>Confirm Next Payment</button>
-                          <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "mark-payment-due")}>Mark Payment Due</button>
-                        </div>
+                    <div>
+                      <h4>Admission Decision</h4>
+                      <p>Use only after school review. These actions affect the student portal.</p>
+                      <div className="student-action-row">
+                        {canReject ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "reject")}>Reject</button> : null}
+                        {canSuspend ? <button className="dark-btn" type="button" onClick={() => action(enrollment, "suspend")}>Suspend</button> : null}
+                        {canGraduate ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "graduate")}>Graduate</button> : null}
+                        {graduated ? <span className="status-badge status-good">Graduated</span> : null}
                       </div>
-                      <div>
-                        <h4>Admission Decision</h4>
-                        <p>Reject, suspend or graduate only after school review.</p>
-                        <div className="student-action-row">
-                          {canReject ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "reject")}>Reject</button> : null}
-                          {canSuspend ? <button className="dark-btn" type="button" onClick={() => action(enrollment, "suspend")}>Suspend</button> : null}
-                          {canGraduate ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "graduate")}>Graduate</button> : null}
-                          {graduated ? <span className="status-badge status-good">Graduated</span> : null}
-                        </div>
-                      </div>
-                      <div>
-                        <h4>Access and Notices</h4>
-                        <p>Promote level or show/hide the student payment warning manually.</p>
-                        <div className="student-action-row">
-                          <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "promote-level")}>Promote Level</button>
-                          <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "send-payment-notice")}>Send Payment Notice</button>
-                          {enrollment.studentPaymentNotice ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "hide-payment-notice")}>Hide Notice</button> : null}
-                          <button className="dark-btn" type="button" onClick={() => accessAction(enrollment, enrollment.accessStatus === "BLOCKED" ? "restore-access" : "block-access")}>{enrollment.accessStatus === "BLOCKED" ? "Restore Access" : "Block Access"}</button>
-                        </div>
+                    </div>
+
+                    <div>
+                      <h4>Level and Notices</h4>
+                      <p>Promote students manually and control whether payment notices show in their portal.</p>
+                      <div className="student-action-row">
+                        {enrollment ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "promote-level")}>Promote Level</button> : null}
+                        {enrollment ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "send-payment-notice")}>Send Payment Notice</button> : null}
+                        {enrollment?.studentPaymentNotice ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "hide-payment-notice")}>Hide Notice</button> : null}
+                        {enrollment ? <button className="dark-btn" type="button" onClick={() => accessAction(enrollment, enrollment.accessStatus === "BLOCKED" ? "restore-access" : "block-access")}>{enrollment.accessStatus === "BLOCKED" ? "Restore Access" : "Block Access"}</button> : null}
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              ) : null}
+            </article>
           );
         })}
       </div>
     </section>
   );
 }
+
+
 
 const bookFields = [
   ["title", "Book title"], ["author", "Author"], ["category", "Category"], ["price", "Price e.g ₦8,500"], ["buyLink", "Stellar purchase link"], ["imageUrl", "Book cover image URL"], ["description", "Description", "textarea"]

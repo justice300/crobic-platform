@@ -9760,3 +9760,341 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Standard LMS admissions desk: split students into clear workflow sections */
+.lms-admin-desk {
+  display: grid;
+  gap: 22px;
+}
+
+.lms-desk-hero {
+  background: var(--black);
+  color: white;
+  border: 1px solid rgba(196, 159, 100, 0.24);
+  padding: 34px;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.lms-desk-hero span {
+  display: block;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .22em;
+  margin-bottom: 12px;
+}
+
+.lms-desk-hero h2 {
+  color: white;
+  margin-bottom: 12px;
+}
+
+.lms-desk-hero p {
+  color: rgba(255,255,255,.68);
+  margin: 0;
+  max-width: 840px;
+}
+
+.lms-desk-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lms-desk-tabs button {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 18px 16px;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.lms-desk-tabs strong {
+  color: var(--black);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.lms-desk-tabs span {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(196,159,100,.12);
+  color: var(--gold);
+  border: 1px solid rgba(196,159,100,.25);
+  font-weight: 900;
+}
+
+.lms-desk-tabs .active-lms-desk-tab {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+.lms-desk-tabs .active-lms-desk-tab strong,
+.lms-desk-tabs .active-lms-desk-tab span {
+  color: var(--black);
+}
+
+.lms-desk-tabs .active-lms-desk-tab span {
+  background: rgba(255,255,255,.34);
+  border-color: rgba(7,11,24,.18);
+}
+
+.lms-desk-toolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, .8fr) minmax(420px, 1.2fr);
+  gap: 18px;
+  align-items: center;
+  background: white;
+  border: 1px solid var(--line);
+  padding: 22px;
+}
+
+.lms-desk-toolbar strong {
+  display: block;
+  color: var(--black);
+  font-size: 20px;
+}
+
+.lms-desk-toolbar p {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.lms-desk-filters {
+  display: grid;
+  grid-template-columns: 1.2fr .9fr .7fr;
+  gap: 10px;
+}
+
+.lms-desk-filters input,
+.lms-desk-filters select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  color: var(--black);
+  padding: 0 14px;
+  outline: none;
+}
+
+.lms-student-record-list {
+  display: grid;
+  gap: 14px;
+}
+
+.lms-student-record {
+  background: white;
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 48px rgba(7, 11, 24, 0.05);
+  overflow: hidden;
+}
+
+.lms-record-summary {
+  width: 100%;
+  border: 0;
+  background: white;
+  display: grid;
+  grid-template-columns: minmax(230px, 1.1fr) minmax(260px, 1fr) minmax(280px, .95fr) 32px;
+  gap: 18px;
+  align-items: center;
+  padding: 22px 24px;
+  text-align: left;
+}
+
+.lms-record-summary:hover {
+  background: rgba(196,159,100,.08);
+}
+
+.lms-record-person strong {
+  display: block;
+  color: var(--black);
+  font-size: 18px;
+  margin-bottom: 5px;
+}
+
+.lms-record-person span,
+.lms-record-programme small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lms-record-programme small {
+  display: block;
+  color: var(--gold);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  margin-bottom: 5px;
+}
+
+.lms-record-programme b {
+  display: block;
+  color: var(--black);
+  line-height: 1.45;
+}
+
+.lms-record-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.lms-chevron-open {
+  transform: rotate(180deg);
+}
+
+.lms-record-details {
+  border-top: 1px solid var(--line);
+  background: rgba(248,243,233,.52);
+  padding: 24px;
+  display: grid;
+  gap: 20px;
+}
+
+.lms-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0;
+  border: 1px solid var(--line);
+  background: white;
+}
+
+.lms-detail-grid > div {
+  padding: 18px;
+  border-right: 1px solid var(--line);
+}
+
+.lms-detail-grid > div:last-child {
+  border-right: 0;
+}
+
+.lms-detail-grid small {
+  display: block;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .15em;
+  margin-bottom: 8px;
+}
+
+.lms-detail-grid strong {
+  display: block;
+  color: var(--black);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.lms-student-edit-form {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 18px;
+}
+
+.lms-application-details {
+  background: white;
+  border: 1px solid var(--line);
+}
+
+.lms-application-details summary {
+  cursor: pointer;
+  padding: 16px 18px;
+  color: var(--black);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .13em;
+  font-size: 11px;
+}
+
+.lms-workflow-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.lms-workflow-columns > div {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 22px;
+}
+
+.lms-workflow-columns h4 {
+  margin: 0 0 8px;
+  color: var(--black);
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+
+.lms-workflow-columns p {
+  margin: 0 0 16px;
+  font-size: 13px;
+}
+
+.lms-workflow-columns .student-action-row {
+  padding: 0;
+  margin-top: 14px;
+}
+
+@media (max-width: 1200px) {
+  .lms-desk-tabs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .lms-record-summary,
+  .lms-desk-toolbar,
+  .lms-workflow-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .lms-record-statuses {
+    justify-content: flex-start;
+  }
+
+  .lms-detail-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .lms-detail-grid > div:nth-child(3n) {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .lms-desk-hero {
+    flex-direction: column;
+    padding: 24px;
+  }
+
+  .lms-desk-tabs,
+  .lms-desk-filters,
+  .lms-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lms-record-summary,
+  .lms-record-details {
+    padding: 18px;
+  }
+
+  .lms-detail-grid > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .lms-detail-grid > div:last-child {
+    border-bottom: 0;
+  }
+}
