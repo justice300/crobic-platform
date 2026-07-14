@@ -2531,6 +2531,14 @@ function StudentPortal({ user, setUser, goTo }) {
           </div>
         )}
 
+        {!activeEnrollment && studentTab === "dashboard" ? (
+          <div className="student-portal-guide-grid">
+            <div><span>Programme</span><strong>{dashboard.enrollments[0]?.course?.programme?.title || dashboard.enrollments[0]?.course?.title || "No approved programme yet"}</strong><p>Your courses are locked to your approved programme.</p></div>
+            <div><span>Current Stage</span><strong>{dashboard.enrollments[0]?.currentLevelStage || "Not set"}</strong><p>Admin controls when you move to the next level.</p></div>
+            <div><span>Access</span><strong>{formatPortalStatus(dashboard.enrollments[0]?.accessStatus || "ACTIVE")}</strong><p>Live classes, lessons and certificates appear based on approval.</p></div>
+          </div>
+        ) : null}
+
         {activeEnrollment ? (
           <LearningCourseView
             enrollment={activeEnrollment}
@@ -4029,9 +4037,16 @@ function AssessmentsAdmin() {
 
   return (
     <section className="admin-section assessments-admin">
-      <div className="content-editor-header">
+      <div className="content-editor-header admin-ux-hero">
         <div><span>LMS Assessment</span><h2>Assignments & Quiz</h2><p>Create coursework, grade student submissions, add quiz questions and control certificate eligibility.</p></div>
         <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="admin-workflow-guide assessment-guide">
+        <div><span>A</span><strong>Assignment</strong><p>Use for file/text submissions that a lecturer will grade.</p></div>
+        <div><span>Q</span><strong>Quiz</strong><p>Use for objective questions with A, B, C or D answers.</p></div>
+        <div><span>Certificate</span><strong>Required</strong><p>Tick this only when the score should count toward certificate eligibility.</p></div>
+        <div><span>Publish</span><strong>Visible</strong><p>Untick published when you are still preparing the assessment.</p></div>
       </div>
 
       <div className="assessment-admin-forms">
@@ -4435,6 +4450,30 @@ function statusBadgeClass(value) {
   return "status-badge";
 }
 
+function getEnrollmentProgrammeTitle(enrollment = {}) {
+  return enrollment.programme?.title || enrollment.course?.programme?.title || enrollment.course?.title || "Programme not linked yet";
+}
+
+function getEnrollmentProgrammeMeta(enrollment = {}) {
+  const programme = enrollment.programme || enrollment.course?.programme || {};
+  const level = enrollment.currentLevelStage || enrollment.course?.levelStage || programme.level || enrollment.course?.level || "Level not set";
+  const duration = programme.duration || enrollment.course?.duration || "Duration not set";
+  return `${level} · ${duration}`;
+}
+
+function formatAdminAmount(enrollment = {}) {
+  const amount = Number(enrollment.amount || 0);
+  if (!amount) return "No amount recorded";
+  if (amount < 1000) return `$${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return `₦${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function courseProgrammeLabel(item = {}) {
+  if (item.generalForAllProgrammes) return "General compulsory course for every programme";
+  if (item.programme?.title) return item.programme.title;
+  return "Needs programme assignment";
+}
+
 function parseApplicationDetails(value) {
   if (!value) return {};
   if (typeof value === "object") return value;
@@ -4580,13 +4619,20 @@ function StudentsAdmin() {
 
   return (
     <section className="admin-section students-admin-polished">
-      <div className="content-editor-header students-admin-header">
+      <div className="content-editor-header students-admin-header admin-ux-hero">
         <div>
-          <span>Admissions</span>
-          <h2>Admissions and Payments</h2>
-          <p>Review payment receipts, confirm payment, approve portal access, suspend students or mark completed students as graduated.</p>
+          <span>Admissions Workflow</span>
+          <h2>Students, Payments and Access</h2>
+          <p>Use this page in order: review the student, confirm payment, approve admission, manage access level, then send payment notices only when admin decides.</p>
         </div>
         <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="admin-workflow-guide">
+        <div><span>01</span><strong>Check Application</strong><p>Confirm the student details, selected programme and learning stream.</p></div>
+        <div><span>02</span><strong>Review Payment</strong><p>Open the receipt, then approve payment only after it is verified.</p></div>
+        <div><span>03</span><strong>Open Access</strong><p>Approve admission and set the correct level, such as 100 Level or 200 Level.</p></div>
+        <div><span>04</span><strong>Control Notices</strong><p>Students only see payment warnings after admin sends the notice.</p></div>
       </div>
 
       {loading ? <p>Loading students...</p> : null}
@@ -4652,7 +4698,8 @@ function StudentsAdmin() {
                     <div className="enrollment-summary-row">
                       <div>
                         <span>Programme</span>
-                        <strong>{enrollment.course?.title || "Course not found"}</strong>
+                        <strong>{getEnrollmentProgrammeTitle(enrollment)}</strong>
+                        <small>{getEnrollmentProgrammeMeta(enrollment)}</small>
                       </div>
                       <div>
                         <span>Learning Stream</span>
@@ -4660,7 +4707,8 @@ function StudentsAdmin() {
                       </div>
                       <div>
                         <span>Amount</span>
-                        <strong>₦{Number(enrollment.amount || 0).toLocaleString()}</strong>
+                        <strong>{formatAdminAmount(enrollment)}</strong>
+                        <small>Amount recorded from payment submission</small>
                       </div>
                     </div>
 
@@ -4707,18 +4755,36 @@ function StudentsAdmin() {
                       )}
                     </div>
 
-                    <div className="student-action-row">
-                      {canApprove ? <button className="gold-btn" type="button" onClick={() => action(enrollment, "approve")}>Approve & Confirm Payment</button> : null}
-                      {canReject ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "reject")}>Reject</button> : null}
-                      {canSuspend ? <button className="dark-btn" type="button" onClick={() => action(enrollment, "suspend")}>Suspend</button> : null}
-                      {canGraduate ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "graduate")}>Graduate</button> : null}
-                      <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "promote-level")}>Promote Level</button>
-                      <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "mark-payment-due")}>Mark Payment Due</button>
-                      <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "send-payment-notice")}>Send Payment Notice</button>
-                      {enrollment.studentPaymentNotice ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "hide-payment-notice")}>Hide Notice</button> : null}
-                      <button className="gold-btn" type="button" onClick={() => accessAction(enrollment, "confirm-next-payment")}>Confirm Next Payment</button>
-                      <button className="dark-btn" type="button" onClick={() => accessAction(enrollment, enrollment.accessStatus === "BLOCKED" ? "restore-access" : "block-access")}>{enrollment.accessStatus === "BLOCKED" ? "Restore Access" : "Block Access"}</button>
-                      {graduated ? <span className="status-badge status-good">Graduated</span> : null}
+                    <div className="admin-action-groups">
+                      <div>
+                        <h4>Payment Review</h4>
+                        <p>Use after checking the receipt or Paystack reference.</p>
+                        <div className="student-action-row">
+                          {canApprove ? <button className="gold-btn" type="button" onClick={() => action(enrollment, "approve")}>Approve & Confirm Payment</button> : null}
+                          <button className="gold-btn" type="button" onClick={() => accessAction(enrollment, "confirm-next-payment")}>Confirm Next Payment</button>
+                          <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "mark-payment-due")}>Mark Payment Due</button>
+                        </div>
+                      </div>
+                      <div>
+                        <h4>Admission Decision</h4>
+                        <p>Reject, suspend or graduate only after school review.</p>
+                        <div className="student-action-row">
+                          {canReject ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "reject")}>Reject</button> : null}
+                          {canSuspend ? <button className="dark-btn" type="button" onClick={() => action(enrollment, "suspend")}>Suspend</button> : null}
+                          {canGraduate ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => action(enrollment, "graduate")}>Graduate</button> : null}
+                          {graduated ? <span className="status-badge status-good">Graduated</span> : null}
+                        </div>
+                      </div>
+                      <div>
+                        <h4>Access and Notices</h4>
+                        <p>Promote level or show/hide the student payment warning manually.</p>
+                        <div className="student-action-row">
+                          <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "promote-level")}>Promote Level</button>
+                          <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "send-payment-notice")}>Send Payment Notice</button>
+                          {enrollment.studentPaymentNotice ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "hide-payment-notice")}>Hide Notice</button> : null}
+                          <button className="dark-btn" type="button" onClick={() => accessAction(enrollment, enrollment.accessStatus === "BLOCKED" ? "restore-access" : "block-access")}>{enrollment.accessStatus === "BLOCKED" ? "Restore Access" : "Block Access"}</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
@@ -4884,7 +4950,7 @@ function SlidesAdmin({ reloadPublic }) {
 
 
 function CoursesAdmin({ reloadPublic }) {
-  const empty = { programmeId: "", title: "", level: "Course", levelStage: "", generalForAllProgrammes: false, duration: "", feeUsd: 0, currency: "USD", fee: 0, imageUrl: "", description: "" };
+  const empty = { programmeId: "", title: "", level: "Core Course", levelStage: "", generalForAllProgrammes: false, duration: "", feeUsd: 0, currency: "USD", fee: 0, imageUrl: "", description: "" };
   const [items, setItems] = useState([]);
   const [programmes, setProgrammes] = useState([]);
   const [form, setForm] = useState(empty);
@@ -4903,7 +4969,7 @@ function CoursesAdmin({ reloadPublic }) {
     setForm({
       programmeId: item.programmeId || "",
       title: item.title || "",
-      level: item.level || "Course",
+      level: item.level || "Core Course",
       duration: item.duration || "",
       levelStage: item.levelStage || "",
       generalForAllProgrammes: Boolean(item.generalForAllProgrammes),
@@ -4952,21 +5018,34 @@ function CoursesAdmin({ reloadPublic }) {
   }
 
   return (
-    <section className="admin-section">
-      <h2>{editingId ? "Edit Course" : "Courses Under Programmes"}</h2>
-      <p className="admin-helper-text">Create programmes first, then attach each course to the correct programme. Student access follows the programme selected on the Admission page.</p>
+    <section className="admin-section courses-admin-ux">
+      <div className="content-editor-header admin-ux-hero">
+        <div>
+          <span>Course Setup</span>
+          <h2>{editingId ? "Edit Course" : "Courses Under Programmes"}</h2>
+          <p>Create a course, attach it to a programme or mark it as a general compulsory course, then use Course Builder to add videos, lessons and notes.</p>
+        </div>
+      </div>
+
+      <div className="admin-workflow-guide">
+        <div><span>01</span><strong>Choose Programme</strong><p>Select the programme that should see this course.</p></div>
+        <div><span>02</span><strong>Set Level</strong><p>Use 100 Level, 200 Level or General so access is easy to understand.</p></div>
+        <div><span>03</span><strong>Save Course</strong><p>This creates the course shell and controls who can access it.</p></div>
+        <div><span>04</span><strong>Add Videos</strong><p>Open Course Builder to add modules, lesson videos and notes.</p></div>
+      </div>
+
       {!programmes.length && <div className="quiet-banner"><strong>No programme yet.</strong><p>Add programmes from the Programmes tab before adding courses.</p></div>}
-      <form className="admin-form" onSubmit={submit}>
+      <form className="admin-form course-admin-form-ux" onSubmit={submit}>
         <select value={form.programmeId} onChange={(e) => setForm({ ...form, programmeId: e.target.value })} required={!form.generalForAllProgrammes} disabled={form.generalForAllProgrammes}>
           <option value="">Select programme</option>
           {programmes.map((programme) => <option key={programme.id} value={programme.id}>{programme.title}</option>)}
         </select>
         <input placeholder="Course title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-        <input placeholder="Level" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} required />
-        <input placeholder="Level/Stage e.g 100 Level, 200 Level, General" value={form.levelStage} onChange={(e) => setForm({ ...form, levelStage: e.target.value })} />
+        <input placeholder="Course category e.g Core Course, Elective, Ministry Practical" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} required />
+        <input placeholder="Access level/stage e.g 100 Level, 200 Level, General" value={form.levelStage} onChange={(e) => setForm({ ...form, levelStage: e.target.value })} />
         <label className="admin-checkbox-row">
           <input type="checkbox" checked={Boolean(form.generalForAllProgrammes)} onChange={(e) => setForm({ ...form, generalForAllProgrammes: e.target.checked, programmeId: e.target.checked ? "" : form.programmeId })} />
-          <span>General compulsory course for all programmes</span>
+          <span>General compulsory course for all programmes <small>Every approved student will see this course, no matter their programme.</small></span>
         </label>
         <input placeholder="Duration e.g 12 Weeks" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} />
         <div className="form-row two-columns">
@@ -4977,7 +5056,7 @@ function CoursesAdmin({ reloadPublic }) {
         <input placeholder="Image URL" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} />
         <textarea placeholder="Course description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
         <div className="form-row">
-          <button className="gold-btn" type="submit">{editingId ? "Update Course" : "Add Course"}</button>
+          <button className="gold-btn" type="submit">{editingId ? "Update Course" : "Save Course"}</button>
           {editingId && <button className="ghost-btn" type="button" onClick={cancelEdit}>Cancel Edit</button>}
         </div>
       </form>
@@ -4986,7 +5065,8 @@ function CoursesAdmin({ reloadPublic }) {
           <div key={item.id} className="admin-list-item">
             <div>
               <strong>{item.title}</strong>
-              <p>{item.generalForAllProgrammes ? "General for all programmes" : item.programme?.title || "No programme attached"} · {item.level}{item.levelStage ? ` · ${item.levelStage}` : ""}</p>
+              <p>{courseProgrammeLabel(item)} · {item.level || "Course"}{item.levelStage ? ` · ${item.levelStage}` : ""}</p>
+              <small>{item.generalForAllProgrammes ? "Visible to all approved students" : "Visible only to students in this programme"} · Add videos in Course Builder</small>
             </div>
             <div>
               <button className="ghost-btn" type="button" onClick={() => startEdit(item)}>Edit</button>
@@ -6678,7 +6758,10 @@ function ActivityLogAdmin() {
                 </div>
                 <div><span>Entity</span><b>{log.entityType || "System"}{log.entityId ? ` #${log.entityId}` : ""}</b></div>
                 <div><span>Date</span><b>{formatDateTime(log.createdAt)}</b></div>
-                <div className="audit-details"><span>Details</span><p>{Object.keys(details).length ? Object.entries(details).map(([key, value]) => `${key}: ${value}`).join(" · ") : "No extra details"}</p></div>
+                <details className="audit-details">
+                  <summary>View technical details</summary>
+                  <p>{Object.keys(details).length ? Object.entries(details).map(([key, value]) => `${key}: ${value}`).join(" · ") : "No extra details"}</p>
+                </details>
               </div>
             );
           })}

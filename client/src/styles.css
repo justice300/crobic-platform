@@ -9420,3 +9420,343 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
 .admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box p::first-letter {
   color: #070b18 !important;
 }
+
+/* CIBI admin + student UX upgrade */
+.portal-page {
+  background:
+    linear-gradient(90deg, rgba(7,11,24,0.02), transparent 22%),
+    var(--cream) !important;
+}
+
+.portal-main {
+  max-width: 1320px;
+  width: 100%;
+}
+
+.portal-header {
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(17,24,39,.08);
+  padding: 30px 34px;
+  box-shadow: 0 20px 55px rgba(13,17,28,.05);
+}
+
+.portal-header h1 {
+  font-size: clamp(42px, 5.8vw, 78px) !important;
+}
+
+.admin-ux-hero {
+  background: #ffffff !important;
+  border: 1px solid rgba(17,24,39,.08) !important;
+  box-shadow: 0 18px 48px rgba(13,17,28,.05) !important;
+}
+
+.admin-ux-hero h2 {
+  font-size: clamp(36px, 4.5vw, 64px) !important;
+}
+
+.admin-workflow-guide {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin: 0 0 24px;
+}
+
+.admin-workflow-guide > div {
+  background: #ffffff;
+  border: 1px solid rgba(196,159,100,.22);
+  padding: 22px;
+  min-height: 150px;
+  box-shadow: 0 14px 42px rgba(13,17,28,.04);
+}
+
+.admin-workflow-guide span {
+  display: inline-flex;
+  width: fit-content;
+  background: rgba(196,159,100,.13);
+  color: var(--gold);
+  border: 1px solid rgba(196,159,100,.24);
+  padding: 7px 10px;
+  margin-bottom: 14px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+}
+
+.admin-workflow-guide strong {
+  display: block;
+  color: var(--black);
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.admin-workflow-guide p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* Students / admissions workflow */
+.enrollment-summary-row {
+  grid-template-columns: minmax(0, 1.25fr) minmax(190px, .7fr) minmax(170px, .5fr) !important;
+}
+
+.enrollment-summary-row small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.admin-action-groups {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  padding: 24px;
+  background: #fff;
+  border-top: 1px solid var(--line);
+}
+
+.admin-action-groups > div {
+  border: 1px solid rgba(17,24,39,.1);
+  background: rgba(248,243,233,.62);
+  padding: 20px;
+}
+
+.admin-action-groups h4 {
+  margin: 0 0 8px;
+  color: var(--black);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+}
+
+.admin-action-groups p {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.admin-action-groups .student-action-row {
+  padding: 0 !important;
+  border: 0 !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+.admin-action-groups .student-action-row button,
+.admin-action-groups .student-action-row .status-badge {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Courses admin */
+.courses-admin-ux {
+  display: grid;
+  gap: 22px;
+}
+
+.course-admin-form-ux {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  padding: 28px;
+  box-shadow: 0 18px 48px rgba(13,17,28,.05);
+}
+
+.admin-checkbox-row {
+  align-items: flex-start !important;
+  background: rgba(196,159,100,.08);
+  border: 1px solid rgba(196,159,100,.22);
+  padding: 16px !important;
+}
+
+.admin-checkbox-row span {
+  display: grid;
+  gap: 5px;
+  color: var(--black);
+}
+
+.admin-checkbox-row small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.courses-admin-ux .admin-list {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  padding: 18px;
+}
+
+.courses-admin-ux .admin-list-item {
+  align-items: flex-start;
+  border: 1px solid rgba(17,24,39,.08);
+  background: rgba(248,243,233,.54);
+  margin-bottom: 12px;
+  padding: 18px;
+}
+
+.courses-admin-ux .admin-list-item strong {
+  font-size: 18px;
+  color: var(--black);
+}
+
+.courses-admin-ux .admin-list-item p {
+  margin: 8px 0 4px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.courses-admin-ux .admin-list-item small {
+  display: block;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Assessments admin */
+.assessment-guide {
+  margin-top: -4px;
+}
+
+.assessments-admin .assessment-admin-forms {
+  align-items: start;
+}
+
+.assessment-admin-form {
+  position: relative;
+  background: #ffffff !important;
+  border: 1px solid rgba(17,24,39,.09) !important;
+  box-shadow: 0 18px 48px rgba(13,17,28,.05);
+}
+
+.assessment-admin-form h3::after {
+  content: "Fill this section, then publish only when students should see it.";
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.checkbox-field {
+  background: rgba(248,243,233,.65);
+  border: 1px solid rgba(17,24,39,.08);
+  padding: 14px;
+}
+
+/* Activity log: hide raw technical noise until opened */
+.audit-log-card {
+  align-items: start !important;
+}
+
+.audit-details {
+  border: 1px solid rgba(17,24,39,.08);
+  background: rgba(248,243,233,.65);
+  padding: 12px;
+}
+
+.audit-details summary {
+  cursor: pointer;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .16em;
+}
+
+.audit-details p {
+  margin: 12px 0 0 !important;
+  max-height: 220px;
+  overflow: auto;
+  word-break: break-word;
+}
+
+/* Student portal */
+.student-portal-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin: 0 0 26px;
+}
+
+.student-portal-guide-grid > div {
+  background: #ffffff;
+  border: 1px solid rgba(196,159,100,.22);
+  box-shadow: 0 16px 45px rgba(13,17,28,.05);
+  padding: 24px;
+}
+
+.student-portal-guide-grid span {
+  display: block;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+  margin-bottom: 10px;
+}
+
+.student-portal-guide-grid strong {
+  display: block;
+  color: var(--black);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.student-portal-guide-grid p {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.student-tab-heading {
+  background: #ffffff;
+  border: 1px solid rgba(17,24,39,.08);
+  padding: 26px;
+  margin-bottom: 22px;
+  box-shadow: 0 14px 42px rgba(13,17,28,.04);
+}
+
+.student-tab-heading h2 {
+  font-size: clamp(34px, 4vw, 56px) !important;
+}
+
+.student-mini-course-list button {
+  text-align: left;
+}
+
+@media (max-width: 1180px) {
+  .admin-workflow-guide,
+  .admin-action-groups,
+  .student-portal-guide-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .enrollment-summary-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .portal-main {
+    padding: 18px !important;
+  }
+
+  .portal-header,
+  .content-editor-header,
+  .course-admin-form-ux,
+  .student-tab-heading {
+    padding: 22px !important;
+  }
+
+  .admin-workflow-guide,
+  .admin-action-groups,
+  .student-portal-guide-grid {
+    grid-template-columns: 1fr;
+  }
+}
