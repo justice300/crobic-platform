@@ -9364,3 +9364,32 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
   font-size: 12px !important;
   line-height: 1.6 !important;
 }
+
+
+/* Force manual bank transfer details to black */
+.admission-payment-card .bank-box,
+.admission-payment-card .bank-box *,
+.apply-action-panel .bank-box,
+.apply-action-panel .bank-box *,
+.payment-box .bank-box,
+.payment-box .bank-box *,
+.payment-box [class*="bank"],
+.payment-box [class*="bank"] * {
+  color: #070b18 !important;
+  opacity: 1 !important;
+}
+
+.admission-payment-card .bank-box h4,
+.apply-action-panel .bank-box h4,
+.payment-box .bank-box h4,
+.payment-box [class*="bank"] h4 {
+  color: #070b18 !important;
+  opacity: 1 !important;
+}
+
+.admission-payment-card .bank-box span,
+.apply-action-panel .bank-box span,
+.payment-box .bank-box span,
+.payment-box [class*="bank"] span {
+  color: #070b18 !important;
+}
