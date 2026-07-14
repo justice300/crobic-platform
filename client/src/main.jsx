@@ -1482,7 +1482,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
     additionalQuestions: ""
   });
   const [submitting, setSubmitting] = useState(false);
-  const selectedCourse = availableCourses.find((course) => course.id === Number(form.courseId));
+  const selectedCourse = availableCourses.find((course) => String(course.id) === String(form.courseId));
 
   useEffect(() => {
     if (!form.courseId && firstCourseId) {
@@ -1496,7 +1496,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
 
   async function submit(e) {
     e.preventDefault();
-    const resolvedCourseId = form.courseId || availableCourses?.[0]?.id || ""; if (!resolvedCourseId) { showToast("Please select the programme you are applying for.", "error"); return; } if (!form.learningStream) {
+    if (!form.courseId) { showToast("Please select the programme you are applying for.", "error"); return; } if (!form.learningStream) {
       showToast("Please select your learning stream.", "error");
       return;
     }
@@ -1585,7 +1585,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
         <div className="two-columns">
           <label className="content-field">
             <span>Programme applying for</span>
-            <select value={form.courseId} onChange={(e) => updateField("courseId", e.target.value)} required>
+            <select value={String(form.courseId || "")} onChange={(e) => updateField("courseId", e.target.value)} required>
               {availableCourses.map((course) => (
                 <option value={course.id} key={course.id}>{course.title} — {course.level || "Programme"}</option>
               ))}
@@ -3701,7 +3701,7 @@ function UsersRolesAdmin() {
             {staff.map((user) => <option key={user.id} value={user.id}>{user.name} — {formatPortalStatus(user.role)}</option>)}
           </select>
           <select value={accessForm.courseId} onChange={(e) => setAccessForm({ ...accessForm, courseId: e.target.value })}>
-            {(data.courses || []).map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+            {(data.courses || []).map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
           </select>
           <button className="dark-btn" type="submit">Grant Course Access</button>
         </form>
@@ -3802,7 +3802,7 @@ function StudentGroupsAdmin() {
       <form className="admin-form phase2-card" onSubmit={createGroups}>
         <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
           <option value="">Select course</option>
-          {(data.courses || []).map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+          {(data.courses || []).map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
         </select>
         <input type="number" min="1" placeholder="Students per group" value={form.groupSize} onChange={(e) => setForm({ ...form, groupSize: Number(e.target.value || 10) })} />
         <input placeholder="Group task title" value={form.taskTitle} onChange={(e) => setForm({ ...form, taskTitle: e.target.value })} />
@@ -4006,7 +4006,7 @@ function AssessmentsAdmin() {
           <h3>Add Assignment</h3>
           <select value={assignmentForm.courseId} onChange={(e) => setAssignmentForm({ ...assignmentForm, courseId: e.target.value, moduleId: "", lessonId: "" })} required>
             <option value="">Select course</option>
-            {courseOptions().map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+            {courseOptions().map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
           </select>
           <div className="form-row">
             <select value={assignmentForm.moduleId} onChange={(e) => setAssignmentForm({ ...assignmentForm, moduleId: e.target.value, lessonId: "" })}>
@@ -4040,7 +4040,7 @@ function AssessmentsAdmin() {
           <h3>Add Quiz</h3>
           <select value={quizForm.courseId} onChange={(e) => setQuizForm({ ...quizForm, courseId: e.target.value, moduleId: "", lessonId: "" })} required>
             <option value="">Select course</option>
-            {courseOptions().map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+            {courseOptions().map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
           </select>
           <div className="form-row">
             <select value={quizForm.moduleId} onChange={(e) => setQuizForm({ ...quizForm, moduleId: e.target.value, lessonId: "" })}>
@@ -5179,7 +5179,7 @@ function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null 
       <div className="admin-form builder-course-select">
         <select value={selectedCourseId} onChange={(e) => { setSelectedCourseId(e.target.value); resetModuleForm(); resetLessonForm(1, ""); setPreviewLesson(null); }}>
           <option value="">Select programme/course</option>
-          {courses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+          {courses.map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
         </select>
       </div>
 
@@ -6200,7 +6200,7 @@ function LiveAdmin({ reloadPublic }) {
       <form className="admin-form live-start-form" onSubmit={start}>
         <select value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value })}>
           <option value="">General live class for all students</option>
-          {courses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+          {courses.map((course) => <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>)}
         </select>
         <input placeholder="Live class title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <input placeholder="Embeddable live/video link or iframe code" value={form.liveUrl} onChange={(e) => setForm({ ...form, liveUrl: e.target.value })} required />
@@ -6968,7 +6968,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
     phone: "",
     country: "",
     password: "",
-    courseId: availableCourses[0]?.id || "",
+    courseId: availableCourses[0]?.id ? String(availableCourses[0].id) : "",
     learningStream: learningStreams[0] || "Regular Classes"
   });
   const selectedCountry = findCountry(form.country);
@@ -6986,7 +6986,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
 
   useEffect(() => {
     if (isRegister && !form.courseId && availableCourses[0]?.id) {
-      setForm((current) => ({ ...current, courseId: availableCourses[0].id }));
+      setForm((current) => ({ ...current, courseId: String(availableCourses[0].id) }));
     }
   }, [isRegister, availableCourses[0]?.id]);
 
@@ -7142,10 +7142,10 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
 
                   <label className="auth-field">
                     <span>Programme</span>
-                    <select value={form.courseId} onChange={(e) => updateField("courseId", e.target.value)} required>
+                    <select value={String(form.courseId || "")} onChange={(e) => updateField("courseId", e.target.value)} required>
                       <option value="">Select programme</option>
                       {availableCourses.map((course) => (
-                        <option key={course.id} value={course.id}>{course.title}</option>
+                        <option key={course.id || course.title} value={String(course.id || "")}>{course.title}</option>
                       ))}
                     </select>
                   </label>
