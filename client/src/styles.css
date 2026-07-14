@@ -9393,3 +9393,30 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
 .payment-box [class*="bank"] span {
   color: #070b18 !important;
 }
+
+/* FINAL override: manual bank transfer text must be black */
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box,
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box *,
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box h4,
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box p,
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box strong {
+  color: #070b18 !important;
+  opacity: 1 !important;
+}
+
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box {
+  background: #f8f3e9 !important;
+}
+
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box h4 {
+  color: #070b18 !important;
+  letter-spacing: .16em !important;
+}
+
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box p {
+  color: #070b18 !important;
+}
+
+.admission-page .admission-apply-card .payment-box.premium-payment-box .bank-box.premium-bank-box p::first-letter {
+  color: #070b18 !important;
+}
