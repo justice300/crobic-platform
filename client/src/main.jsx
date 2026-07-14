@@ -1508,7 +1508,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
         method: "POST",
         body: {
           ...form,
-          programmeId: Number(form.courseId), courseId: Number(form.courseId),
+          programmeId: selectedProgrammeId, courseId: selectedProgrammeId,
           applicationSource: "ADMISSION_PAGE"
         }
       });
@@ -6951,7 +6951,8 @@ const COUNTRY_OPTIONS = [
 ];
 
 function getProgrammeOptionId(item = {}) {
-  return item?.id ?? item?.programmeId ?? item?.courseId ?? "";
+  const raw = item?.id ?? item?.programmeId ?? item?.courseId ?? "";
+  return raw === null || raw === undefined ? "" : String(raw);
 }
 
 function findCountry(value) {
@@ -7005,10 +7006,17 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
     e.preventDefault();
     try {
       const endpoint = isRegister ? "/auth/register" : "/auth/login";
-      if (isRegister && !form.courseId) {
-        showToast("Please select your programme before creating your student account.", "error");
+      const selectedProgramme = availableCourses.find((course) =>
+        String(getProgrammeOptionId(course)) === String(form.courseId) ||
+        String(course?.title || "") === String(form.courseId)
+      );
+      const selectedProgrammeId = Number(getProgrammeOptionId(selectedProgramme) || form.courseId);
+
+      if (isRegister && (!selectedProgrammeId || Number.isNaN(selectedProgrammeId))) {
+        showToast("Please select the programme you are applying for.", "error");
         return;
       }
+
       if (isRegister && !form.learningStream) {
         showToast("Please select your learning stream before creating your student account.", "error");
         return;
@@ -7022,7 +7030,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
       const payload = isRegister
         ? {
             ...safeForm,
-            programmeId: Number(form.courseId), courseId: Number(form.courseId),
+            programmeId: selectedProgrammeId, courseId: selectedProgrammeId,
             country: selectedCountry?.name || form.country,
             phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",
             applicationSource: "QUICK_REGISTER"

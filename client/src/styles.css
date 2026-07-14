@@ -9139,3 +9139,13 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
   font-size: 18px !important;
   cursor: pointer !important;
 }
+
+/* Final register password show/hide text button */
+.password-input-wrap button {
+  width: 76px !important;
+  min-width: 76px !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .12em !important;
+  color: #c49f64 !important;
+}
