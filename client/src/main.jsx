@@ -964,6 +964,43 @@ function registrationProgrammePayloadId(item = {}) {
   return id > 0 ? id : 0;
 }
 
+
+function adminProgrammeFilterList(programmes = [], courses = [], settings = {}) {
+  const defaults = defaultProgrammeCards(settings);
+
+  function keyFor(item = {}) {
+    const slot = item.slot || programSlotForCourse(item);
+    if (slot) return slot;
+    return String(item.title || "").trim().toLowerCase();
+  }
+
+  const realProgrammes = programmeDisplayList(programmes, courses, settings)
+    .filter((item) => item?.published !== false && item?.title);
+
+  const byKey = new Map(defaults.map((item) => [keyFor(item), item]));
+
+  for (const programme of realProgrammes) {
+    const key = keyFor(programme);
+    if (!key) continue;
+    byKey.set(key, {
+      ...(byKey.get(key) || {}),
+      ...programme,
+      title: programme.title || byKey.get(key)?.title
+    });
+  }
+
+  const base = defaults.map((item) => byKey.get(keyFor(item)) || item);
+  const used = new Set(base.map((item) => keyFor(item)));
+  const extra = realProgrammes.filter((item) => {
+    const key = keyFor(item);
+    if (!key || used.has(key)) return false;
+    used.add(key);
+    return true;
+  });
+
+  return [...base, ...extra].filter((item) => item?.title);
+}
+
 function isCorporateProgramme(programme = {}) {
   const text = `${programme.level || ""} ${programme.title || ""} ${programme.slot || ""}`.toLowerCase();
   return /worker|corporate|leadership training/.test(text);
@@ -4501,6 +4538,7 @@ function applicationDetailRows(details = {}) {
 
 function StudentsAdmin() {
   const [students, setStudents] = useState([]);
+  const [programmeFilters, setProgrammeFilters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingStudentId, setEditingStudentId] = useState(null);
   const [studentForm, setStudentForm] = useState({ name: "", email: "", phone: "", country: "" });
@@ -4511,7 +4549,12 @@ function StudentsAdmin() {
   async function load() {
     try {
       setLoading(true);
-      setStudents(await api("/admin/students"));
+      const [studentRows, bootstrap] = await Promise.all([
+        api("/admin/students"),
+        api(`/public/bootstrap?_=${Date.now()}`).catch(() => ({ programmes: [], courses: [], settings: {} }))
+      ]);
+      setStudents(studentRows);
+      setProgrammeFilters(adminProgrammeFilterList(bootstrap.programmes || [], bootstrap.courses || [], bootstrap.settings || {}));
     } catch (error) {
       showToast(error.message || "Could not load students", "error");
     } finally {
@@ -4678,7 +4721,10 @@ function StudentsAdmin() {
     return acc;
   }, {});
 
-  const programmeOptions = [...new Set(enrollmentRows.map((row) => row.programmeTitle).filter(Boolean))];
+  const programmeOptions = [...new Set([
+    ...programmeFilters.map((programme) => programme.title).filter(Boolean),
+    ...enrollmentRows.map((row) => row.programmeTitle).filter(Boolean)
+  ].filter((title) => title !== "No programme selected"))];
   const levelOptions = [...new Set(enrollmentRows.map((row) => row.level).filter(Boolean))];
 
   const filteredRows = enrollmentRows.filter((row) => {
@@ -4746,7 +4792,7 @@ function StudentsAdmin() {
       {!loading && !filteredRows.length ? (
         <div className="quiet-banner">
           <strong>No record in this desk.</strong>
-          <p>Use another desk or clear the filters to see more students.</p>
+          <p>{filters.programme !== "all" ? `No students found under ${filters.programme} in this desk yet.` : "Use another desk or clear the filters to see more students."}</p>
         </div>
       ) : null}
 
