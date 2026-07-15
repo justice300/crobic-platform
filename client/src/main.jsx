@@ -964,43 +964,6 @@ function registrationProgrammePayloadId(item = {}) {
   return id > 0 ? id : 0;
 }
 
-
-function adminProgrammeFilterList(programmes = [], courses = [], settings = {}) {
-  const defaults = defaultProgrammeCards(settings);
-
-  function keyFor(item = {}) {
-    const slot = item.slot || programSlotForCourse(item);
-    if (slot) return slot;
-    return String(item.title || "").trim().toLowerCase();
-  }
-
-  const realProgrammes = programmeDisplayList(programmes, courses, settings)
-    .filter((item) => item?.published !== false && item?.title);
-
-  const byKey = new Map(defaults.map((item) => [keyFor(item), item]));
-
-  for (const programme of realProgrammes) {
-    const key = keyFor(programme);
-    if (!key) continue;
-    byKey.set(key, {
-      ...(byKey.get(key) || {}),
-      ...programme,
-      title: programme.title || byKey.get(key)?.title
-    });
-  }
-
-  const base = defaults.map((item) => byKey.get(keyFor(item)) || item);
-  const used = new Set(base.map((item) => keyFor(item)));
-  const extra = realProgrammes.filter((item) => {
-    const key = keyFor(item);
-    if (!key || used.has(key)) return false;
-    used.add(key);
-    return true;
-  });
-
-  return [...base, ...extra].filter((item) => item?.title);
-}
-
 function isCorporateProgramme(programme = {}) {
   const text = `${programme.level || ""} ${programme.title || ""} ${programme.slot || ""}`.toLowerCase();
   return /worker|corporate|leadership training/.test(text);
@@ -4538,7 +4501,6 @@ function applicationDetailRows(details = {}) {
 
 function StudentsAdmin() {
   const [students, setStudents] = useState([]);
-  const [programmeFilters, setProgrammeFilters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingStudentId, setEditingStudentId] = useState(null);
   const [studentForm, setStudentForm] = useState({ name: "", email: "", phone: "", country: "" });
@@ -4549,12 +4511,7 @@ function StudentsAdmin() {
   async function load() {
     try {
       setLoading(true);
-      const [studentRows, bootstrap] = await Promise.all([
-        api("/admin/students"),
-        api(`/public/bootstrap?_=${Date.now()}`).catch(() => ({ programmes: [], courses: [], settings: {} }))
-      ]);
-      setStudents(studentRows);
-      setProgrammeFilters(adminProgrammeFilterList(bootstrap.programmes || [], bootstrap.courses || [], bootstrap.settings || {}));
+      setStudents(await api("/admin/students"));
     } catch (error) {
       showToast(error.message || "Could not load students", "error");
     } finally {
@@ -4721,10 +4678,7 @@ function StudentsAdmin() {
     return acc;
   }, {});
 
-  const programmeOptions = [...new Set([
-    ...programmeFilters.map((programme) => programme.title).filter(Boolean),
-    ...enrollmentRows.map((row) => row.programmeTitle).filter(Boolean)
-  ].filter((title) => title !== "No programme selected"))];
+  const programmeOptions = [...new Set(enrollmentRows.map((row) => row.programmeTitle).filter(Boolean))];
   const levelOptions = [...new Set(enrollmentRows.map((row) => row.level).filter(Boolean))];
 
   const filteredRows = enrollmentRows.filter((row) => {
@@ -4792,7 +4746,7 @@ function StudentsAdmin() {
       {!loading && !filteredRows.length ? (
         <div className="quiet-banner">
           <strong>No record in this desk.</strong>
-          <p>{filters.programme !== "all" ? `No students found under ${filters.programme} in this desk yet.` : "Use another desk or clear the filters to see more students."}</p>
+          <p>Use another desk or clear the filters to see more students.</p>
         </div>
       ) : null}
 
@@ -7566,7 +7520,115 @@ function DashboardCard({ icon, label, value }) { return <div className="dashboar
 function Step({ number, title, text }) { return <div className="step"><strong>{number}</strong><h3>{title}</h3><p>{text}</p></div>; }
 function PathCard({ icon, title, text, points }) { return <div className="path-card"><div className="icon-box">{icon}</div><h3>{title}</h3><div className="short-gold-line" /><p>{text}</p><small>Ideal For</small><ul>{points.map((point) => <li key={point}><span />{point}</li>)}</ul></div>; }
 function AdminList({ items, onDelete, onEdit }) { return <div className="admin-list">{items.map((item) => <div className="admin-item" key={item.id}><div><strong>{item.title}</strong><p>ID: {item.id}</p></div><div className="admin-item-actions">{onEdit && <button className="edit-btn" onClick={() => onEdit(item)}>Edit</button>}<button className="delete-btn" onClick={() => onDelete(item.id)}><Trash2 size={18} /></button></div></div>)}</div>; }
-function PortalSidebar({ title, items, tab, setTab }) { return <div className="portal-sidebar"><img src={LOGO} alt="CIBI" /><h3>{title}</h3>{items.map((item) => <button key={item} className={tab === item.toLowerCase() ? "side-active" : ""} onClick={() => setTab && setTab(item.toLowerCase())}>{item}</button>)}</div>; }
+const ADMIN_NAV_GROUPS = [
+  {
+    title: "Main Desk",
+    description: "Dashboard start point",
+    items: ["Overview"]
+  },
+  {
+    title: "Admissions & Accounts",
+    description: "Applications, payments and student records",
+    items: ["Admissions", "Students", "Users & Roles", "Appeals & Support"]
+  },
+  {
+    title: "Programme Setup",
+    description: "Create the school structure first",
+    items: ["Programmes", "Programs", "Courses", "Course Builder"]
+  },
+  {
+    title: "Learning & Classes",
+    description: "Lessons, live class and participation",
+    items: ["Live", "Attendance Records", "Course Discussions", "Student Groups"]
+  },
+  {
+    title: "Assessment & Results",
+    description: "Assignments, scores and certificates",
+    items: ["Assignments & Quiz", "Progress", "Gradebook", "Certificates"]
+  },
+  {
+    title: "Public Website",
+    description: "Website content and media",
+    items: ["Website Content", "Slides", "Gallery", "Books", "Announcements"]
+  },
+  {
+    title: "System Settings",
+    description: "Finance, logs and configuration",
+    items: ["Currency Settings", "Email Settings", "Activity Log", "Settings"]
+  }
+];
+
+function buildAdminNavGroups(items = []) {
+  const allowed = new Set((items || []).map((item) => String(item).toLowerCase()));
+  const used = new Set();
+  const groups = ADMIN_NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      const key = String(item).toLowerCase();
+      if (!allowed.has(key)) return false;
+      used.add(key);
+      return true;
+    })
+  })).filter((group) => group.items.length);
+
+  const leftover = (items || []).filter((item) => !used.has(String(item).toLowerCase()));
+  if (leftover.length) {
+    groups.push({ title: "Other Tools", description: "Additional admin pages", items: leftover });
+  }
+  return groups;
+}
+
+function PortalSidebar({ title, items, tab, setTab }) {
+  const isAdminPortal = title === "Admin Dashboard";
+  const adminGroups = isAdminPortal ? buildAdminNavGroups(items) : [];
+
+  if (isAdminPortal) {
+    return (
+      <div className="portal-sidebar portal-sidebar-grouped">
+        <img src={LOGO} alt="CIBI" />
+        <h3>{title}</h3>
+        <div className="portal-nav-groups">
+          {adminGroups.map((group) => {
+            const groupActive = group.items.some((item) => tab === item.toLowerCase());
+            return (
+              <details className="portal-nav-group" key={group.title} open={groupActive || group.title === "Main Desk"}>
+                <summary>
+                  <span>
+                    <strong>{group.title}</strong>
+                    <small>{group.description}</small>
+                  </span>
+                  <ChevronDown size={15} />
+                </summary>
+                <div className="portal-nav-group-items">
+                  {group.items.map((item) => (
+                    <button
+                      key={item}
+                      className={tab === item.toLowerCase() ? "side-active" : ""}
+                      onClick={() => setTab && setTab(item.toLowerCase())}
+                      type="button"
+                    >
+                      {item === "Courses" ? "Create Courses" : item === "Course Builder" ? "Add Lessons / Videos" : item}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="portal-sidebar">
+      <img src={LOGO} alt="CIBI" />
+      <h3>{title}</h3>
+      {items.map((item) => (
+        <button key={item} className={tab === item.toLowerCase() ? "side-active" : ""} onClick={() => setTab && setTab(item.toLowerCase())} type="button">{item}</button>
+      ))}
+    </div>
+  );
+}
 function AccessGate({ title, openAuth }) { return <main className="page container gate"><ShieldCheck size={56} /><h1>{title}</h1><p>You need to login before accessing this section.</p><button className="gold-btn big" onClick={openAuth}>Login</button></main>; }
 function Footer({ goTo, settings = {} }) {
   return (

@@ -10098,3 +10098,95 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     border-bottom: 0;
   }
 }
+
+
+/* Admin sidebar parent dropdown groups */
+.portal-sidebar-grouped {
+  overflow-y: auto;
+  padding-bottom: 34px !important;
+}
+
+.portal-nav-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.portal-nav-group {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.portal-nav-group summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.portal-nav-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.portal-nav-group summary strong {
+  display: block;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.portal-nav-group summary small {
+  display: block;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 10px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.portal-nav-group summary svg {
+  color: var(--gold);
+  flex: 0 0 auto;
+  transition: transform .25s ease;
+}
+
+.portal-nav-group[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.portal-nav-group-items {
+  display: grid;
+  gap: 2px;
+  padding: 0 12px 12px;
+}
+
+.portal-sidebar .portal-nav-group-items button {
+  padding: 10px 11px !important;
+  border-left: 2px solid rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.58) !important;
+  font-size: 12px;
+}
+
+.portal-sidebar .portal-nav-group-items button:hover,
+.portal-sidebar .portal-nav-group-items button.side-active {
+  border-left-color: var(--gold) !important;
+  color: var(--gold) !important;
+  background: rgba(196, 159, 100, 0.08) !important;
+  padding-left: 15px !important;
+}
+
+@media (max-width: 1080px) {
+  .portal-nav-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .portal-nav-groups {
+    grid-template-columns: 1fr;
+  }
+}
