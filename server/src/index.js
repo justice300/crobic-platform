@@ -385,6 +385,32 @@ async function createCourseNotifications({ courseId, users, title, message, url,
   });
 }
 
+function uniqueUsersById(users = []) {
+  return Array.from(new Map((users || []).filter((user) => user?.id).map((user) => [user.id, user])).values());
+}
+
+function canStartGeneralLive(user) {
+  return ["SUPER_ADMIN", "RECTOR", "ADMIN"].includes(user?.role);
+}
+
+function studentLiveUrl() {
+  return `${appBaseUrl()}/student`;
+}
+
+function adminLiveUrl() {
+  return `${appBaseUrl()}/admin`;
+}
+
+async function staffRecipientsForGeneralLive() {
+  return prisma.user.findMany({
+    where: {
+      role: { in: ["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"] },
+      status: { in: ["ACTIVE", "PAYMENT_CONFIRMED", "GRADUATED"] }
+    },
+    select: { id: true, name: true, email: true, role: true }
+  });
+}
+
 
 function normaliseProgrammePayload(body = {}) {
   const paymentPlan = String(body.paymentPlan || "ONE_TIME").trim().toUpperCase() || "ONE_TIME";
@@ -1443,18 +1469,61 @@ app.get("/api/student/payment-status", requireAuth, async (req, res) => {
 });
 
 
+async function studentCanSeeLiveCourse(userId, courseId) {
+  const id = Number(courseId || 0);
+  if (!userId || !id) return false;
+  const course = await prisma.course.findUnique({
+    where: { id },
+    select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true }
+  });
+  if (!course) return false;
+
+  const enrollment = await prisma.enrollment.findFirst({
+    where: {
+      userId,
+      admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+      accessStatus: { not: "BLOCKED" },
+      OR: [
+        { courseId: id },
+        course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
+        course.programmeId ? { programmeId: course.programmeId } : { id: -1 }
+      ]
+    }
+  });
+
+  return canEnrollmentUseCourse(enrollment, course);
+}
+
+async function findAllowedLiveSessionForStudent({ userId, activeOnly = true } = {}) {
+  const sessions = await prisma.liveSession.findMany({
+    where: activeOnly ? { active: true } : {},
+    include: { course: { select: { id: true, title: true } } },
+    orderBy: { updatedAt: "desc" },
+    take: 25
+  });
+
+  for (const session of sessions) {
+    if (!session.courseId) return session;
+    if (await studentCanSeeLiveCourse(userId, session.courseId)) return session;
+  }
+
+  return null;
+}
+
 async function getLiveSessionForClassroom(includeInactiveLatest = false, viewerUserId = null) {
-  const baseWhere = viewerUserId
-    ? {
-        OR: [
-          { courseId: null },
-          { course: { enrollments: { some: { userId: viewerUserId, admissionStatus: { in: ["APPROVED", "GRADUATED"] } } } } }
-        ]
-      }
-    : {};
-  const active = await prisma.liveSession.findFirst({ where: { ...baseWhere, active: true }, include: { course: { select: { id: true, title: true } } }, orderBy: { updatedAt: "desc" } });
+  if (viewerUserId) {
+    const active = await findAllowedLiveSessionForStudent({ userId: viewerUserId, activeOnly: true });
+    if (active || !includeInactiveLatest) return active;
+    return findAllowedLiveSessionForStudent({ userId: viewerUserId, activeOnly: false });
+  }
+
+  const active = await prisma.liveSession.findFirst({
+    where: { active: true },
+    include: { course: { select: { id: true, title: true } } },
+    orderBy: { updatedAt: "desc" }
+  });
   if (active || !includeInactiveLatest) return active;
-  return prisma.liveSession.findFirst({ where: baseWhere, include: { course: { select: { id: true, title: true } } }, orderBy: { updatedAt: "desc" } });
+  return prisma.liveSession.findFirst({ include: { course: { select: { id: true, title: true } } }, orderBy: { updatedAt: "desc" } });
 }
 
 async function buildLiveClassroomPayload(liveSession, viewerUserId = null) {
@@ -3760,7 +3829,7 @@ app.post("/api/courses/:courseId/live/start", requireAuth, validators.courseId, 
     users: students,
     title: `${live.course?.title || "Course"} is live now`,
     message: `${title} has started. Join now.`,
-    url: liveUrl,
+    url: notificationUrl,
     type: "LIVE_CLASS"
   });
 
@@ -3768,16 +3837,16 @@ app.post("/api/courses/:courseId/live/start", requireAuth, validators.courseId, 
     to: students.map((student) => student.email).filter(Boolean),
     subject: `${live.course?.title || "CIBI"} is live now`,
     title: "Your CIBI Class Is Live",
-    html: goLiveEmailHtml({ course: live.course, lecturer: live.startedBy, title, description, liveUrl, startedAt: live.createdAt }),
+    html: goLiveEmailHtml({ course: live.course, lecturer: live.startedBy, title, description, liveUrl: notificationUrl, startedAt: live.createdAt }),
     buttonText: "JOIN NOW",
-    buttonUrl: liveUrl
+    buttonUrl: notificationUrl
   }).catch((error) => console.error("Go Live email failed:", error.message));
 
   sendOneSignalNotification({
     userIds: students.map((student) => student.id),
     title: `${live.course?.title || "CIBI"} is live now`,
     message: `${title} has started. Join now.`,
-    url: liveUrl
+    url: notificationUrl
   }).catch((error) => console.error("OneSignal live notification failed:", error.message));
 
   res.status(201).json({ message: "Live class started and students notified.", liveSessionId: live.id, live });
@@ -3930,49 +3999,110 @@ app.delete("/api/admin/live/chat/:id", requireAuth, requireAdmin, async (req, re
 });
 
 app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) => {
-  const { title, description, liveUrl, scheduledAt, courseId, replayUrl, subtitleUrl, subtitleLanguage, chatEnabled, voiceEnabled } = req.body;
-  const finalCourseId = courseId ? Number(courseId) : null;
-  if (finalCourseId && !(await canManageCourse(req, finalCourseId))) return res.status(403).json({ message: "You do not have access to this course." });
-  await prisma.liveSession.updateMany({ data: { active: false } });
-  const live = await prisma.liveSession.create({
-    data: {
-      courseId: finalCourseId,
-      title,
-      description,
-      liveUrl,
-      replayUrl: replayUrl ? String(replayUrl) : null,
-      subtitleUrl: subtitleUrl ? String(subtitleUrl) : null,
-      subtitleLanguage: subtitleLanguage ? String(subtitleLanguage) : null,
-      chatEnabled: chatEnabled === undefined ? true : chatEnabled === true || chatEnabled === "true" || chatEnabled === "on",
-      voiceEnabled: voiceEnabled === true || voiceEnabled === "true" || voiceEnabled === "on",
-      active: true,
-      status: "live",
-      startedById: req.user.id,
-      scheduledAt: scheduledAt ? new Date(scheduledAt) : null
+  try {
+    const { title, description, liveUrl, scheduledAt, courseId, replayUrl, subtitleUrl, subtitleLanguage, chatEnabled, voiceEnabled } = req.body;
+    const finalCourseId = courseId ? Number(courseId) : null;
+    const safeTitle = String(title || "").trim();
+    const safeDescription = description ? String(description).trim() : "";
+    const safeLiveUrl = String(liveUrl || "").trim();
+
+    if (!safeTitle || !safeLiveUrl) return res.status(400).json({ message: "Title and Zoom/YouTube live link are required." });
+    if (!validateLivePlatformUrl(safeLiveUrl)) return res.status(400).json({ message: "Only valid Zoom or YouTube Live links are allowed." });
+
+    if (finalCourseId) {
+      if (!(await canManageCourse(req, finalCourseId))) return res.status(403).json({ message: "You do not have access to this course." });
+    } else if (!canStartGeneralLive(req.user)) {
+      return res.status(403).json({ message: "Only Super Admin, Rector, or Admin can start a general live class." });
     }
-  });
-  await logAdminActivity(req, { action: "STARTED_LIVE_CLASS", entityType: "LiveSession", entityId: live.id, details: { title: live.title, courseId: live.courseId } });
 
-  const students = await enrolledStudentsForCourse(finalCourseId);
-  await createCourseNotifications({
-    courseId: finalCourseId,
-    users: students,
-    title: finalCourseId ? "Your CIBI class is live now" : "CIBI general live class is live now",
-    message: `${title} has started. Join now.`,
-    url: liveUrl,
-    type: "LIVE_CLASS"
-  });
+    await prisma.liveSession.updateMany({ data: { active: false, status: "ended", endedAt: new Date() } });
 
-  sendTransactionalEmail({
-    to: students.map((student) => student.email).filter(Boolean),
-    subject: finalCourseId ? "Your CIBI class is live now" : "CIBI general live class is live now",
-    title: "Your CIBI Class Is Live",
-    html: goLiveEmailHtml({ course: null, lecturer: req.user, title, description, liveUrl, startedAt: live.createdAt }),
-    buttonText: "JOIN NOW",
-    buttonUrl: liveUrl
-  }).catch((error) => console.error("Admin live email failed:", error.message));
+    const live = await prisma.liveSession.create({
+      data: {
+        courseId: finalCourseId,
+        title: safeTitle,
+        description: safeDescription,
+        liveUrl: safeLiveUrl,
+        replayUrl: replayUrl ? String(replayUrl) : null,
+        subtitleUrl: subtitleUrl ? String(subtitleUrl) : null,
+        subtitleLanguage: subtitleLanguage ? String(subtitleLanguage) : null,
+        chatEnabled: chatEnabled === undefined ? true : chatEnabled === true || chatEnabled === "true" || chatEnabled === "on",
+        voiceEnabled: voiceEnabled === true || voiceEnabled === "true" || voiceEnabled === "on",
+        active: true,
+        status: "live",
+        startedById: req.user.id,
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : null
+      },
+      include: {
+        course: { select: { id: true, title: true } },
+        startedBy: { select: { id: true, name: true, role: true } }
+      }
+    });
 
-  res.status(201).json(live);
+    await logAdminActivity(req, { action: "STARTED_LIVE_CLASS", entityType: "LiveSession", entityId: live.id, details: { title: live.title, courseId: live.courseId, scope: finalCourseId ? "COURSE" : "GENERAL" } });
+
+    const students = await enrolledStudentsForCourse(finalCourseId);
+    const studentUrl = finalCourseId ? clientCourseUrl(finalCourseId) : studentLiveUrl();
+    const liveTitle = finalCourseId ? `${live.course?.title || "Your CIBI class"} is live now` : "CIBI general live class is live now";
+    const liveMessage = `${safeTitle} has started. Join now.`;
+
+    await createCourseNotifications({
+      courseId: finalCourseId,
+      users: students,
+      title: liveTitle,
+      message: liveMessage,
+      url: studentUrl,
+      type: "LIVE_CLASS"
+    });
+
+    sendTransactionalEmail({
+      to: students.map((student) => student.email).filter(Boolean),
+      subject: liveTitle,
+      title: "Your CIBI Class Is Live",
+      html: goLiveEmailHtml({ course: live.course, lecturer: live.startedBy, title: safeTitle, description: safeDescription, liveUrl: studentUrl, startedAt: live.createdAt }),
+      buttonText: "JOIN NOW",
+      buttonUrl: studentUrl
+    }).catch((error) => console.error("Admin live student email failed:", error.message));
+
+    sendOneSignalNotification({
+      userIds: students.map((student) => student.id),
+      title: liveTitle,
+      message: liveMessage,
+      url: studentUrl
+    }).catch((error) => console.error("Admin live student push failed:", error.message));
+
+    if (!finalCourseId) {
+      const staff = uniqueUsersById(await staffRecipientsForGeneralLive());
+      await createCourseNotifications({
+        courseId: null,
+        users: staff,
+        title: "CIBI general live class is live now",
+        message: liveMessage,
+        url: adminLiveUrl(),
+        type: "LIVE_CLASS"
+      });
+
+      sendTransactionalEmail({
+        to: staff.map((user) => user.email).filter(Boolean),
+        subject: "CIBI general live class is live now",
+        title: "CIBI General Live Class",
+        html: goLiveEmailHtml({ course: null, lecturer: live.startedBy, title: safeTitle, description: safeDescription, liveUrl: adminLiveUrl(), startedAt: live.createdAt }),
+        buttonText: "OPEN LIVE CLASS",
+        buttonUrl: adminLiveUrl()
+      }).catch((error) => console.error("Admin live staff email failed:", error.message));
+
+      sendOneSignalNotification({
+        userIds: staff.map((user) => user.id),
+        title: "CIBI general live class is live now",
+        message: liveMessage,
+        url: adminLiveUrl()
+      }).catch((error) => console.error("Admin live staff push failed:", error.message));
+    }
+
+    res.status(201).json({ message: finalCourseId ? "Course live class started and eligible students notified." : "General live class started and all approved students plus staff notified.", live });
+  } catch (error) {
+    res.status(500).json({ message: "Could not start live class", error: error.message });
+  }
 });
 
 app.post("/api/admin/live/stop", requireAuth, requireAdmin, async (req, res) => {

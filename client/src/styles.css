@@ -10190,3 +10190,65 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     grid-template-columns: 1fr;
   }
 }
+
+/* CIBI live class target selector */
+.live-target-card {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(196, 159, 100, 0.24);
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.live-target-heading span {
+  display: inline-flex;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.live-target-heading strong {
+  display: block;
+  color: var(--black);
+  font-size: 18px;
+  margin-bottom: 5px;
+}
+
+.live-target-heading p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.live-target-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.live-course-target-field {
+  grid-column: 1 / -1;
+}
+
+.live-target-warning {
+  background: rgba(179, 38, 30, 0.07);
+  border: 1px solid rgba(179, 38, 30, 0.16);
+  color: #7a241e;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  font-weight: 700;
+}
+
+.live-start-form button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+  .live-target-grid {
+    grid-template-columns: 1fr;
+  }
+}

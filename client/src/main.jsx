@@ -6394,15 +6394,32 @@ function LessonsAdmin() {
 }
 
 function LiveAdmin({ reloadPublic }) {
-  const [form, setForm] = useState({ courseId: "", title: "", description: "", liveUrl: "", replayUrl: "", subtitleUrl: "", subtitleLanguage: "", chatEnabled: true, voiceEnabled: false });
+  const [form, setForm] = useState({
+    targetScope: "all",
+    programmeId: "",
+    levelStage: "",
+    courseId: "",
+    title: "",
+    description: "",
+    liveUrl: "",
+    replayUrl: "",
+    subtitleUrl: "",
+    subtitleLanguage: "",
+    chatEnabled: true,
+    voiceEnabled: false
+  });
   const [classroom, setClassroom] = useState(null);
   const [courses, setCourses] = useState([]);
+  const [programmes, setProgrammes] = useState([]);
   const [answers, setAnswers] = useState({});
 
   async function loadCourses() {
-    const result = await api("/admin/course-builder");
-    setCourses(result || []);
-    setForm((current) => ({ ...current, courseId: current.courseId || result?.[0]?.id || "" }));
+    const [courseRows, programmeRows] = await Promise.all([
+      api("/admin/course-builder"),
+      api("/admin/programmes")
+    ]);
+    setCourses(courseRows || []);
+    setProgrammes(programmeRows || []);
   }
 
   async function loadClassroom() {
@@ -6419,7 +6436,15 @@ function LiveAdmin({ reloadPublic }) {
 
   async function start(e) {
     e.preventDefault();
-    await api("/admin/live/start", { method: "POST", body: form });
+    if (!canStartLive) {
+      showToast("Choose All approved students or select a course. Programme and level live targeting need the backend targeting update before they can safely restrict access.", "error");
+      return;
+    }
+    const payload = {
+      ...form,
+      courseId: form.targetScope === "course" ? form.courseId : ""
+    };
+    await api("/admin/live/start", { method: "POST", body: payload });
     setForm((current) => ({ ...current, title: "", description: "", liveUrl: "", replayUrl: "", subtitleUrl: "", subtitleLanguage: "" }));
     await reloadPublic();
     await loadClassroom();
@@ -6451,6 +6476,47 @@ function LiveAdmin({ reloadPublic }) {
     await loadClassroom();
   }
 
+  const programmeOptions = useMemo(() => {
+    const fromProgrammes = (programmes || []).filter((item) => item?.published !== false);
+    const fromCourses = (courses || [])
+      .map((course) => course.programme)
+      .filter((programme) => programme?.id && programme?.published !== false);
+    const seen = new Set();
+    return [...fromProgrammes, ...fromCourses].filter((programme) => {
+      const key = String(programme.id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [programmes, courses]);
+
+  const levelOptions = useMemo(() => {
+    const levels = (courses || [])
+      .map((course) => course.levelStage || course.level)
+      .filter(Boolean);
+    return [...new Set(levels)];
+  }, [courses]);
+
+  const groupedCourses = useMemo(() => {
+    const groups = new Map();
+    for (const course of courses || []) {
+      const groupName = course.generalForAllProgrammes
+        ? "General Courses"
+        : course.programme?.title || "Courses without programme";
+      if (!groups.has(groupName)) groups.set(groupName, []);
+      groups.get(groupName).push(course);
+    }
+    return [...groups.entries()].map(([title, rows]) => ({ title, rows }));
+  }, [courses]);
+
+  const targetScopeCopy = {
+    all: "All approved students will see this live class in their portal.",
+    programme: "Prepared for programme targeting. A backend targeting update is required before this can restrict access.",
+    level: "Prepared for level/stage targeting. A backend targeting update is required before this can restrict access.",
+    course: "Only students who have access to the selected course will see this live class."
+  };
+
+  const canStartLive = form.targetScope === "all" || (form.targetScope === "course" && form.courseId);
   const liveSession = classroom?.liveSession;
 
   return (
@@ -6464,10 +6530,66 @@ function LiveAdmin({ reloadPublic }) {
       </div>
 
       <form className="admin-form live-start-form" onSubmit={start}>
-        <select value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value })}>
-          <option value="">General live class for all students</option>
-          {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
-        </select>
+        <div className="live-target-card">
+          <div className="live-target-heading">
+            <span>Step 1</span>
+            <strong>Choose who should see this live class</strong>
+            <p>{targetScopeCopy[form.targetScope]}</p>
+          </div>
+          <div className="live-target-grid">
+            <label className="content-field">
+              <span>Live audience</span>
+              <select
+                value={form.targetScope}
+                onChange={(e) => setForm({ ...form, targetScope: e.target.value, courseId: "", programmeId: "", levelStage: "" })}
+              >
+                <option value="all">All approved students</option>
+                <option value="programme">Specific programme</option>
+                <option value="level">Specific level / stage</option>
+                <option value="course">Specific course</option>
+              </select>
+            </label>
+
+            {form.targetScope === "programme" && (
+              <label className="content-field">
+                <span>Programme</span>
+                <select value={form.programmeId} onChange={(e) => setForm({ ...form, programmeId: e.target.value })}>
+                  <option value="">Select programme</option>
+                  {programmeOptions.map((programme) => <option key={programme.id} value={String(programme.id)}>{programme.title}</option>)}
+                </select>
+              </label>
+            )}
+
+            {form.targetScope === "level" && (
+              <label className="content-field">
+                <span>Level / stage</span>
+                <select value={form.levelStage} onChange={(e) => setForm({ ...form, levelStage: e.target.value })}>
+                  <option value="">Select level / stage</option>
+                  {levelOptions.map((level) => <option key={level} value={level}>{level}</option>)}
+                </select>
+              </label>
+            )}
+
+            {form.targetScope === "course" && (
+              <label className="content-field live-course-target-field">
+                <span>Course</span>
+                <select value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value })} required>
+                  <option value="">Select course</option>
+                  {groupedCourses.map((group) => (
+                    <optgroup key={group.title} label={group.title}>
+                      {group.rows.map((course) => <option key={course.id} value={String(course.id)}>{course.levelStage ? `${course.levelStage} — ` : ""}{course.title}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+          {!["all", "course"].includes(form.targetScope) && (
+            <div className="live-target-warning">
+              Programme and level targeting are now visible for admin planning, but they need one backend update before they can safely restrict which students see the live class. Use “All approved students” or “Specific course” for live classes today.
+            </div>
+          )}
+        </div>
         <input placeholder="Live class title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <input placeholder="Embeddable live/video link or iframe code" value={form.liveUrl} onChange={(e) => setForm({ ...form, liveUrl: e.target.value })} required />
         <input placeholder="Replay link after class ends (optional)" value={form.replayUrl} onChange={(e) => setForm({ ...form, replayUrl: e.target.value })} />
@@ -6482,7 +6604,7 @@ function LiveAdmin({ reloadPublic }) {
         </div>
         {form.liveUrl && <div className="admin-video-preview"><PortalVideoPlayer url={form.liveUrl} title={form.title || "Live class preview"} /></div>}
         <div className="form-row">
-          <button className="gold-btn" type="submit">Start Live Class</button>
+          <button className="gold-btn" type="submit" disabled={!canStartLive}>Start Live Class</button>
           <button type="button" className="dark-btn" onClick={stop}>Stop Live Class</button>
           <button type="button" className="ghost-btn admin-cancel-btn" onClick={loadClassroom}>Refresh Classroom</button>
         </div>
@@ -6494,7 +6616,7 @@ function LiveAdmin({ reloadPublic }) {
             <div>
               <h3>{liveSession.title}</h3>
               <p>{liveSession.description || "No description added."}</p>
-              <p><strong>Course:</strong> {liveSession.course?.title || "General"}</p>
+              <p><strong>Audience:</strong> {liveSession.course?.title ? `Course — ${liveSession.course.title}` : "All approved students"}</p>
               <p><strong>Chat:</strong> {liveSession.chatEnabled === false ? "Off" : "On"} · <strong>Voice:</strong> {liveSession.voiceEnabled ? "Flagged Enabled" : "Off"}</p>
               {liveSession.replayUrl && <p><a className="receipt-preview-link" href={liveSession.replayUrl} target="_blank" rel="noreferrer">Open replay link</a></p>}
               {liveSession.subtitleUrl && <p><a className="receipt-preview-link" href={liveSession.subtitleUrl} target="_blank" rel="noreferrer">Open subtitle file ({liveSession.subtitleLanguage || "language"})</a></p>}
