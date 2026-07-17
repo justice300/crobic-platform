@@ -10252,3 +10252,54 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     grid-template-columns: 1fr;
   }
 }
+
+/* CIBI live YouTube player fit fix: prevents the parent video shell from adding an extra 16:9 spacer above the embedded YouTube player */
+.portal-video-shell:has(.platform-video-shell)::before,
+.admin-video-preview:has(.platform-video-shell)::before,
+.lesson-video-shell:has(.platform-video-shell)::before {
+  display: none;
+  padding-top: 0;
+}
+
+.portal-video-shell:has(.platform-video-shell),
+.admin-video-preview:has(.platform-video-shell),
+.lesson-video-shell:has(.platform-video-shell) {
+  aspect-ratio: 16 / 9;
+  min-height: 320px;
+}
+
+.portal-video-shell .platform-video-shell,
+.admin-video-preview .platform-video-shell,
+.lesson-video-shell .platform-video-shell {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.portal-video-shell .platform-video-frame-wrap,
+.admin-video-preview .platform-video-frame-wrap,
+.lesson-video-shell .platform-video-frame-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+.portal-video-shell .platform-video-controls,
+.admin-video-preview .platform-video-controls,
+.lesson-video-shell .platform-video-controls {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 720px) {
+  .portal-video-shell:has(.platform-video-shell),
+  .admin-video-preview:has(.platform-video-shell),
+  .lesson-video-shell:has(.platform-video-shell) {
+    min-height: 240px;
+  }
+}
