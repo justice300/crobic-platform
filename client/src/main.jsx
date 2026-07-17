@@ -486,6 +486,48 @@ function App() {
 }
 
 
+function normalisePortalTabName(value = "") {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  const spaced = raw.replace(/[\-_]+/g, " ").replace(/\s+/g, " ").trim();
+  const compact = spaced.replace(/\s+/g, "");
+  const aliases = {
+    live: "live classes",
+    liveclass: "live classes",
+    liveclasses: "live classes",
+    classroom: "live classes",
+    classes: "live classes",
+    dashboard: "dashboard",
+    overview: "overview"
+  };
+  return aliases[compact] || spaced;
+}
+
+function getPortalInitialTab(fallback, allowedTabs = []) {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const requested = normalisePortalTabName(params.get("tab") || params.get("section") || params.get("portalTab") || "");
+    const allowed = allowedTabs.map((item) => String(item || "").toLowerCase());
+    return requested && allowed.includes(requested) ? requested : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function openNotificationDestination(rawUrl = "") {
+  if (!rawUrl) return;
+  try {
+    const url = new URL(rawUrl, window.location.origin);
+    if (url.origin === window.location.origin) {
+      window.location.href = `${url.pathname}${url.search}${url.hash}`;
+      return;
+    }
+    window.open(url.href, "_blank", "noopener,noreferrer");
+  } catch {
+    window.location.href = String(rawUrl);
+  }
+}
+
 function NotificationBell({ user }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
@@ -511,7 +553,7 @@ function NotificationBell({ user }) {
     try {
       await api(`/notifications/${item.id}/read`, { method: "PATCH" });
       setItems((current) => current.map((row) => row.id === item.id ? { ...row, readAt: new Date().toISOString() } : row));
-      if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
+      if (item.url) openNotificationDestination(item.url);
     } catch (error) {
       showToast(error.message, "error");
     }
@@ -2465,7 +2507,7 @@ function StudentPortal({ user, setUser, goTo }) {
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [error, setError] = useState("");
   const [activeEnrollmentId, setActiveEnrollmentId] = useState(null);
-  const [studentTab, setStudentTab] = useState("dashboard");
+  const [studentTab, setStudentTab] = useState(() => getPortalInitialTab("dashboard", ["dashboard", "my profile", "my courses", "live classes", "attendance", "book library", "my results", "certificates", "support & appeals"]));
   const [publicBooks, setPublicBooks] = useState([]);
 
   async function loadDashboard() {
@@ -3618,7 +3660,7 @@ function PaymentCallback({ goTo }) {
 }
 
 function AdminDashboard({ reloadPublic, currentUser }) {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(() => getPortalInitialTab("overview", ["overview", "website content", "programmes", "courses", "currency settings", "users & roles", "admissions", "students", "books", "course builder", "progress", "gradebook", "student groups", "activity log", "attendance records", "course discussions", "certificates", "assignments & quiz", "slides", "gallery", "announcements", "live", "appeals & support", "email settings", "settings"]));
   const [overview, setOverview] = useState(null);
 
   async function loadOverview() {

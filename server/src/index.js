@@ -333,7 +333,7 @@ function validateLivePlatformUrl(value = "") {
 }
 
 function clientCourseUrl(courseId) {
-  return `${appBaseUrl()}/student?courseId=${encodeURIComponent(courseId)}`;
+  return `${appBaseUrl()}/student?tab=live&courseId=${encodeURIComponent(courseId)}`;
 }
 
 async function enrolledStudentsForCourse(courseId) {
@@ -394,11 +394,11 @@ function canStartGeneralLive(user) {
 }
 
 function studentLiveUrl() {
-  return `${appBaseUrl()}/student`;
+  return `${appBaseUrl()}/student?tab=live`;
 }
 
 function adminLiveUrl() {
-  return `${appBaseUrl()}/admin`;
+  return `${appBaseUrl()}/admin?tab=live`;
 }
 
 async function staffRecipientsForGeneralLive() {
