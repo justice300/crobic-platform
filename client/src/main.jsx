@@ -741,22 +741,30 @@ async function uploadBrochurePdf(file) {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch("/api/admin/brochure/upload", {
-    method: "POST",
-    headers,
-    credentials: "include",
-    body: formData
-  });
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 45000);
 
-  const text = await response.text();
-  let result = {};
-  try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
+  try {
+    const response = await fetch("/api/admin/brochure/upload", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: formData,
+      signal: controller.signal
+    });
 
-  if (!response.ok) {
-    throw new Error(result.message || "Could not upload brochure.");
+    const text = await response.text();
+    let result = {};
+    try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
+
+    if (!response.ok) throw new Error(result.message || "Could not upload brochure.");
+    return result;
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("Upload timed out. Please check backend logs or try again.");
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
   }
-
-  return result;
 }
 
 
@@ -6916,6 +6924,7 @@ function BrochureAdminPanel({ settings = {}, setSettings, reloadPublic }) {
 
     try {
       setUploading(true);
+      showToast("Uploading brochure PDF. Please wait...", "info");
       const result = await uploadBrochurePdf(file);
       setSettings((current) => ({
         ...current,
@@ -6934,21 +6943,22 @@ function BrochureAdminPanel({ settings = {}, setSettings, reloadPublic }) {
   }
 
   return (
-    <div className="brochure-admin-panel">
+    <div className="brochure-admin-panel brochure-admin-panel-featured" id="school-brochure-upload">
+      <div className="brochure-admin-icon"><BookOpen size={24} /></div>
       <div>
-        <span>Brochure PDF</span>
+        <span>Quick Action · School Brochure PDF</span>
         <h3>Upload / Replace Public Brochure</h3>
-        <p>Upload the official CIBI brochure as a PDF. The public website buttons will download this file automatically.</p>
+        <p>This is the main brochure file visitors download from the homepage, programmes page, and registration CTA.</p>
         {brochureUrl ? (
           <small>Current file: {originalName}{uploadedAt ? ` · Updated ${formatDateTime(uploadedAt)}` : ""}</small>
         ) : (
-          <small>No brochure uploaded yet. The public button will stay hidden until a PDF is uploaded.</small>
+          <small>No brochure uploaded yet. Upload a PDF here to activate the public Download Brochure button.</small>
         )}
       </div>
       <div className="brochure-admin-actions">
         {brochureUrl && <a className="ghost-btn dark-text" href="/api/public/brochure/download">Test Download</a>}
         <label className={uploading ? "gold-btn brochure-upload-btn disabled" : "gold-btn brochure-upload-btn"}>
-          {uploading ? "Uploading..." : "Upload PDF"}
+          {uploading ? "Uploading..." : "Choose PDF Brochure"}
           <input type="file" accept="application/pdf" onChange={handleUpload} disabled={uploading} />
         </label>
       </div>
@@ -6960,6 +6970,7 @@ function BrochureAdminPanel({ settings = {}, setSettings, reloadPublic }) {
 function WebsiteContentAdmin({ reloadPublic }) {
   const [settings, setSettings] = useState({});
   const [activeGroupTitle, setActiveGroupTitle] = useState(websiteContentGroups[0]?.title || "Home Page");
+  const [contentSearch, setContentSearch] = useState("");
 
   async function load() {
     setSettings(await api("/admin/settings"));
@@ -6968,7 +6979,19 @@ function WebsiteContentAdmin({ reloadPublic }) {
   useEffect(() => { load(); }, []);
 
   const activeGroup = websiteContentGroups.find((group) => group.title === activeGroupTitle) || websiteContentGroups[0];
-  const sectionGroups = groupWebsiteFields(activeGroup.fields);
+  const searchTerm = contentSearch.trim().toLowerCase();
+  const searchableGroups = websiteContentGroups.filter((group) => {
+    if (!searchTerm) return true;
+    return [group.title, ...group.fields.flatMap(([key, label]) => [key, label, getContentSection(key)])]
+      .join(" ")
+      .toLowerCase()
+      .includes(searchTerm);
+  });
+  const visibleFields = searchTerm
+    ? activeGroup.fields.filter(([key, label]) => `${key} ${label} ${getContentSection(key)}`.toLowerCase().includes(searchTerm))
+    : activeGroup.fields;
+  const fieldsToShow = visibleFields.length || !searchTerm ? visibleFields : [];
+  const sectionGroups = groupWebsiteFields(fieldsToShow);
   const sectionEntries = Object.entries(sectionGroups);
   const imageFieldCount = activeGroup.fields.filter(([key, label]) => key.includes("image_url") || label.toLowerCase().includes("image url")).length;
 
@@ -6984,87 +7007,86 @@ function WebsiteContentAdmin({ reloadPublic }) {
     setSettings((current) => ({ ...current, [key]: value }));
   }
 
+  function openGroup(title) {
+    setActiveGroupTitle(title);
+    window.setTimeout(() => {
+      document.querySelector(".content-editor-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }
+
   return (
     <section className="admin-section content-manager">
       <div className="content-manager-title">
         <div>
           <p className="eyebrow dark">Website Content</p>
-          <h2>Public Page Editor</h2>
-          <p>
-            Choose the page or section first, then edit only what belongs there. Homepage hero slides are managed separately under the Slides tab.
-          </p>
+          <h2>Public Website Control Centre</h2>
+          <p>Use the search bar or quick actions to find what you need fast. Each editable area now has a clear page name and section name.</p>
         </div>
+      </div>
+
+      <div className="content-search-strip">
+        <div className="content-search-box">
+          <Search size={18} />
+          <input value={contentSearch} onChange={(e) => setContentSearch(e.target.value)} placeholder="Search brochure, home, admission, fees, footer, phone, image, programmes..." />
+          {contentSearch && <button type="button" onClick={() => setContentSearch("")}>Clear</button>}
+        </div>
+      </div>
+
+      <div className="content-quick-actions">
+        <button type="button" onClick={() => document.getElementById("school-brochure-upload")?.scrollIntoView({ behavior: "smooth", block: "center" })}><strong>Upload School Brochure</strong><span>PDF download button</span></button>
+        <button type="button" onClick={() => openGroup("Home Page")}><strong>Edit Home Page</strong><span>Cards, stats, CTA</span></button>
+        <button type="button" onClick={() => openGroup("Admission Page")}><strong>Edit Admission Page</strong><span>Fees and requirements</span></button>
+        <button type="button" onClick={() => openGroup("Footer and Global CTA")}><strong>Edit Footer / Global CTA</strong><span>Phone, email, footer</span></button>
       </div>
 
       <div className="content-manager-layout">
         <aside className="content-page-menu">
-          <h3>Choose Area</h3>
-          {websiteContentGroups.map((group) => {
+          <h3>Choose Website Area</h3>
+          <p className="content-menu-helper">Pick the page you want to edit. Search narrows the list.</p>
+          {searchableGroups.map((group) => {
             const isActive = activeGroup.title === group.title;
             const imageCount = group.fields.filter(([key, label]) => key.includes("image_url") || label.toLowerCase().includes("image url")).length;
-
             return (
-              <button
-                type="button"
-                key={group.title}
-                className={isActive ? "content-page-card active-content-page" : "content-page-card"}
-                onClick={() => setActiveGroupTitle(group.title)}
-              >
+              <button type="button" key={group.title} className={isActive ? "content-page-card active-content-page" : "content-page-card"} onClick={() => setActiveGroupTitle(group.title)}>
                 <strong>{group.title}</strong>
                 <span>{group.fields.length} fields · {imageCount} images</span>
               </button>
             );
           })}
+          {!searchableGroups.length && <div className="content-no-results">No website area matched your search.</div>}
         </aside>
 
         <form className="admin-form content-editor-panel" onSubmit={submit}>
+          <BrochureAdminPanel settings={settings} setSettings={setSettings} reloadPublic={reloadPublic} />
           <div className="content-editor-header">
             <div>
               <span>Now editing</span>
               <h3>{activeGroup.title}</h3>
-              <p>{sectionEntries.length} sections · {activeGroup.fields.length} editable fields · {imageFieldCount} image fields</p>
+              <p>{sectionEntries.length} visible sections · {fieldsToShow.length} editable fields · {imageFieldCount} image fields</p>
             </div>
             <button className="gold-btn" type="submit">Save {activeGroup.title}</button>
           </div>
 
           {activeGroup.title === "Home Page" && (
-            <div className="content-help-box">
-              <strong>Homepage note:</strong>
-              <p>The large 01–04 hero slider is edited under <b>Slides</b>. This page controls the homepage cards, statistics, about section, programmes intro, graduates section, book preview and admission CTA.</p>
-            </div>
+            <div className="content-help-box"><strong>Homepage note:</strong><p>The large 01–04 hero slider is edited under <b>Slides</b>. This page controls the homepage cards, statistics, about section, programmes intro, graduates section, FAQ and admission CTA.</p></div>
           )}
 
-          {activeGroup.title === "Home Page" && (
-            <BrochureAdminPanel settings={settings} setSettings={setSettings} reloadPublic={reloadPublic} />
+          {searchTerm && !fieldsToShow.length && (
+            <div className="content-help-box"><strong>No fields matched inside {activeGroup.title}.</strong><p>Choose another website area from the left, clear search, or use the quick actions above.</p></div>
           )}
 
           {sectionEntries.map(([sectionTitle, fields]) => (
             <details className="content-section-panel" key={sectionTitle} open>
-              <summary>
-                <strong>{sectionTitle}</strong>
-                <span>{fields.length} fields</span>
-              </summary>
-
+              <summary><strong>{activeGroup.title} · {sectionTitle}</strong><span>{fields.length} fields</span></summary>
               <div className="content-admin-grid clean-content-grid">
                 {fields.map(([key, label, type]) => {
                   const isImageField = key.includes("image_url") || label.toLowerCase().includes("image url");
                   const value = settings[key] || "";
-
                   return (
                     <label className={type === "textarea" ? "content-field content-field-wide" : "content-field"} key={key}>
                       <span>{label}</span>
-                      {type === "textarea" ? (
-                        <textarea value={value} onChange={(e) => updateSetting(key, e.target.value)} />
-                      ) : (
-                        <input value={value} onChange={(e) => updateSetting(key, e.target.value)} />
-                      )}
-
-                      {isImageField && value && (
-                        <div className="image-url-preview">
-                          <img src={value} alt={`${label} preview`} />
-                          <small>Image preview</small>
-                        </div>
-                      )}
+                      {type === "textarea" ? <textarea value={value} onChange={(e) => updateSetting(key, e.target.value)} /> : <input value={value} onChange={(e) => updateSetting(key, e.target.value)} />}
+                      {isImageField && value && <div className="image-url-preview"><img src={value} alt={`${label} preview`} /><small>Image preview</small></div>}
                     </label>
                   );
                 })}
@@ -7072,9 +7094,7 @@ function WebsiteContentAdmin({ reloadPublic }) {
             </details>
           ))}
 
-          <div className="content-save-footer">
-            <button className="gold-btn" type="submit">Save {activeGroup.title}</button>
-          </div>
+          <div className="content-save-footer"><button className="gold-btn" type="submit">Save {activeGroup.title}</button></div>
         </form>
       </div>
     </section>
