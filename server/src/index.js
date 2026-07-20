@@ -21,7 +21,7 @@ import {
   refreshTokenHash
 } from "./middleware.js";
 import { applySecurity, strictCorsOptions, loginLimiter, registerLimiter, otpLimiter, validators, validateRequest, productionErrorHandler, sanitizeRequestBody } from "./security.js";
-import { documentUpload, makeStorageName, uploadToBunny } from "./storage.js";
+import { documentUpload, makeStorageName } from "./storage.js";
 import {
   sendTransactionalEmail,
   sendOneSignalNotification,
@@ -1704,83 +1704,74 @@ app.post("/api/admin/brochure/upload", requireAuth, requireAdmin, documentUpload
       return res.status(400).json({ message: "Only PDF brochure files are allowed." });
     }
 
+    await fs.mkdir(BROCHURE_DIR, { recursive: true });
     const fileName = makeStorageName(req.file.originalname || "cibi-brochure.pdf");
-    let uploaded;
+    const savedPath = path.join(BROCHURE_DIR, fileName);
+    await fs.writeFile(savedPath, req.file.buffer);
 
-    try {
-      uploaded = await uploadToBunny({
-        folder: "brochures",
-        fileName,
-        buffer: req.file.buffer,
-        contentType: req.file.mimetype || "application/pdf"
-      });
-    } catch (storageError) {
-      await fs.mkdir(BROCHURE_DIR, { recursive: true });
-      const savedPath = path.join(BROCHURE_DIR, fileName);
-      await fs.writeFile(savedPath, req.file.buffer);
-      uploaded = {
-        filePath: `uploads/brochures/${fileName}`,
-        cdnUrl: `${req.protocol}://${req.get("host")}/uploads/brochures/${fileName}`
-      };
-    }
-
-    const safeOriginalName = String(req.file.originalname || "CIBI-Brochure.pdf").replace(/[\\/"]/g, "").slice(0, 180) || "CIBI-Brochure.pdf";
+    const relativeUrl = `/uploads/brochures/${fileName}`;
+    const absoluteUrl = `${req.protocol}://${req.get("host")}${relativeUrl}`;
+    const safeOriginalName = String(req.file.originalname || "CIBI-Brochure.pdf").replace(/[\/"]/g, "").slice(0, 180) || "CIBI-Brochure.pdf";
     const rows = [
-      ["brochure_pdf_url", uploaded.cdnUrl],
-      ["brochure_pdf_path", uploaded.filePath || ""],
+      ["brochure_pdf_url", absoluteUrl],
+      ["brochure_pdf_path", relativeUrl],
       ["brochure_original_name", safeOriginalName],
       ["brochure_uploaded_at", new Date().toISOString()]
     ];
 
     await prisma.$transaction(rows.map(([key, value]) => (
-      prisma.setting.upsert({
-        where: { key },
-        update: { value },
-        create: { key, value }
-      })
+      prisma.setting.upsert({ where: { key }, update: { value }, create: { key, value } })
     )));
 
     await logAdminActivity(req, {
       action: "UPLOADED_BROCHURE",
       entityType: "Setting",
-      details: { fileName: safeOriginalName, brochureUrl: uploaded.cdnUrl }
+      details: { fileName: safeOriginalName, brochureUrl: absoluteUrl }
     });
 
     res.status(201).json({
       message: "Brochure uploaded successfully.",
-      brochureUrl: uploaded.cdnUrl,
+      brochureUrl: absoluteUrl,
+      brochurePath: relativeUrl,
       downloadUrl: "/api/public/brochure/download",
       originalName: safeOriginalName
     });
   } catch (error) {
+    console.error("Brochure upload failed:", error);
     res.status(500).json({ message: "Could not upload brochure", error: error.message });
   }
 });
 
 app.get("/api/public/brochure/download", async (req, res) => {
   try {
-    const rows = await prisma.setting.findMany({
-      where: { key: { in: ["brochure_pdf_url", "brochure_original_name"] } }
-    });
+    const rows = await prisma.setting.findMany({ where: { key: { in: ["brochure_pdf_url", "brochure_pdf_path", "brochure_original_name"] } } });
     const settings = Object.fromEntries(rows.map((row) => [row.key, row.value]));
     const brochureUrl = String(settings.brochure_pdf_url || "").trim();
+    const brochurePath = String(settings.brochure_pdf_path || "").trim();
+    if (!brochureUrl && !brochurePath) return res.status(404).send("CIBI brochure has not been uploaded yet.");
 
-    if (!brochureUrl) return res.status(404).send("CIBI brochure has not been uploaded yet.");
-
-    const fileName = String(settings.brochure_original_name || "CIBI-Brochure.pdf")
-      .replace(/[\\/"]/g, "")
-      .slice(0, 160) || "CIBI-Brochure.pdf";
-
+    const fileName = String(settings.brochure_original_name || "CIBI-Brochure.pdf").replace(/[\/"]/g, "").slice(0, 160) || "CIBI-Brochure.pdf";
     res.set("Cache-Control", "no-store");
     res.set("Content-Type", "application/pdf");
     res.set("Content-Disposition", `attachment; filename="${fileName}"`);
 
+    if (brochurePath.startsWith("/uploads/brochures/")) {
+      const localPath = path.join(UPLOAD_ROOT, brochurePath.replace(/^\/uploads\//, ""));
+      return res.download(localPath, fileName);
+    }
+
+    if (brochureUrl.startsWith(`${req.protocol}://${req.get("host")}/uploads/brochures/`)) {
+      const pathname = new URL(brochureUrl).pathname;
+      const localPath = path.join(UPLOAD_ROOT, pathname.replace(/^\/uploads\//, ""));
+      return res.download(localPath, fileName);
+    }
+
     const response = await fetch(brochureUrl);
     if (!response.ok) return res.redirect(brochureUrl);
-
     const buffer = Buffer.from(await response.arrayBuffer());
     res.send(buffer);
   } catch (error) {
+    console.error("Brochure download failed:", error);
     res.status(500).send("Could not download brochure.");
   }
 });

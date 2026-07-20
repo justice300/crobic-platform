@@ -10398,3 +10398,23 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     width: 100%;
   }
 }
+
+
+/* Website Content search and clearer admin sections */
+.content-search-strip { background: rgba(248, 243, 233, 0.86); border-bottom: 1px solid var(--line); padding: 20px 28px; }
+.content-search-box { display: flex; align-items: center; gap: 12px; background: white; border: 1px solid rgba(196, 159, 100, 0.28); padding: 14px 16px; box-shadow: 0 16px 45px rgba(13, 17, 28, 0.05); }
+.content-search-box svg { color: var(--gold); flex: 0 0 auto; }
+.content-search-box input { flex: 1; border: 0 !important; background: transparent !important; padding: 0 !important; outline: 0; }
+.content-search-box button { border: 1px solid var(--line); background: var(--cream); color: var(--black); padding: 8px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .16em; }
+.content-quick-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding: 20px 28px; background: white; border-bottom: 1px solid var(--line); }
+.content-quick-actions button { text-align: left; background: var(--black); color: white; border: 1px solid rgba(196, 159, 100, 0.22); padding: 18px; display: grid; gap: 6px; }
+.content-quick-actions button:first-child { background: linear-gradient(135deg, #c49f64, #d5b577); color: var(--black); }
+.content-quick-actions strong { font-size: 13px; text-transform: uppercase; letter-spacing: .14em; }
+.content-quick-actions span { color: inherit; opacity: .72; font-size: 12px; }
+.content-menu-helper, .content-no-results { font-size: 12px; line-height: 1.5; margin: 0 0 10px; }
+.content-no-results { background: white; border: 1px dashed var(--line); padding: 14px; color: var(--muted); }
+.brochure-admin-panel-featured { position: relative; grid-template-columns: auto minmax(0, 1fr) auto; border: 2px solid rgba(196, 159, 100, 0.42) !important; box-shadow: 0 24px 70px rgba(7, 11, 24, 0.12); }
+.brochure-admin-icon { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: rgba(196, 159, 100, 0.14); color: var(--gold); border: 1px solid rgba(196, 159, 100, 0.32); }
+.brochure-upload-btn { min-height: 48px; }
+@media (max-width: 980px) { .content-quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } .brochure-admin-panel-featured { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .content-search-strip, .content-quick-actions { padding: 16px; } .content-quick-actions { grid-template-columns: 1fr; } }
