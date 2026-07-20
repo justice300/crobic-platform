@@ -42,6 +42,7 @@ const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 const PAYMENT_PROOF_DIR = path.join(UPLOAD_ROOT, "payment-proofs");
 const CERTIFICATE_ASSET_DIR = path.join(UPLOAD_ROOT, "certificate-assets");
 const ASSIGNMENT_FILE_DIR = path.join(UPLOAD_ROOT, "assignment-files");
+const BROCHURE_DIR = path.join(UPLOAD_ROOT, "brochures");
 
 initSentry(app);
 applySecurity(app);
@@ -1691,6 +1692,99 @@ app.post("/api/uploads/assignment-file", requireAuth, requireActiveStudent, asyn
     res.status(error.statusCode || 500).json({ message: error.message || "Could not upload assignment file" });
   }
 });
+
+
+
+app.post("/api/admin/brochure/upload", requireAuth, requireAdmin, documentUpload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "Brochure PDF file is required." });
+
+    const ext = path.extname(String(req.file.originalname || "")).toLowerCase();
+    if (ext !== ".pdf" || (req.file.mimetype && req.file.mimetype !== "application/pdf")) {
+      return res.status(400).json({ message: "Only PDF brochure files are allowed." });
+    }
+
+    const fileName = makeStorageName(req.file.originalname || "cibi-brochure.pdf");
+    let uploaded;
+
+    try {
+      uploaded = await uploadToBunny({
+        folder: "brochures",
+        fileName,
+        buffer: req.file.buffer,
+        contentType: req.file.mimetype || "application/pdf"
+      });
+    } catch (storageError) {
+      await fs.mkdir(BROCHURE_DIR, { recursive: true });
+      const savedPath = path.join(BROCHURE_DIR, fileName);
+      await fs.writeFile(savedPath, req.file.buffer);
+      uploaded = {
+        filePath: `uploads/brochures/${fileName}`,
+        cdnUrl: `${req.protocol}://${req.get("host")}/uploads/brochures/${fileName}`
+      };
+    }
+
+    const safeOriginalName = String(req.file.originalname || "CIBI-Brochure.pdf").replace(/[\\/"]/g, "").slice(0, 180) || "CIBI-Brochure.pdf";
+    const rows = [
+      ["brochure_pdf_url", uploaded.cdnUrl],
+      ["brochure_pdf_path", uploaded.filePath || ""],
+      ["brochure_original_name", safeOriginalName],
+      ["brochure_uploaded_at", new Date().toISOString()]
+    ];
+
+    await prisma.$transaction(rows.map(([key, value]) => (
+      prisma.setting.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value }
+      })
+    )));
+
+    await logAdminActivity(req, {
+      action: "UPLOADED_BROCHURE",
+      entityType: "Setting",
+      details: { fileName: safeOriginalName, brochureUrl: uploaded.cdnUrl }
+    });
+
+    res.status(201).json({
+      message: "Brochure uploaded successfully.",
+      brochureUrl: uploaded.cdnUrl,
+      downloadUrl: "/api/public/brochure/download",
+      originalName: safeOriginalName
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Could not upload brochure", error: error.message });
+  }
+});
+
+app.get("/api/public/brochure/download", async (req, res) => {
+  try {
+    const rows = await prisma.setting.findMany({
+      where: { key: { in: ["brochure_pdf_url", "brochure_original_name"] } }
+    });
+    const settings = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    const brochureUrl = String(settings.brochure_pdf_url || "").trim();
+
+    if (!brochureUrl) return res.status(404).send("CIBI brochure has not been uploaded yet.");
+
+    const fileName = String(settings.brochure_original_name || "CIBI-Brochure.pdf")
+      .replace(/[\\/"]/g, "")
+      .slice(0, 160) || "CIBI-Brochure.pdf";
+
+    res.set("Cache-Control", "no-store");
+    res.set("Content-Type", "application/pdf");
+    res.set("Content-Disposition", `attachment; filename="${fileName}"`);
+
+    const response = await fetch(brochureUrl);
+    if (!response.ok) return res.redirect(brochureUrl);
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).send("Could not download brochure.");
+  }
+});
+
 
 async function getStudentApplicationEnrollment(userId, requestedCourseId = null) {
   const courseId = requestedCourseId ? Number(requestedCourseId) : null;

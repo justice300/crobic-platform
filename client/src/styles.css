@@ -10303,3 +10303,98 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     min-height: 240px;
   }
 }
+
+
+/* CIBI brochure download CTA and admin uploader */
+.brochure-download-btn {
+  text-decoration: none;
+}
+
+.hero-actions .brochure-download-btn {
+  border-color: rgba(196, 159, 100, 0.4);
+}
+
+.program-final-actions {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.brochure-admin-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(7, 11, 24, 0.98), rgba(17, 23, 38, 0.95));
+  border: 1px solid rgba(196, 159, 100, 0.28);
+  padding: 26px;
+  color: white;
+}
+
+.brochure-admin-panel span {
+  display: inline-flex;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: .22em;
+  font-size: 10px;
+  font-weight: 900;
+  margin-bottom: 10px;
+}
+
+.brochure-admin-panel h3 {
+  color: white;
+  margin-bottom: 8px;
+}
+
+.brochure-admin-panel p {
+  color: rgba(255, 255, 255, 0.68);
+  margin: 0 0 10px;
+  max-width: 720px;
+}
+
+.brochure-admin-panel small {
+  display: block;
+  color: rgba(255, 255, 255, 0.58);
+  line-height: 1.55;
+}
+
+.brochure-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.brochure-upload-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.brochure-upload-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.brochure-upload-btn.disabled {
+  opacity: .55;
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .brochure-admin-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .brochure-admin-actions {
+    justify-content: flex-start;
+  }
+
+  .brochure-admin-actions .ghost-btn,
+  .brochure-admin-actions .gold-btn {
+    width: 100%;
+  }
+}

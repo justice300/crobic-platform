@@ -695,6 +695,7 @@ function SiteRegistrationCTA({ page, goTo, openAuth, settings = {} }) {
         <div className="site-registration-actions">
           <button className="gold-btn big" type="button" onClick={() => openAuth("register")}>Enroll Now</button>
           <button className="white-btn big" type="button" onClick={() => goTo("admissions")}>Admission Details</button>
+          <BrochureDownloadButton settings={settings} className="ghost-btn big">Download Brochure</BrochureDownloadButton>
           <a className="ghost-btn big" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a>
         </div>
       </div>
@@ -716,6 +717,48 @@ function FloatingWhatsApp({ settings = {} }) {
     </a>
   );
 }
+
+
+function brochureDownloadUrl(settings = {}) {
+  return settings?.brochure_pdf_url ? "/api/public/brochure/download" : "";
+}
+
+function BrochureDownloadButton({ settings = {}, className = "ghost-btn big", children = "Download Brochure" }) {
+  const url = brochureDownloadUrl(settings);
+  if (!url) return null;
+  return (
+    <a className={`brochure-download-btn ${className}`} href={url}>
+      {children}<ArrowRight size={14} />
+    </a>
+  );
+}
+
+async function uploadBrochurePdf(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch("/api/admin/brochure/upload", {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: formData
+  });
+
+  const text = await response.text();
+  let result = {};
+  try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
+
+  if (!response.ok) {
+    throw new Error(result.message || "Could not upload brochure.");
+  }
+
+  return result;
+}
+
 
 function ContactMap({ address = CIBI_ADDRESS }) {
   const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(address || CIBI_MAP_QUERY)}&output=embed`;
@@ -796,6 +839,7 @@ function Home({ data, goTo, openAuth }) {
           <div className="hero-actions">
             <button className="gold-btn big" onClick={() => goTo(slide.ctaPage || "admissions")}>{slide.ctaText || "Apply Now"}<ArrowRight size={14} /></button>
             <button className="white-btn big" onClick={() => goTo("programs")}>Explore Programs</button>
+            <BrochureDownloadButton settings={s} className="ghost-btn big">Download Brochure</BrochureDownloadButton>
           </div>
         </div>
         <div className="hero-progress">
@@ -1242,7 +1286,10 @@ function Programs({ courses, programmes = [], openAuth, user, goTo, settings = {
           <p className="eyebrow framed">{getSetting(settings, "programs_cta_kicker", "Start Today")}</p>
           <h2>{getSetting(settings, "programs_cta_title", "Ready to Begin Your Theological Journey")}</h2>
           <p>{getSetting(settings, "programs_cta_text", "Applications are now open. Take the first step toward deeper ministry and theological excellence.")}</p>
-          <button className="gold-btn big" onClick={() => user ? goTo("admissions") : openAuth("register")}>{getSetting(settings, "programs_cta_button", "Apply Now")}</button>
+          <div className="program-final-actions">
+            <button className="gold-btn big" onClick={() => user ? goTo("admissions") : openAuth("register")}>{getSetting(settings, "programs_cta_button", "Apply Now")}</button>
+            <BrochureDownloadButton settings={settings} className="white-btn big">Download Brochure</BrochureDownloadButton>
+          </div>
         </div>
       </section>
     </main>
@@ -6851,6 +6898,65 @@ function groupWebsiteFields(fields) {
   }, {});
 }
 
+
+function BrochureAdminPanel({ settings = {}, setSettings, reloadPublic }) {
+  const [uploading, setUploading] = useState(false);
+  const brochureUrl = settings.brochure_pdf_url || "";
+  const uploadedAt = settings.brochure_uploaded_at || "";
+  const originalName = settings.brochure_original_name || "CIBI Brochure";
+
+  async function handleUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf" && !String(file.name || "").toLowerCase().endsWith(".pdf")) {
+      showToast("Please choose a PDF brochure file.", "error");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const result = await uploadBrochurePdf(file);
+      setSettings((current) => ({
+        ...current,
+        brochure_pdf_url: result.brochureUrl || current.brochure_pdf_url || "",
+        brochure_original_name: result.originalName || file.name,
+        brochure_uploaded_at: new Date().toISOString()
+      }));
+      await reloadPublic();
+      showToast("Brochure uploaded. The public Download Brochure button is now active.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not upload brochure.", "error");
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  }
+
+  return (
+    <div className="brochure-admin-panel">
+      <div>
+        <span>Brochure PDF</span>
+        <h3>Upload / Replace Public Brochure</h3>
+        <p>Upload the official CIBI brochure as a PDF. The public website buttons will download this file automatically.</p>
+        {brochureUrl ? (
+          <small>Current file: {originalName}{uploadedAt ? ` · Updated ${formatDateTime(uploadedAt)}` : ""}</small>
+        ) : (
+          <small>No brochure uploaded yet. The public button will stay hidden until a PDF is uploaded.</small>
+        )}
+      </div>
+      <div className="brochure-admin-actions">
+        {brochureUrl && <a className="ghost-btn dark-text" href="/api/public/brochure/download">Test Download</a>}
+        <label className={uploading ? "gold-btn brochure-upload-btn disabled" : "gold-btn brochure-upload-btn"}>
+          {uploading ? "Uploading..." : "Upload PDF"}
+          <input type="file" accept="application/pdf" onChange={handleUpload} disabled={uploading} />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+
 function WebsiteContentAdmin({ reloadPublic }) {
   const [settings, setSettings] = useState({});
   const [activeGroupTitle, setActiveGroupTitle] = useState(websiteContentGroups[0]?.title || "Home Page");
@@ -6926,6 +7032,10 @@ function WebsiteContentAdmin({ reloadPublic }) {
               <strong>Homepage note:</strong>
               <p>The large 01–04 hero slider is edited under <b>Slides</b>. This page controls the homepage cards, statistics, about section, programmes intro, graduates section, book preview and admission CTA.</p>
             </div>
+          )}
+
+          {activeGroup.title === "Home Page" && (
+            <BrochureAdminPanel settings={settings} setSettings={setSettings} reloadPublic={reloadPublic} />
           )}
 
           {sectionEntries.map(([sectionTitle, fields]) => (
