@@ -1497,7 +1497,7 @@ async function studentCanSeeLiveCourse(userId, courseId) {
 async function findAllowedLiveSessionForStudent({ userId, activeOnly = true } = {}) {
   const sessions = await prisma.liveSession.findMany({
     where: activeOnly ? { active: true } : {},
-    include: { course: { select: { id: true, title: true } } },
+    include: { course: { select: { id: true, title: true } }, startedBy: { select: { id: true, name: true, role: true } } },
     orderBy: { updatedAt: "desc" },
     take: 25
   });
@@ -1505,6 +1505,31 @@ async function findAllowedLiveSessionForStudent({ userId, activeOnly = true } = 
   for (const session of sessions) {
     if (!session.courseId) return session;
     if (await studentCanSeeLiveCourse(userId, session.courseId)) return session;
+  }
+
+  return null;
+}
+
+async function staffCanSeeLiveSession(user, session) {
+  if (!user || !session || !isAdminRole(user.role)) return false;
+  if (session.startedById && Number(session.startedById) === Number(user.id)) return true;
+  if (!session.courseId) return true;
+  return canManageCourse({ user }, session.courseId);
+}
+
+async function findAllowedLiveSessionForStaff({ user, activeOnly = true } = {}) {
+  const sessions = await prisma.liveSession.findMany({
+    where: activeOnly ? { active: true } : {},
+    include: {
+      course: { select: { id: true, title: true } },
+      startedBy: { select: { id: true, name: true, role: true } }
+    },
+    orderBy: [{ active: "desc" }, { updatedAt: "desc" }],
+    take: 50
+  });
+
+  for (const session of sessions) {
+    if (await staffCanSeeLiveSession(user, session)) return session;
   }
 
   return null;
@@ -1519,11 +1544,11 @@ async function getLiveSessionForClassroom(includeInactiveLatest = false, viewerU
 
   const active = await prisma.liveSession.findFirst({
     where: { active: true },
-    include: { course: { select: { id: true, title: true } } },
+    include: { course: { select: { id: true, title: true } }, startedBy: { select: { id: true, name: true, role: true } } },
     orderBy: { updatedAt: "desc" }
   });
   if (active || !includeInactiveLatest) return active;
-  return prisma.liveSession.findFirst({ include: { course: { select: { id: true, title: true } } }, orderBy: { updatedAt: "desc" } });
+  return prisma.liveSession.findFirst({ include: { course: { select: { id: true, title: true } }, startedBy: { select: { id: true, name: true, role: true } } }, orderBy: { updatedAt: "desc" } });
 }
 
 async function buildLiveClassroomPayload(liveSession, viewerUserId = null) {
@@ -3967,8 +3992,8 @@ app.delete("/api/courses/:courseId/daily/room/:roomName", requireAuth, validator
 
 
 app.get("/api/admin/live/classroom", requireAuth, requireAdmin, async (req, res) => {
-  let liveSession = await getLiveSessionForClassroom(true);
-  if (liveSession?.courseId && !(await canManageCourse(req, liveSession.courseId))) liveSession = null;
+  let liveSession = await findAllowedLiveSessionForStaff({ user: req.user, activeOnly: true });
+  if (!liveSession) liveSession = await findAllowedLiveSessionForStaff({ user: req.user, activeOnly: false });
   res.json(await buildLiveClassroomPayload(liveSession));
 });
 
