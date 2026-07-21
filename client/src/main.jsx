@@ -7970,6 +7970,23 @@ function PortalSidebar({ title, items, tab, setTab }) {
   );
 }
 function AccessGate({ title, openAuth }) { return <main className="page container gate"><ShieldCheck size={56} /><h1>{title}</h1><p>You need to login before accessing this section.</p><button className="gold-btn big" onClick={openAuth}>Login</button></main>; }
+function FooterSocialIcon({ label }) {
+  const key = String(label || "").toLowerCase();
+  if (key === "facebook") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8.5h2.2V5.1c-.4-.1-1.7-.2-3.1-.2-3.1 0-5.2 1.9-5.2 5.4v3H4.6V17h3.3v7h4v-7h3.3l.5-3.7h-3.8v-2.6c0-1.1.3-2.2 2.1-2.2Z" /></svg>;
+  }
+  if (key === "instagram") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9a5.5 5.5 0 0 1-5.5 5.5h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2Zm0 2A3.5 3.5 0 0 0 4 7.5v9A3.5 3.5 0 0 0 7.5 20h9a3.5 3.5 0 0 0 3.5-3.5v-9A3.5 3.5 0 0 0 16.5 4h-9ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm5.2-2.3a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z" /></svg>;
+  }
+  if (key === "youtube") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 8.2s-.2-1.6-.9-2.3c-.9-.9-1.9-.9-2.4-1C15.4 4.7 12 4.7 12 4.7h-.1s-3.4 0-6.7.2c-.5.1-1.5.1-2.4 1C2.2 6.6 2 8.2 2 8.2S1.8 10 1.8 11.8v.8c0 1.8.2 3.6.2 3.6s.2 1.6.9 2.3c.9.9 2.1.9 2.7 1 1.9.2 6.4.2 6.4.2s3.4 0 6.7-.3c.5-.1 1.5-.1 2.4-1 .7-.7.9-2.3.9-2.3s.2-1.8.2-3.6v-.8c0-1.7-.2-3.5-.2-3.5ZM10 15.2V8.8l5.8 3.2-5.8 3.2Z" /></svg>;
+  }
+  if (key === "tiktok") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 3c.5 3 2.2 4.8 5 5v3.5c-1.8.1-3.4-.5-4.9-1.5v6.4c0 4.1-2.7 6.6-6.5 6.6-3.4 0-6-2.4-6-5.7 0-3.5 2.7-5.9 6.5-5.9.4 0 .8 0 1.2.1v3.7c-.4-.1-.8-.2-1.2-.2-1.6 0-2.7.9-2.7 2.3 0 1.3 1 2.2 2.4 2.2 1.5 0 2.5-.8 2.5-2.8V3h3.7Z" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.4 3h3.2l-7 8 8.2 10h-6.4l-5-6.1L4.7 21H1.5L9 12.5 1.2 3h6.6l4.5 5.5L17.4 3Zm-1.1 16h1.8L6.8 4.9H4.9L16.3 19Z" /></svg>;
+}
+
 function FooterSocialLinks({ settings = {} }) {
   const links = [
     ["Facebook", settings.footer_facebook_url],
@@ -7983,10 +8000,11 @@ function FooterSocialLinks({ settings = {} }) {
 
   return (
     <div className="footer-social-links" aria-label="CIBI social media handles">
-      <strong>Follow CIBI</strong>
       <div>
         {links.map(([label, url]) => (
-          <a key={label} href={String(url).trim()} target="_blank" rel="noreferrer">{label}</a>
+          <a key={label} href={String(url).trim()} target="_blank" rel="noreferrer" aria-label={label} title={label}>
+            <FooterSocialIcon label={label} />
+          </a>
         ))}
       </div>
     </div>
