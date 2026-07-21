@@ -10522,3 +10522,48 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     grid-template-columns: 1fr !important;
   }
 }
+
+
+/* Gallery ordering admin controls */
+.gallery-order-help {
+  background: rgba(196, 159, 100, 0.10);
+  border: 1px solid rgba(196, 159, 100, 0.26);
+  padding: 18px 20px;
+  margin: 16px 0 22px;
+}
+
+.gallery-order-help strong {
+  color: var(--black);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.gallery-order-help p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.admin-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+  color: var(--black);
+  font-weight: 800;
+}
+
+.admin-checkbox-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gold);
+}
+
+.admin-checkbox-field span {
+  color: var(--black);
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+

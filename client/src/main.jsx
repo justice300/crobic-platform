@@ -1822,7 +1822,14 @@ function RequirementBox({ title, items }) {
 }
 
 function Gallery({ gallery = [], settings = {} }) {
-  const items = gallery.length ? gallery : DEFAULT_GALLERY;
+  const sourceItems = gallery.length ? gallery : DEFAULT_GALLERY;
+  const items = [...sourceItems].sort((a, b) => {
+    const featuredRank = Number(Boolean(b.featured)) - Number(Boolean(a.featured));
+    if (featuredRank) return featuredRank;
+    const orderRank = Number(a.galleryOrder || 100) - Number(b.galleryOrder || 100);
+    if (orderRank) return orderRank;
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  });
   return (
     <main>
       <PageHero eyebrow={getSetting(settings, "gallery_hero_eyebrow", "Gallery")} title={getSetting(settings, "gallery_hero_title", "CIBI Gallery")} text={getSetting(settings, "gallery_hero_text", "A visual glimpse into CIBI training, classroom moments and graduation ceremonies.")} image={getSetting(settings, "gallery_hero_image_url", CIBI_IMAGES.graduation)} />
@@ -5027,7 +5034,7 @@ const slideFields = [
   ["eyebrow", "Small heading"], ["title", "Slide title"], ["description", "Description", "textarea"], ["imageUrl", "Image URL"], ["ctaText", "CTA text"], ["ctaPage", "CTA page e.g admissions"], ["slideOrder", "Order", "number"]
 ];
 const announcementFields = [["title", "Title"], ["body", "Message", "textarea"]];
-const galleryFields = [["title", "Image title"], ["category", "Category"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]];
+const galleryFields = [["title", "Image title"], ["category", "Category"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"], ["featured", "Pin this image to the top", "checkbox"], ["galleryOrder", "Display order (1 shows first, 8 shows eighth)", "number"]];
 
 
 function SlidesAdmin({ reloadPublic }) {
@@ -5297,7 +5304,10 @@ function CoursesAdmin({ reloadPublic }) {
 }
 
 function CrudAdmin({ title, path, fields, reloadPublic }) {
-  const empty = Object.fromEntries(fields.map(([name]) => [name, ""]));
+  const empty = Object.fromEntries(fields.map(([name, _label, type]) => [
+    name,
+    type === "checkbox" ? false : type === "number" ? "" : ""
+  ]));
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(empty);
   const [editingId, setEditingId] = useState(null);
@@ -5307,8 +5317,9 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
 
   function startEdit(item) {
     const nextForm = { ...empty };
-    fields.forEach(([name]) => {
-      nextForm[name] = item[name] ?? "";
+    fields.forEach(([name, _label, type]) => {
+      if (type === "checkbox") nextForm[name] = Boolean(item[name]);
+      else nextForm[name] = item[name] ?? "";
     });
     setForm(nextForm);
     setEditingId(item.id);
@@ -5325,6 +5336,7 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
     const payload = { ...form };
     fields.forEach(([name, _label, type]) => {
       if (type === "number") payload[name] = Number(payload[name] || 0);
+      if (type === "checkbox") payload[name] = Boolean(payload[name]);
     });
 
     if (editingId) {
@@ -5351,8 +5363,27 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
   return (
     <section className="admin-section">
       <h2>{editingId ? `Edit ${title}` : title}</h2>
+      {path === "gallery" && (
+        <div className="gallery-order-help">
+          <strong>Gallery arrangement</strong>
+          <p>Turn on “Pin this image to the top” for the images you want first, then use Display order: 1, 2, 3 up to 8. All other images will follow automatically.</p>
+        </div>
+      )}
       <form className="admin-form" onSubmit={submit}>
-        {fields.map(([name, label, type]) => type === "textarea" ? <textarea key={name} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} /> : <input key={name} type={type || "text"} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} required={name !== "imageUrl" && name !== "ctaText" && name !== "ctaPage"} />)}
+        {fields.map(([name, label, type]) => {
+          if (type === "textarea") {
+            return <textarea key={name} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} />;
+          }
+          if (type === "checkbox") {
+            return (
+              <label key={name} className="admin-checkbox-field">
+                <input type="checkbox" checked={Boolean(form[name])} onChange={(e) => setForm({ ...form, [name]: e.target.checked })} />
+                <span>{label}</span>
+              </label>
+            );
+          }
+          return <input key={name} type={type || "text"} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} required={name !== "imageUrl" && name !== "ctaText" && name !== "ctaPage" && type !== "number"} />;
+        })}
         <div className="form-row">
           <button className="gold-btn" type="submit">{editingId ? `Update ${title}` : `Add ${title}`}</button>
           {editingId && <button className="ghost-btn" type="button" onClick={cancelEdit}>Cancel Edit</button>}

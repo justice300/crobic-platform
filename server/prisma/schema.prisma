@@ -427,14 +427,19 @@ model Slide {
 }
 
 model Gallery {
-  id          Int      @id @default(autoincrement())
-  title       String
-  category    String?
-  imageUrl    String
-  description String?
-  published   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  title        String
+  category     String?
+  imageUrl     String
+  description  String?
+  featured     Boolean  @default(false)
+  galleryOrder Int      @default(100)
+  published    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([featured])
+  @@index([galleryOrder])
 }
 
 model Announcement {
