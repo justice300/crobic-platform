@@ -764,8 +764,6 @@ async function uploadBrochurePdf(file) {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 45000);
   const headers = { "Content-Type": "application/json" };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
 
   try {
     const response = await fetch(apiFileUrl("/api/admin/brochure/upload"), {
