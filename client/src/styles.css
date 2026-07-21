@@ -10523,47 +10523,178 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
   }
 }
 
-
-/* Gallery ordering admin controls */
-.gallery-order-help {
-  background: rgba(196, 159, 100, 0.10);
-  border: 1px solid rgba(196, 159, 100, 0.26);
-  padding: 18px 20px;
-  margin: 16px 0 22px;
+/* Layman-friendly noreply email automation page */
+.email-automation-panel .email-automation-hero p {
+  max-width: 760px;
 }
 
-.gallery-order-help strong {
-  color: var(--black);
-  display: block;
-  margin-bottom: 6px;
+.email-automation-status-card {
+  background: var(--black);
+  color: #ffffff;
+  border: 1px solid rgba(196, 159, 100, 0.28);
+  padding: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
 }
 
-.gallery-order-help p {
+.email-automation-status-card h3 {
+  color: #ffffff;
+  margin: 12px 0 8px;
+  font-size: 30px;
+}
+
+.email-automation-status-card p {
+  color: rgba(255, 255, 255, 0.68);
   margin: 0;
-  font-size: 13px;
+  max-width: 760px;
 }
 
-.admin-checkbox-field {
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.status-pill-on {
+  background: rgba(15, 138, 75, 0.16);
+  color: #9af0bf;
+  border-color: rgba(15, 138, 75, 0.35);
+}
+
+.simple-switch-row {
+  min-width: 300px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 18px;
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--cream);
-  border: 1px solid var(--line);
-  padding: 14px 16px;
-  color: var(--black);
-  font-weight: 800;
+  color: #ffffff;
 }
 
-.admin-checkbox-field input {
+.simple-switch-row input {
   width: 18px;
   height: 18px;
-  accent-color: var(--gold);
 }
 
-.admin-checkbox-field span {
-  color: var(--black);
-  font-size: 12px;
-  letter-spacing: .12em;
+.email-automation-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.email-summary-box {
+  background: rgba(196, 159, 100, 0.08);
+  border: 1px solid rgba(196, 159, 100, 0.22);
+  padding: 20px;
+}
+
+.email-summary-box small {
+  display: block;
+  color: var(--muted);
   text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+  font-weight: 900;
+  margin-bottom: 9px;
 }
 
+.email-summary-box strong {
+  display: block;
+  color: var(--black);
+  font-size: 15px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.email-layman-grid {
+  margin-top: 0;
+}
+
+.email-settings-card-wide {
+  grid-column: 1 / -1;
+}
+
+.field-help-text,
+.plain-help-text {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.content-field .field-help-text {
+  margin-top: -2px;
+}
+
+.email-advanced-settings {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  margin-top: 18px;
+}
+
+.email-advanced-settings summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+}
+
+.email-advanced-settings summary::-webkit-details-marker {
+  display: none;
+}
+
+.email-advanced-settings summary strong {
+  display: block;
+  color: var(--black);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.email-advanced-settings summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.email-advanced-settings summary b {
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+}
+
+.email-advanced-settings .email-settings-grid {
+  padding: 0 24px 24px;
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 980px) {
+  .email-automation-status-card,
+  .simple-switch-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .simple-switch-row {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .email-automation-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

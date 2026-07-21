@@ -23,7 +23,7 @@ import {
 import { applySecurity, strictCorsOptions, loginLimiter, registerLimiter, otpLimiter, validators, validateRequest, productionErrorHandler, sanitizeRequestBody } from "./security.js";
 import { documentUpload, makeStorageName, uploadToBunny } from "./storage.js";
 import {
-  sendTransactionalEmail,
+  sendTransactionalEmail as sendIntegrationTransactionalEmail,
   sendOneSignalNotification,
   goLiveEmailHtml,
   classEndedEmailHtml,
@@ -100,9 +100,9 @@ function getEmailSettingDefaults() {
   return {
     email_notifications_enabled: "false",
     email_school_name: "Champion International Bible Institute",
-    email_from_name: "CIBI Admissions",
-    email_from_address: "",
-    email_reply_to: "",
+    email_from_name: process.env.EMAIL_FROM_NAME || "CIBI",
+    email_from_address: process.env.EMAIL_FROM_ADDRESS || "noreply@cibionline.org",
+    email_reply_to: process.env.EMAIL_REPLY_TO || "support@cibionline.org",
     email_admin_recipients: "",
     email_smtp_host: "",
     email_smtp_port: "587",
@@ -1342,7 +1342,7 @@ app.get("/api/public/bootstrap", async (req, res) => {
     prisma.setting.findMany(),
     prisma.testimonial.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
     prisma.faq.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } }),
-    prisma.gallery.findMany({ where: { published: true }, orderBy: [{ featured: "desc" }, { galleryOrder: "asc" }, { createdAt: "desc" }] })
+    prisma.gallery.findMany({ where: { published: true }, orderBy: { createdAt: "desc" } })
   ]);
 
   const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
@@ -3260,22 +3260,9 @@ Current Level/Stage: ${updated.currentLevelStage || "Not set"}`,
   }
 });
 
-function normaliseGalleryPayload(body = {}) {
-  return {
-    title: String(body.title || "").trim(),
-    category: body.category ? String(body.category).trim() : null,
-    imageUrl: String(body.imageUrl || "").trim(),
-    description: body.description ? String(body.description).trim() : null,
-    featured: body.featured === true || body.featured === "true" || body.featured === "on",
-    galleryOrder: Math.max(1, Number(body.galleryOrder || 100)),
-    published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on"
-  };
-}
-
 function crudPayload(routeName, body = {}) {
   if (routeName === "programmes") return normaliseProgrammePayload(body);
   if (routeName === "courses") return normaliseCoursePayload(body);
-  if (routeName === "gallery") return normaliseGalleryPayload(body);
   return body;
 }
 
@@ -3283,10 +3270,7 @@ function crudRoutes(modelName, routeName) {
   app.get(`/api/admin/${routeName}`, requireAuth, requireAdmin, async (req, res) => {
     const where = routeName === "courses" ? courseAccessWhereForUser(req.user) : {};
     const include = routeName === "courses" ? { programme: true } : routeName === "programmes" ? { courses: { orderBy: { title: "asc" } } } : undefined;
-    const orderBy = routeName === "gallery"
-      ? [{ featured: "desc" }, { galleryOrder: "asc" }, { createdAt: "desc" }]
-      : { createdAt: "desc" };
-    const data = await prisma[modelName].findMany({ where, include, orderBy });
+    const data = await prisma[modelName].findMany({ where, include, orderBy: { createdAt: "desc" } });
     res.json(data);
   });
 

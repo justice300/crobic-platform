@@ -1822,14 +1822,7 @@ function RequirementBox({ title, items }) {
 }
 
 function Gallery({ gallery = [], settings = {} }) {
-  const sourceItems = gallery.length ? gallery : DEFAULT_GALLERY;
-  const items = [...sourceItems].sort((a, b) => {
-    const featuredRank = Number(Boolean(b.featured)) - Number(Boolean(a.featured));
-    if (featuredRank) return featuredRank;
-    const orderRank = Number(a.galleryOrder || 100) - Number(b.galleryOrder || 100);
-    if (orderRank) return orderRank;
-    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-  });
+  const items = gallery.length ? gallery : DEFAULT_GALLERY;
   return (
     <main>
       <PageHero eyebrow={getSetting(settings, "gallery_hero_eyebrow", "Gallery")} title={getSetting(settings, "gallery_hero_title", "CIBI Gallery")} text={getSetting(settings, "gallery_hero_text", "A visual glimpse into CIBI training, classroom moments and graduation ceremonies.")} image={getSetting(settings, "gallery_hero_image_url", CIBI_IMAGES.graduation)} />
@@ -5034,7 +5027,7 @@ const slideFields = [
   ["eyebrow", "Small heading"], ["title", "Slide title"], ["description", "Description", "textarea"], ["imageUrl", "Image URL"], ["ctaText", "CTA text"], ["ctaPage", "CTA page e.g admissions"], ["slideOrder", "Order", "number"]
 ];
 const announcementFields = [["title", "Title"], ["body", "Message", "textarea"]];
-const galleryFields = [["title", "Image title"], ["category", "Category"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"], ["featured", "Pin this image to the top", "checkbox"], ["galleryOrder", "Display order (1 shows first, 8 shows eighth)", "number"]];
+const galleryFields = [["title", "Image title"], ["category", "Category"], ["imageUrl", "Image URL"], ["description", "Description", "textarea"]];
 
 
 function SlidesAdmin({ reloadPublic }) {
@@ -5304,10 +5297,7 @@ function CoursesAdmin({ reloadPublic }) {
 }
 
 function CrudAdmin({ title, path, fields, reloadPublic }) {
-  const empty = Object.fromEntries(fields.map(([name, _label, type]) => [
-    name,
-    type === "checkbox" ? false : type === "number" ? "" : ""
-  ]));
+  const empty = Object.fromEntries(fields.map(([name]) => [name, ""]));
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(empty);
   const [editingId, setEditingId] = useState(null);
@@ -5317,9 +5307,8 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
 
   function startEdit(item) {
     const nextForm = { ...empty };
-    fields.forEach(([name, _label, type]) => {
-      if (type === "checkbox") nextForm[name] = Boolean(item[name]);
-      else nextForm[name] = item[name] ?? "";
+    fields.forEach(([name]) => {
+      nextForm[name] = item[name] ?? "";
     });
     setForm(nextForm);
     setEditingId(item.id);
@@ -5336,7 +5325,6 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
     const payload = { ...form };
     fields.forEach(([name, _label, type]) => {
       if (type === "number") payload[name] = Number(payload[name] || 0);
-      if (type === "checkbox") payload[name] = Boolean(payload[name]);
     });
 
     if (editingId) {
@@ -5363,27 +5351,8 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
   return (
     <section className="admin-section">
       <h2>{editingId ? `Edit ${title}` : title}</h2>
-      {path === "gallery" && (
-        <div className="gallery-order-help">
-          <strong>Gallery arrangement</strong>
-          <p>Turn on “Pin this image to the top” for the images you want first, then use Display order: 1, 2, 3 up to 8. All other images will follow automatically.</p>
-        </div>
-      )}
       <form className="admin-form" onSubmit={submit}>
-        {fields.map(([name, label, type]) => {
-          if (type === "textarea") {
-            return <textarea key={name} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} />;
-          }
-          if (type === "checkbox") {
-            return (
-              <label key={name} className="admin-checkbox-field">
-                <input type="checkbox" checked={Boolean(form[name])} onChange={(e) => setForm({ ...form, [name]: e.target.checked })} />
-                <span>{label}</span>
-              </label>
-            );
-          }
-          return <input key={name} type={type || "text"} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} required={name !== "imageUrl" && name !== "ctaText" && name !== "ctaPage" && type !== "number"} />;
-        })}
+        {fields.map(([name, label, type]) => type === "textarea" ? <textarea key={name} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} /> : <input key={name} type={type || "text"} placeholder={label} value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} required={name !== "imageUrl" && name !== "ctaText" && name !== "ctaPage"} />)}
         <div className="form-row">
           <button className="gold-btn" type="submit">{editingId ? `Update ${title}` : `Add ${title}`}</button>
           {editingId && <button className="ghost-btn" type="button" onClick={cancelEdit}>Cancel Edit</button>}
@@ -7407,16 +7376,17 @@ function EmailSettingsAdmin() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testEmail, setTestEmail] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   async function load() {
     const result = await api("/admin/settings");
     setSettings({
       email_notifications_enabled: result.email_notifications_enabled || "false",
       email_school_name: result.email_school_name || "Champion International Bible Institute",
-      email_from_name: result.email_from_name || "CIBI Admissions",
-      email_from_address: result.email_from_address || "",
-      email_reply_to: result.email_reply_to || "",
-      email_admin_recipients: result.email_admin_recipients || "",
+      email_from_name: result.email_from_name || "CIBI",
+      email_from_address: result.email_from_address || "noreply@cibionline.org",
+      email_reply_to: result.email_reply_to || "support@cibionline.org",
+      email_admin_recipients: result.email_admin_recipients || "admin@cibionline.org\nregistrar@cibionline.org\nsupport@cibionline.org",
       email_smtp_host: result.email_smtp_host || "",
       email_smtp_port: result.email_smtp_port || "587",
       email_smtp_user: result.email_smtp_user || "",
@@ -7439,18 +7409,18 @@ function EmailSettingsAdmin() {
       setSaving(true);
       const saved = await api("/admin/settings", { method: "PATCH", body: settings });
       setSettings((current) => ({ ...current, ...saved }));
-      showToast("Email notification settings saved.", "success");
+      showToast("Website email automation settings saved.", "success");
     } catch (error) {
-      showToast(error.message || "Could not save email settings", "error");
+      showToast(error.message || "Could not save email automation settings", "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function sendTestEmail() {
-    const to = testEmail || settings.email_admin_recipients || settings.email_from_address;
+    const to = testEmail || settings.email_admin_recipients || settings.email_reply_to;
     if (!to) {
-      showToast("Enter a test email address or admin recipient email first.", "error");
+      showToast("Enter your email address first, then click Send Test Email.", "error");
       return;
     }
     try {
@@ -7464,95 +7434,140 @@ function EmailSettingsAdmin() {
     }
   }
 
+  const automationOn = settings.email_notifications_enabled === "true";
+  const senderLine = `${settings.email_from_name || "CIBI"} <${settings.email_from_address || "noreply@cibionline.org"}>`;
+  const replyLine = settings.email_reply_to || "support@cibionline.org";
+
   return (
-    <section className="admin-section email-settings-panel">
-      <div className="content-editor-header students-admin-header">
+    <section className="admin-section email-settings-panel email-automation-panel">
+      <div className="content-editor-header students-admin-header email-automation-hero">
         <div>
-          <span>Communication</span>
-          <h2>Email Settings</h2>
-          <p>Send automatic email notifications for admissions, payments, support replies, assignments, quizzes and certificates.</p>
+          <span>Website Email Automation</span>
+          <h2>Noreply Email Setup</h2>
+          <p>This controls automatic website emails. Staff should still use Zoho Mail for normal human emails.</p>
         </div>
         <button className="gold-btn" type="button" onClick={load}>Refresh</button>
       </div>
 
       <form className="admin-form email-settings-form" onSubmit={submit}>
-        <div className="email-settings-grid">
+        <div className="email-automation-status-card">
+          <div>
+            <span className={automationOn ? "status-pill status-pill-on" : "status-pill"}>{automationOn ? "Automation On" : "Automation Off"}</span>
+            <h3>Automatic Website Emails</h3>
+            <p>When students register, submit payment, receive admission approval, join live classes, get assignments, quiz updates, certificates or support replies, the website sends emails automatically.</p>
+          </div>
+          <label className="simple-switch-row">
+            <input type="checkbox" checked={automationOn} onChange={(e) => updateField("email_notifications_enabled", e.target.checked ? "true" : "false")} />
+            <strong>Send automatic emails from the website</strong>
+          </label>
+        </div>
+
+        <div className="email-automation-summary-grid">
+          <div className="email-summary-box">
+            <small>Website sends from</small>
+            <strong>{senderLine}</strong>
+          </div>
+          <div className="email-summary-box">
+            <small>Replies go to</small>
+            <strong>{replyLine}</strong>
+          </div>
+          <div className="email-summary-box">
+            <small>Normal staff email</small>
+            <strong>Use Zoho Mail</strong>
+          </div>
+        </div>
+
+        <div className="email-settings-grid email-layman-grid">
           <div className="email-settings-card">
-            <h3>Notification Control</h3>
-            <label className="checkbox-field email-toggle-field">
-              <input type="checkbox" checked={settings.email_notifications_enabled === "true"} onChange={(e) => updateField("email_notifications_enabled", e.target.checked ? "true" : "false")} />
-              Enable email notifications
-            </label>
+            <h3>School Details</h3>
             <label className="content-field content-field-wide">
-              <span>School email name</span>
+              <span>School name shown in emails</span>
               <input value={settings.email_school_name || ""} onChange={(e) => updateField("email_school_name", e.target.value)} placeholder="Champion International Bible Institute" />
             </label>
             <label className="content-field content-field-wide">
-              <span>Website / portal base URL</span>
-              <input value={settings.email_base_url || ""} onChange={(e) => updateField("email_base_url", e.target.value)} placeholder="https://yourdomain.com" />
+              <span>Website link</span>
+              <input value={settings.email_base_url || ""} onChange={(e) => updateField("email_base_url", e.target.value)} placeholder="https://cibionline.org" />
             </label>
             <label className="content-field content-field-wide">
-              <span>Email footer text</span>
+              <span>Footer text inside emails</span>
               <input value={settings.email_footer_text || ""} onChange={(e) => updateField("email_footer_text", e.target.value)} placeholder="Raising world class ministers" />
             </label>
           </div>
 
           <div className="email-settings-card">
-            <h3>Sender Details</h3>
+            <h3>Noreply Sender</h3>
             <label className="content-field content-field-wide">
-              <span>From name</span>
-              <input value={settings.email_from_name || ""} onChange={(e) => updateField("email_from_name", e.target.value)} placeholder="CIBI Admissions" />
+              <span>Sender name</span>
+              <input value={settings.email_from_name || ""} onChange={(e) => updateField("email_from_name", e.target.value)} placeholder="CIBI" />
             </label>
             <label className="content-field content-field-wide">
-              <span>From email address</span>
-              <input type="email" value={settings.email_from_address || ""} onChange={(e) => updateField("email_from_address", e.target.value)} placeholder="noreply@yourdomain.com" />
+              <span>Automatic sender email</span>
+              <input type="email" value={settings.email_from_address || ""} onChange={(e) => updateField("email_from_address", e.target.value)} placeholder="noreply@cibionline.org" />
+              <small className="field-help-text">Do not log in to this email. It is only used by the website.</small>
             </label>
             <label className="content-field content-field-wide">
-              <span>Reply-to email</span>
-              <input type="email" value={settings.email_reply_to || ""} onChange={(e) => updateField("email_reply_to", e.target.value)} placeholder="admissions@yourdomain.com" />
-            </label>
-            <label className="content-field content-field-wide">
-              <span>Admin recipients</span>
-              <textarea value={settings.email_admin_recipients || ""} onChange={(e) => updateField("email_admin_recipients", e.target.value)} placeholder="admin@crobic.org\nadmissions@crobic.org" />
+              <span>Reply email</span>
+              <input type="email" value={settings.email_reply_to || ""} onChange={(e) => updateField("email_reply_to", e.target.value)} placeholder="support@cibionline.org" />
+              <small className="field-help-text">When a student replies to an automatic email, the reply goes here.</small>
             </label>
           </div>
 
-          <div className="email-settings-card">
-            <h3>SMTP Settings</h3>
+          <div className="email-settings-card email-settings-card-wide">
+            <h3>Admin Alert Emails</h3>
+            <p className="plain-help-text">Website alerts for new applications, payment receipts and student updates will be sent to these staff emails.</p>
             <label className="content-field content-field-wide">
-              <span>SMTP host</span>
-              <input value={settings.email_smtp_host || ""} onChange={(e) => updateField("email_smtp_host", e.target.value)} placeholder="smtp.gmail.com or mail.yourdomain.com" />
-            </label>
-            <div className="email-two-cols">
-              <label className="content-field">
-                <span>SMTP port</span>
-                <input value={settings.email_smtp_port || "587"} onChange={(e) => updateField("email_smtp_port", e.target.value)} placeholder="587" />
-              </label>
-              <label className="checkbox-field email-secure-field">
-                <input type="checkbox" checked={settings.email_smtp_secure === "true"} onChange={(e) => updateField("email_smtp_secure", e.target.checked ? "true" : "false")} />
-                Use SSL / secure port
-              </label>
-            </div>
-            <label className="content-field content-field-wide">
-              <span>SMTP username</span>
-              <input value={settings.email_smtp_user || ""} onChange={(e) => updateField("email_smtp_user", e.target.value)} placeholder="email username" />
-            </label>
-            <label className="content-field content-field-wide">
-              <span>SMTP password / app password</span>
-              <input type="password" value={settings.email_smtp_password || ""} onChange={(e) => updateField("email_smtp_password", e.target.value)} placeholder="SMTP password" />
+              <span>Admin emails, one per line</span>
+              <textarea value={settings.email_admin_recipients || ""} onChange={(e) => updateField("email_admin_recipients", e.target.value)} placeholder="admin@cibionline.org\nregistrar@cibionline.org\nsupport@cibionline.org" />
             </label>
           </div>
 
           <div className="email-settings-card email-test-card">
-            <h3>Test Email</h3>
-            <p>After saving SMTP details, send a test email to confirm delivery before going live.</p>
-            <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="test@example.com" />
+            <h3>Test Your Email</h3>
+            <p>Enter your own email address and send a test. This confirms that automatic website emails are working.</p>
+            <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="yourname@gmail.com" />
             <button className="dark-btn" type="button" onClick={sendTestEmail} disabled={testing}>{testing ? "Sending..." : "Send Test Email"}</button>
           </div>
         </div>
 
+        <details className="email-advanced-settings" open={advancedOpen} onToggle={(e) => setAdvancedOpen(e.currentTarget.open)}>
+          <summary>
+            <div>
+              <strong>Advanced SMTP Settings</strong>
+              <span>Do not touch unless the developer asks you to. CIBI is using Resend for noreply automation.</span>
+            </div>
+            <b>{advancedOpen ? "Hide" : "Show"}</b>
+          </summary>
+          <div className="email-settings-grid">
+            <div className="email-settings-card">
+              <h3>SMTP Backup</h3>
+              <label className="content-field content-field-wide">
+                <span>SMTP host</span>
+                <input value={settings.email_smtp_host || ""} onChange={(e) => updateField("email_smtp_host", e.target.value)} placeholder="smtp.gmail.com or mail.yourdomain.com" />
+              </label>
+              <div className="email-two-cols">
+                <label className="content-field">
+                  <span>SMTP port</span>
+                  <input value={settings.email_smtp_port || "587"} onChange={(e) => updateField("email_smtp_port", e.target.value)} placeholder="587" />
+                </label>
+                <label className="checkbox-field email-secure-field">
+                  <input type="checkbox" checked={settings.email_smtp_secure === "true"} onChange={(e) => updateField("email_smtp_secure", e.target.checked ? "true" : "false")} />
+                  Use SSL / secure port
+                </label>
+              </div>
+              <label className="content-field content-field-wide">
+                <span>SMTP username</span>
+                <input value={settings.email_smtp_user || ""} onChange={(e) => updateField("email_smtp_user", e.target.value)} placeholder="email username" />
+              </label>
+              <label className="content-field content-field-wide">
+                <span>SMTP password / app password</span>
+                <input type="password" value={settings.email_smtp_password || ""} onChange={(e) => updateField("email_smtp_password", e.target.value)} placeholder="SMTP password" />
+              </label>
+            </div>
+          </div>
+        </details>
+
         <div className="content-save-footer email-save-footer">
-          <button className="gold-btn" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Email Settings"}</button>
+          <button className="gold-btn" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Email Automation"}</button>
         </div>
       </form>
     </section>
