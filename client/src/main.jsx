@@ -719,8 +719,19 @@ function FloatingWhatsApp({ settings = {} }) {
 }
 
 
+function apiBaseForFileRequests() {
+  const configured = String(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").trim();
+  if (!configured) return "";
+  return configured.replace(/\/api\/?$/, "").replace(/\/$/, "");
+}
+
+function apiFileUrl(path = "") {
+  const cleanPath = String(path || "").startsWith("/") ? String(path || "") : `/${path}`;
+  return `${apiBaseForFileRequests()}${cleanPath}`;
+}
+
 function brochureDownloadUrl(settings = {}) {
-  return settings?.brochure_pdf_url ? "/api/public/brochure/download" : "";
+  return settings?.brochure_pdf_url ? apiFileUrl("/api/public/brochure/download") : "";
 }
 
 function BrochureDownloadButton({ settings = {}, className = "ghost-btn big", children = "Download Brochure" }) {
@@ -742,10 +753,10 @@ async function uploadBrochurePdf(file) {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 45000);
+  const timer = window.setTimeout(() => controller.abort(), 30000);
 
   try {
-    const response = await fetch("/api/admin/brochure/upload", {
+    const response = await fetch(apiFileUrl("/api/admin/brochure/upload"), {
       method: "POST",
       headers,
       credentials: "include",
@@ -757,10 +768,15 @@ async function uploadBrochurePdf(file) {
     let result = {};
     try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
 
-    if (!response.ok) throw new Error(result.message || "Could not upload brochure.");
+    if (!response.ok) {
+      throw new Error(result.message || "Could not upload brochure.");
+    }
+
     return result;
   } catch (error) {
-    if (error.name === "AbortError") throw new Error("Upload timed out. Please check backend logs or try again.");
+    if (error.name === "AbortError") {
+      throw new Error("Brochure upload timed out after 30 seconds. Please refresh and try again.");
+    }
     throw error;
   } finally {
     window.clearTimeout(timer);
@@ -6844,9 +6860,11 @@ const websiteContentGroups = [
     ]
   },
   {
-    title: "Footer",
+    title: "Footer and Social Media",
     fields: [
-      ["footer_brand_title", "Footer Brand Title"], ["footer_brand_text", "Footer Brand Text"], ["footer_brand_small", "Footer Small Text"], ["footer_address", "Footer Address"], ["footer_phone", "Footer Phone"], ["footer_email", "Footer Email"], ["footer_copyright", "Copyright Text"], ["footer_bottom_note", "Footer Bottom Note"]
+      ["footer_brand_title", "Footer Brand Title"], ["footer_brand_text", "Footer Brand Text"], ["footer_brand_small", "Footer Small Text"], ["footer_address", "Footer Address"], ["footer_phone", "Footer Phone"], ["footer_email", "Footer Email"],
+      ["footer_facebook_url", "Facebook Page URL"], ["footer_instagram_url", "Instagram Page URL"], ["footer_youtube_url", "YouTube Channel URL"], ["footer_tiktok_url", "TikTok Page URL"], ["footer_x_url", "X / Twitter URL"],
+      ["footer_copyright", "Copyright Text"], ["footer_bottom_note", "Footer Bottom Note"]
     ]
   }
 ];
@@ -6924,7 +6942,6 @@ function BrochureAdminPanel({ settings = {}, setSettings, reloadPublic }) {
 
     try {
       setUploading(true);
-      showToast("Uploading brochure PDF. Please wait...", "info");
       const result = await uploadBrochurePdf(file);
       setSettings((current) => ({
         ...current,
@@ -6943,22 +6960,21 @@ function BrochureAdminPanel({ settings = {}, setSettings, reloadPublic }) {
   }
 
   return (
-    <div className="brochure-admin-panel brochure-admin-panel-featured" id="school-brochure-upload">
-      <div className="brochure-admin-icon"><BookOpen size={24} /></div>
+    <div className="brochure-admin-panel">
       <div>
-        <span>Quick Action · School Brochure PDF</span>
+        <span>Brochure PDF</span>
         <h3>Upload / Replace Public Brochure</h3>
-        <p>This is the main brochure file visitors download from the homepage, programmes page, and registration CTA.</p>
+        <p>Upload the official CIBI brochure as a PDF. The public website buttons will download this file automatically.</p>
         {brochureUrl ? (
           <small>Current file: {originalName}{uploadedAt ? ` · Updated ${formatDateTime(uploadedAt)}` : ""}</small>
         ) : (
-          <small>No brochure uploaded yet. Upload a PDF here to activate the public Download Brochure button.</small>
+          <small>No brochure uploaded yet. The public button will stay hidden until a PDF is uploaded.</small>
         )}
       </div>
       <div className="brochure-admin-actions">
-        {brochureUrl && <a className="ghost-btn dark-text" href="/api/public/brochure/download">Test Download</a>}
+        {brochureUrl && <a className="ghost-btn dark-text" href={brochureDownloadUrl(settings)}>Test Download</a>}
         <label className={uploading ? "gold-btn brochure-upload-btn disabled" : "gold-btn brochure-upload-btn"}>
-          {uploading ? "Uploading..." : "Choose PDF Brochure"}
+          {uploading ? "Uploading..." : "Upload PDF"}
           <input type="file" accept="application/pdf" onChange={handleUpload} disabled={uploading} />
         </label>
       </div>
@@ -6978,22 +6994,28 @@ function WebsiteContentAdmin({ reloadPublic }) {
 
   useEffect(() => { load(); }, []);
 
-  const activeGroup = websiteContentGroups.find((group) => group.title === activeGroupTitle) || websiteContentGroups[0];
-  const searchTerm = contentSearch.trim().toLowerCase();
-  const searchableGroups = websiteContentGroups.filter((group) => {
-    if (!searchTerm) return true;
-    return [group.title, ...group.fields.flatMap(([key, label]) => [key, label, getContentSection(key)])]
-      .join(" ")
-      .toLowerCase()
-      .includes(searchTerm);
-  });
-  const visibleFields = searchTerm
-    ? activeGroup.fields.filter(([key, label]) => `${key} ${label} ${getContentSection(key)}`.toLowerCase().includes(searchTerm))
+  const searchNeedle = contentSearch.trim().toLowerCase();
+  function fieldMatchesSearch(field, groupTitle = "") {
+    if (!searchNeedle) return true;
+    const [key, label] = field;
+    return `${groupTitle} ${key} ${label} ${getContentSection(key)}`.toLowerCase().includes(searchNeedle);
+  }
+  function groupMatchesSearch(group) {
+    if (!searchNeedle) return true;
+    return group.title.toLowerCase().includes(searchNeedle) || group.fields.some((field) => fieldMatchesSearch(field, group.title));
+  }
+
+  const matchingContentGroups = websiteContentGroups.filter(groupMatchesSearch);
+  const currentGroup = websiteContentGroups.find((group) => group.title === activeGroupTitle) || websiteContentGroups[0];
+  const activeGroup = searchNeedle && !groupMatchesSearch(currentGroup)
+    ? (matchingContentGroups[0] || currentGroup)
+    : currentGroup;
+  const activeFields = searchNeedle
+    ? activeGroup.fields.filter((field) => fieldMatchesSearch(field, activeGroup.title))
     : activeGroup.fields;
-  const fieldsToShow = visibleFields.length || !searchTerm ? visibleFields : [];
-  const sectionGroups = groupWebsiteFields(fieldsToShow);
+  const sectionGroups = groupWebsiteFields(activeFields);
   const sectionEntries = Object.entries(sectionGroups);
-  const imageFieldCount = activeGroup.fields.filter(([key, label]) => key.includes("image_url") || label.toLowerCase().includes("image url")).length;
+  const imageFieldCount = activeFields.filter(([key, label]) => key.includes("image_url") || label.toLowerCase().includes("image url")).length;
 
   async function submit(e) {
     e.preventDefault();
@@ -7007,86 +7029,108 @@ function WebsiteContentAdmin({ reloadPublic }) {
     setSettings((current) => ({ ...current, [key]: value }));
   }
 
-  function openGroup(title) {
-    setActiveGroupTitle(title);
-    window.setTimeout(() => {
-      document.querySelector(".content-editor-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
-  }
-
   return (
     <section className="admin-section content-manager">
       <div className="content-manager-title">
         <div>
           <p className="eyebrow dark">Website Content</p>
-          <h2>Public Website Control Centre</h2>
-          <p>Use the search bar or quick actions to find what you need fast. Each editable area now has a clear page name and section name.</p>
+          <h2>Public Page Editor</h2>
+          <p>
+            Use the search bar to find brochure, footer, social media, admission, programme or contact fields quickly. Homepage hero slides are managed separately under the Slides tab.
+          </p>
         </div>
       </div>
 
-      <div className="content-search-strip">
-        <div className="content-search-box">
-          <Search size={18} />
-          <input value={contentSearch} onChange={(e) => setContentSearch(e.target.value)} placeholder="Search brochure, home, admission, fees, footer, phone, image, programmes..." />
-          {contentSearch && <button type="button" onClick={() => setContentSearch("")}>Clear</button>}
+      <div className="content-manager-tools">
+        <label className="content-search-box">
+          <Search size={16} />
+          <input
+            value={contentSearch}
+            onChange={(e) => setContentSearch(e.target.value)}
+            placeholder="Search content, e.g. brochure, social media, footer, admission, programmes..."
+          />
+        </label>
+        <div className="content-quick-actions">
+          <button type="button" className="ghost-btn dark-text" onClick={() => { setActiveGroupTitle("Home Page"); setContentSearch("brochure"); }}>Upload School Brochure</button>
+          <button type="button" className="ghost-btn dark-text" onClick={() => { setActiveGroupTitle("Footer and Social Media"); setContentSearch("social"); }}>Social Media Handles</button>
+          <button type="button" className="ghost-btn dark-text" onClick={() => { setActiveGroupTitle("Footer and Social Media"); setContentSearch("footer"); }}>Footer Details</button>
         </div>
-      </div>
-
-      <div className="content-quick-actions">
-        <button type="button" onClick={() => document.getElementById("school-brochure-upload")?.scrollIntoView({ behavior: "smooth", block: "center" })}><strong>Upload School Brochure</strong><span>PDF download button</span></button>
-        <button type="button" onClick={() => openGroup("Home Page")}><strong>Edit Home Page</strong><span>Cards, stats, CTA</span></button>
-        <button type="button" onClick={() => openGroup("Admission Page")}><strong>Edit Admission Page</strong><span>Fees and requirements</span></button>
-        <button type="button" onClick={() => openGroup("Footer and Global CTA")}><strong>Edit Footer / Global CTA</strong><span>Phone, email, footer</span></button>
       </div>
 
       <div className="content-manager-layout">
         <aside className="content-page-menu">
-          <h3>Choose Website Area</h3>
-          <p className="content-menu-helper">Pick the page you want to edit. Search narrows the list.</p>
-          {searchableGroups.map((group) => {
+          <h3>Choose Area</h3>
+          {matchingContentGroups.map((group) => {
             const isActive = activeGroup.title === group.title;
             const imageCount = group.fields.filter(([key, label]) => key.includes("image_url") || label.toLowerCase().includes("image url")).length;
+
             return (
-              <button type="button" key={group.title} className={isActive ? "content-page-card active-content-page" : "content-page-card"} onClick={() => setActiveGroupTitle(group.title)}>
+              <button
+                type="button"
+                key={group.title}
+                className={isActive ? "content-page-card active-content-page" : "content-page-card"}
+                onClick={() => setActiveGroupTitle(group.title)}
+              >
                 <strong>{group.title}</strong>
                 <span>{group.fields.length} fields · {imageCount} images</span>
               </button>
             );
           })}
-          {!searchableGroups.length && <div className="content-no-results">No website area matched your search.</div>}
+          {matchingContentGroups.length === 0 && <p className="content-no-results">No content area matched your search.</p>}
         </aside>
 
         <form className="admin-form content-editor-panel" onSubmit={submit}>
-          <BrochureAdminPanel settings={settings} setSettings={setSettings} reloadPublic={reloadPublic} />
           <div className="content-editor-header">
             <div>
               <span>Now editing</span>
               <h3>{activeGroup.title}</h3>
-              <p>{sectionEntries.length} visible sections · {fieldsToShow.length} editable fields · {imageFieldCount} image fields</p>
+              <p>{sectionEntries.length} sections · {activeFields.length} visible fields · {imageFieldCount} image fields</p>
             </div>
             <button className="gold-btn" type="submit">Save {activeGroup.title}</button>
           </div>
 
           {activeGroup.title === "Home Page" && (
-            <div className="content-help-box"><strong>Homepage note:</strong><p>The large 01–04 hero slider is edited under <b>Slides</b>. This page controls the homepage cards, statistics, about section, programmes intro, graduates section, FAQ and admission CTA.</p></div>
+            <div className="content-help-box">
+              <strong>Homepage note:</strong>
+              <p>The large 01–04 hero slider is edited under <b>Slides</b>. This page controls the homepage cards, statistics, about section, programmes intro, graduates section, book preview and admission CTA.</p>
+            </div>
           )}
 
-          {searchTerm && !fieldsToShow.length && (
-            <div className="content-help-box"><strong>No fields matched inside {activeGroup.title}.</strong><p>Choose another website area from the left, clear search, or use the quick actions above.</p></div>
+          {activeGroup.title === "Home Page" && (
+            <BrochureAdminPanel settings={settings} setSettings={setSettings} reloadPublic={reloadPublic} />
+          )}
+
+          {sectionEntries.length === 0 && (
+            <div className="quiet-banner"><strong>No matching fields.</strong><p>Clear the search or choose another area from the left.</p></div>
           )}
 
           {sectionEntries.map(([sectionTitle, fields]) => (
             <details className="content-section-panel" key={sectionTitle} open>
-              <summary><strong>{activeGroup.title} · {sectionTitle}</strong><span>{fields.length} fields</span></summary>
+              <summary>
+                <strong>{sectionTitle}</strong>
+                <span>{fields.length} fields</span>
+              </summary>
+
               <div className="content-admin-grid clean-content-grid">
                 {fields.map(([key, label, type]) => {
                   const isImageField = key.includes("image_url") || label.toLowerCase().includes("image url");
                   const value = settings[key] || "";
+
                   return (
                     <label className={type === "textarea" ? "content-field content-field-wide" : "content-field"} key={key}>
                       <span>{label}</span>
-                      {type === "textarea" ? <textarea value={value} onChange={(e) => updateSetting(key, e.target.value)} /> : <input value={value} onChange={(e) => updateSetting(key, e.target.value)} />}
-                      {isImageField && value && <div className="image-url-preview"><img src={value} alt={`${label} preview`} /><small>Image preview</small></div>}
+                      {type === "textarea" ? (
+                        <textarea value={value} onChange={(e) => updateSetting(key, e.target.value)} />
+                      ) : (
+                        <input value={value} onChange={(e) => updateSetting(key, e.target.value)} />
+                      )}
+
+                      {isImageField && value && (
+                        <div className="image-url-preview">
+                          <img src={value} alt={`${label} preview`} />
+                          <small>Image preview</small>
+                        </div>
+                      )}
                     </label>
                   );
                 })}
@@ -7094,7 +7138,9 @@ function WebsiteContentAdmin({ reloadPublic }) {
             </details>
           ))}
 
-          <div className="content-save-footer"><button className="gold-btn" type="submit">Save {activeGroup.title}</button></div>
+          <div className="content-save-footer">
+            <button className="gold-btn" type="submit">Save {activeGroup.title}</button>
+          </div>
         </form>
       </div>
     </section>
@@ -7924,6 +7970,29 @@ function PortalSidebar({ title, items, tab, setTab }) {
   );
 }
 function AccessGate({ title, openAuth }) { return <main className="page container gate"><ShieldCheck size={56} /><h1>{title}</h1><p>You need to login before accessing this section.</p><button className="gold-btn big" onClick={openAuth}>Login</button></main>; }
+function FooterSocialLinks({ settings = {} }) {
+  const links = [
+    ["Facebook", settings.footer_facebook_url],
+    ["Instagram", settings.footer_instagram_url],
+    ["YouTube", settings.footer_youtube_url],
+    ["TikTok", settings.footer_tiktok_url],
+    ["X", settings.footer_x_url]
+  ].filter(([, url]) => String(url || "").trim());
+
+  if (!links.length) return null;
+
+  return (
+    <div className="footer-social-links" aria-label="CIBI social media handles">
+      <strong>Follow CIBI</strong>
+      <div>
+        {links.map(([label, url]) => (
+          <a key={label} href={String(url).trim()} target="_blank" rel="noreferrer">{label}</a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Footer({ goTo, settings = {} }) {
   return (
     <footer className="footer">
@@ -7957,10 +8026,11 @@ function Footer({ goTo, settings = {} }) {
 
         <div>
           <h4>Contact</h4>
-          <p>{CIBI_ADDRESS}</p>
-          <p>{CIBI_PHONE_DISPLAY}</p>
+          <p>{getSetting(settings, "footer_address", CIBI_ADDRESS)}</p>
+          <p>{getSetting(settings, "footer_phone", CIBI_PHONE_DISPLAY)}</p>
           <p>{getSetting(settings, "footer_email", getSetting(settings, "contact_email", "info@cibionline.org"))}</p>
           <a className="footer-whatsapp-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">WhatsApp Customer Care</a>
+          <FooterSocialLinks settings={settings} />
         </div>
       </div>
 
