@@ -744,23 +744,39 @@ function BrochureDownloadButton({ settings = {}, className = "ghost-btn big", ch
   );
 }
 
-async function uploadBrochurePdf(file) {
-  const formData = new FormData();
-  formData.append("file", file);
+async function brochureFileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read the selected PDF file."));
+    reader.readAsDataURL(file);
+  });
+}
 
-  const headers = {};
+async function uploadBrochurePdf(file) {
+  if (!file) throw new Error("Please choose a PDF brochure file.");
+  const extOk = String(file.name || "").toLowerCase().endsWith(".pdf");
+  const typeOk = !file.type || String(file.type).toLowerCase() === "application/pdf";
+  if (!extOk || !typeOk) throw new Error("Only PDF brochure files are allowed.");
+  if (file.size > 8 * 1024 * 1024) throw new Error("Brochure PDF must not be more than 8MB.");
+
+  const dataUrl = await brochureFileToDataUrl(file);
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 45000);
+  const headers = { "Content-Type": "application/json" };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 30000);
 
   try {
     const response = await fetch(apiFileUrl("/api/admin/brochure/upload"), {
       method: "POST",
       headers,
       credentials: "include",
-      body: formData,
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType: file.type || "application/pdf",
+        dataUrl
+      }),
       signal: controller.signal
     });
 
@@ -775,7 +791,7 @@ async function uploadBrochurePdf(file) {
     return result;
   } catch (error) {
     if (error.name === "AbortError") {
-      throw new Error("Brochure upload timed out after 30 seconds. Please refresh and try again.");
+      throw new Error("Brochure upload timed out after 45 seconds. Please refresh and try again.");
     }
     throw error;
   } finally {
@@ -891,7 +907,6 @@ function Home({ data, goTo, openAuth }) {
       <section className="stats stats-flat">
         <div><strong>{getSetting(s, "home_stat_1_value", "1000+")}</strong><span>{getSetting(s, "home_stat_1_label", "Ministerial Graduates")}</span></div>
         <div><strong>{getSetting(s, "home_stat_2_value", "15+")}</strong><span>{getSetting(s, "home_stat_2_label", "Years of Excellence")}</span></div>
-        <div><strong>{getSetting(s, "home_stat_3_value", "6")}</strong><span>{getSetting(s, "home_stat_3_label", "Ministry Tracks")}</span></div>
         <div><strong>{getSetting(s, "home_stat_4_value", "Global")}</strong><span>{getSetting(s, "home_stat_4_label", "Reach and Impact")}</span></div>
       </section>
 
@@ -7972,19 +7987,29 @@ function PortalSidebar({ title, items, tab, setTab }) {
 function AccessGate({ title, openAuth }) { return <main className="page container gate"><ShieldCheck size={56} /><h1>{title}</h1><p>You need to login before accessing this section.</p><button className="gold-btn big" onClick={openAuth}>Login</button></main>; }
 function FooterSocialIcon({ label }) {
   const key = String(label || "").toLowerCase();
-  if (key === "facebook") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8.5h2.2V5.1c-.4-.1-1.7-.2-3.1-.2-3.1 0-5.2 1.9-5.2 5.4v3H4.6V17h3.3v7h4v-7h3.3l.5-3.7h-3.8v-2.6c0-1.1.3-2.2 2.1-2.2Z" /></svg>;
+  const iconProps = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg", "aria-hidden": "true" };
+
+  if (key.includes("facebook")) {
+    return <svg {...iconProps}><path d="M14.2 8.8H16V5.9c-.3 0-1.4-.1-2.6-.1-2.6 0-4.3 1.6-4.3 4.5v2.5H6.2V16h2.9v7h3.5v-7h2.9l.5-3.2h-3.4v-2.2c0-.9.3-1.8 1.6-1.8Z" fill="currentColor" /></svg>;
   }
-  if (key === "instagram") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9a5.5 5.5 0 0 1-5.5 5.5h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2Zm0 2A3.5 3.5 0 0 0 4 7.5v9A3.5 3.5 0 0 0 7.5 20h9a3.5 3.5 0 0 0 3.5-3.5v-9A3.5 3.5 0 0 0 16.5 4h-9ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm5.2-2.3a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z" /></svg>;
+
+  if (key.includes("instagram")) {
+    return <svg {...iconProps}><rect x="4" y="4" width="16" height="16" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="3.5" stroke="currentColor" strokeWidth="2" /><circle cx="17" cy="7" r="1.2" fill="currentColor" /></svg>;
   }
-  if (key === "youtube") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 8.2s-.2-1.6-.9-2.3c-.9-.9-1.9-.9-2.4-1C15.4 4.7 12 4.7 12 4.7h-.1s-3.4 0-6.7.2c-.5.1-1.5.1-2.4 1C2.2 6.6 2 8.2 2 8.2S1.8 10 1.8 11.8v.8c0 1.8.2 3.6.2 3.6s.2 1.6.9 2.3c.9.9 2.1.9 2.7 1 1.9.2 6.4.2 6.4.2s3.4 0 6.7-.3c.5-.1 1.5-.1 2.4-1 .7-.7.9-2.3.9-2.3s.2-1.8.2-3.6v-.8c0-1.7-.2-3.5-.2-3.5ZM10 15.2V8.8l5.8 3.2-5.8 3.2Z" /></svg>;
+
+  if (key.includes("youtube")) {
+    return <svg {...iconProps}><path d="M21 8.2s-.2-1.5-.8-2.1c-.8-.8-1.7-.8-2.1-.9C15.2 5 12 5 12 5s-3.2 0-6.1.2c-.4 0-1.3.1-2.1.9C3.2 6.7 3 8.2 3 8.2S2.8 10 2.8 11.8v1.7c0 1.8.2 3.6.2 3.6s.2 1.5.8 2.1c.8.8 1.8.8 2.3.9 1.7.2 5.9.2 5.9.2s3.2 0 6.1-.2c.4 0 1.3-.1 2.1-.9.6-.6.8-2.1.8-2.1s.2-1.8.2-3.6v-1.7c0-1.8-.2-3.6-.2-3.6Z" stroke="currentColor" strokeWidth="1.8" /><path d="m10.4 9.2 4.8 3.1-4.8 3.1V9.2Z" fill="currentColor" /></svg>;
   }
-  if (key === "tiktok") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 3c.5 3 2.2 4.8 5 5v3.5c-1.8.1-3.4-.5-4.9-1.5v6.4c0 4.1-2.7 6.6-6.5 6.6-3.4 0-6-2.4-6-5.7 0-3.5 2.7-5.9 6.5-5.9.4 0 .8 0 1.2.1v3.7c-.4-.1-.8-.2-1.2-.2-1.6 0-2.7.9-2.7 2.3 0 1.3 1 2.2 2.4 2.2 1.5 0 2.5-.8 2.5-2.8V3h3.7Z" /></svg>;
+
+  if (key.includes("whatsapp")) {
+    return <MessageCircle size={18} aria-hidden="true" />;
   }
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.4 3h3.2l-7 8 8.2 10h-6.4l-5-6.1L4.7 21H1.5L9 12.5 1.2 3h6.6l4.5 5.5L17.4 3Zm-1.1 16h1.8L6.8 4.9H4.9L16.3 19Z" /></svg>;
+
+  if (key.includes("tiktok")) {
+    return <svg {...iconProps}><path d="M14.5 4c.4 2.7 1.9 4.2 4.5 4.4v3.1c-1.7.1-3.2-.5-4.4-1.5v5.7c0 3.1-2 5.3-5.1 5.3-2.8 0-5-2.1-5-4.8 0-3 2.3-5.2 5.5-5.1.3 0 .6 0 .9.1v3.3c-.3-.1-.6-.2-1-.2-1.2 0-2 .8-2 1.8s.8 1.8 1.8 1.8c1.2 0 1.8-.7 1.8-2.2V4h3Z" fill="currentColor" /></svg>;
+  }
+
+  return <svg {...iconProps}><path d="M4 4l16 16M20 4 4 20" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" /></svg>;
 }
 
 function FooterSocialLinks({ settings = {} }) {
@@ -7993,20 +8018,19 @@ function FooterSocialLinks({ settings = {} }) {
     ["Instagram", settings.footer_instagram_url],
     ["YouTube", settings.footer_youtube_url],
     ["TikTok", settings.footer_tiktok_url],
-    ["X", settings.footer_x_url]
+    ["X", settings.footer_x_url],
+    ["WhatsApp", CIBI_WHATSAPP_LINK]
   ].filter(([, url]) => String(url || "").trim());
 
   if (!links.length) return null;
 
   return (
     <div className="footer-social-links" aria-label="CIBI social media handles">
-      <div>
-        {links.map(([label, url]) => (
-          <a key={label} href={String(url).trim()} target="_blank" rel="noreferrer" aria-label={label} title={label}>
-            <FooterSocialIcon label={label} />
-          </a>
-        ))}
-      </div>
+      {links.map(([label, url]) => (
+        <a key={label} href={String(url).trim()} target="_blank" rel="noreferrer" aria-label={label} title={label}>
+          <FooterSocialIcon label={label} />
+        </a>
+      ))}
     </div>
   );
 }
@@ -8047,7 +8071,6 @@ function Footer({ goTo, settings = {} }) {
           <p>{getSetting(settings, "footer_address", CIBI_ADDRESS)}</p>
           <p>{getSetting(settings, "footer_phone", CIBI_PHONE_DISPLAY)}</p>
           <p>{getSetting(settings, "footer_email", getSetting(settings, "contact_email", "info@cibionline.org"))}</p>
-          <a className="footer-whatsapp-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">WhatsApp Customer Care</a>
           <FooterSocialLinks settings={settings} />
         </div>
       </div>

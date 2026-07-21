@@ -10447,12 +10447,9 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
 }
 
 .footer-social-links {
-  margin-top: 18px;
+  margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.footer-social-links div {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -10464,22 +10461,21 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(255, 255, 255, 0.74);
-}
-
-.footer-social-links a svg {
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  transition: .25s ease;
 }
 
 .footer-social-links a:hover {
   color: var(--black);
   background: var(--gold);
   border-color: var(--gold);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+}
+
+.footer-social-links svg {
+  display: block;
 }
 
 @media (max-width: 980px) {
@@ -10496,5 +10492,33 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
 @media (max-width: 620px) {
   .content-quick-actions .ghost-btn {
     width: 100%;
+  }
+}
+
+
+/* Final footer/social and homepage stats cleanup */
+.footer-social-links {
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.footer-social-links a {
+  flex: 0 0 42px !important;
+}
+
+.footer-whatsapp-link {
+  display: none !important;
+}
+
+.stats.stats-flat,
+.stats {
+  grid-template-columns: repeat(3, 1fr) !important;
+}
+
+@media (max-width: 900px) {
+  .stats.stats-flat,
+  .stats {
+    grid-template-columns: 1fr !important;
   }
 }

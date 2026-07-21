@@ -1695,24 +1695,35 @@ app.post("/api/uploads/assignment-file", requireAuth, requireActiveStudent, asyn
 
 
 
-app.post("/api/admin/brochure/upload", requireAuth, requireAdmin, documentUpload.single("file"), async (req, res) => {
+app.post("/api/admin/brochure/upload", requireAuth, requireAdmin, async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: "Brochure PDF file is required." });
+    const fileNameInput = String(req.body?.fileName || "CIBI-Brochure.pdf");
+    const contentType = String(req.body?.contentType || "application/pdf").toLowerCase();
+    const dataUrl = String(req.body?.dataUrl || "");
 
-    const ext = path.extname(String(req.file.originalname || "")).toLowerCase();
-    if (ext !== ".pdf" || (req.file.mimetype && req.file.mimetype !== "application/pdf")) {
+    if (!dataUrl) return res.status(400).json({ message: "Brochure PDF file is required." });
+
+    const ext = path.extname(fileNameInput).toLowerCase();
+    if (ext !== ".pdf" || (contentType && contentType !== "application/pdf")) {
       return res.status(400).json({ message: "Only PDF brochure files are allowed." });
+    }
+
+    const base64 = dataUrl.includes(",") ? dataUrl.split(",").pop() : dataUrl;
+    const buffer = Buffer.from(base64 || "", "base64");
+    if (!buffer.length) return res.status(400).json({ message: "The selected brochure file is empty." });
+    if (buffer.length > 8 * 1024 * 1024) {
+      return res.status(400).json({ message: "Brochure PDF must not be more than 8MB." });
     }
 
     await fs.mkdir(BROCHURE_DIR, { recursive: true });
 
-    const safeOriginalName = String(req.file.originalname || "CIBI-Brochure.pdf")
+    const safeOriginalName = fileNameInput
       .replace(/[\\/\"]/g, "")
       .slice(0, 180) || "CIBI-Brochure.pdf";
-    const fileName = makeStorageName(safeOriginalName || "cibi-brochure.pdf");
+    const fileName = `${Date.now()}-${crypto.randomUUID()}.pdf`;
     const savedPath = path.join(BROCHURE_DIR, fileName);
 
-    await fs.writeFile(savedPath, req.file.buffer);
+    await fs.writeFile(savedPath, buffer);
 
     const relativePath = `uploads/brochures/${fileName}`;
     const publicUrl = `${req.protocol}://${req.get("host")}/uploads/brochures/${fileName}`;
