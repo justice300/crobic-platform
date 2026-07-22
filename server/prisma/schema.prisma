@@ -725,6 +725,19 @@ model Notification {
   @@index([readAt])
 }
 
+model BrochureFile {
+  id           Int      @id @default(autoincrement())
+  originalName String
+  mimeType     String   @default("application/pdf")
+  fileSize     Int      @default(0)
+  dataBase64   String
+  uploadedById Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
 model Setting {
   id    Int    @id @default(autoincrement())
   key   String @unique

@@ -1832,42 +1832,52 @@ app.post("/api/admin/brochure/upload", requireAuth, requireAdmin, async (req, re
       return res.status(400).json({ message: "Brochure PDF must not be more than 8MB." });
     }
 
-    await fs.mkdir(BROCHURE_DIR, { recursive: true });
-
     const safeOriginalName = fileNameInput
       .replace(/[\\/\"]/g, "")
       .slice(0, 180) || "CIBI-Brochure.pdf";
-    const fileName = `${Date.now()}-${crypto.randomUUID()}.pdf`;
-    const savedPath = path.join(BROCHURE_DIR, fileName);
+    const publicDownloadUrl = `${req.protocol}://${req.get("host")}/api/public/brochure/download`;
 
-    await fs.writeFile(savedPath, buffer);
+    const savedBrochure = await prisma.$transaction(async (tx) => {
+      await tx.brochureFile.deleteMany({});
+      const brochure = await tx.brochureFile.create({
+        data: {
+          originalName: safeOriginalName,
+          mimeType: "application/pdf",
+          fileSize: buffer.length,
+          dataBase64: buffer.toString("base64"),
+          uploadedById: req.user?.id || null
+        }
+      });
 
-    const relativePath = `uploads/brochures/${fileName}`;
-    const publicUrl = `${req.protocol}://${req.get("host")}/uploads/brochures/${fileName}`;
-    const rows = [
-      ["brochure_pdf_url", publicUrl],
-      ["brochure_pdf_path", relativePath],
-      ["brochure_original_name", safeOriginalName],
-      ["brochure_uploaded_at", new Date().toISOString()]
-    ];
+      const rows = [
+        ["brochure_pdf_url", publicDownloadUrl],
+        ["brochure_pdf_path", "database"],
+        ["brochure_storage", "database"],
+        ["brochure_original_name", safeOriginalName],
+        ["brochure_uploaded_at", new Date().toISOString()]
+      ];
 
-    await prisma.$transaction(rows.map(([key, value]) => (
-      prisma.setting.upsert({
-        where: { key },
-        update: { value },
-        create: { key, value }
-      })
-    )));
+      for (const [key, value] of rows) {
+        await tx.setting.upsert({
+          where: { key },
+          update: { value },
+          create: { key, value }
+        });
+      }
+
+      return brochure;
+    });
 
     await logAdminActivity(req, {
       action: "UPLOADED_BROCHURE",
-      entityType: "Setting",
-      details: { fileName: safeOriginalName, brochureUrl: publicUrl }
+      entityType: "BrochureFile",
+      entityId: savedBrochure.id,
+      details: { fileName: safeOriginalName, brochureUrl: publicDownloadUrl, storage: "database" }
     });
 
     res.status(201).json({
       message: "Brochure uploaded successfully.",
-      brochureUrl: publicUrl,
+      brochureUrl: publicDownloadUrl,
       downloadUrl: "/api/public/brochure/download",
       originalName: safeOriginalName
     });
@@ -1878,6 +1888,23 @@ app.post("/api/admin/brochure/upload", requireAuth, requireAdmin, async (req, re
 
 app.get("/api/public/brochure/download", async (req, res) => {
   try {
+    const brochure = await prisma.brochureFile.findFirst({ orderBy: { updatedAt: "desc" } });
+
+    if (brochure?.dataBase64) {
+      const fileName = String(brochure.originalName || "CIBI-Brochure.pdf")
+        .replace(/[\\/\"]/g, "")
+        .slice(0, 160) || "CIBI-Brochure.pdf";
+      const buffer = Buffer.from(String(brochure.dataBase64 || ""), "base64");
+
+      if (!buffer.length) return res.status(404).send("CIBI brochure file is empty. Please upload it again.");
+
+      res.set("Cache-Control", "no-store");
+      res.set("Content-Type", "application/pdf");
+      res.set("Content-Length", String(buffer.length));
+      res.set("Content-Disposition", `attachment; filename="${fileName}"`);
+      return res.send(buffer);
+    }
+
     const rows = await prisma.setting.findMany({
       where: { key: { in: ["brochure_pdf_url", "brochure_pdf_path", "brochure_original_name"] } }
     });
@@ -1902,9 +1929,10 @@ app.get("/api/public/brochure/download", async (req, res) => {
       });
     }
 
-    if (brochureUrl) return res.redirect(brochureUrl);
+    if (brochureUrl && !brochureUrl.includes("/api/public/brochure/download")) return res.redirect(brochureUrl);
     return res.status(404).send("Brochure file not found. Please upload it again.");
   } catch (error) {
+    console.error("Brochure download failed:", error.message);
     res.status(500).send("Could not download brochure.");
   }
 });

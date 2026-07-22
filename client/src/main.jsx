@@ -6977,7 +6977,7 @@ function BrochureAdminPanel({ settings = {}, setSettings, reloadPublic }) {
       <div>
         <span>Brochure PDF</span>
         <h3>Upload / Replace Public Brochure</h3>
-        <p>Upload the official CIBI brochure as a PDF. The public website buttons will download this file automatically.</p>
+        <p>Upload the official CIBI brochure as a PDF. It is saved safely in the database, so it will still download after backend redeploys.</p>
         {brochureUrl ? (
           <small>Current file: {originalName}{uploadedAt ? ` · Updated ${formatDateTime(uploadedAt)}` : ""}</small>
         ) : (
