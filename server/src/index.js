@@ -157,19 +157,62 @@ function emailTemplate({ heading, body, ctaText, ctaUrl, settings }) {
   </div>`;
 }
 
+
+async function sendResendEmail({ to, subject, heading, body, ctaText, ctaUrl, settings }) {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  if (!apiKey) return { skipped: true, reason: "RESEND_API_KEY is missing" };
+
+  const fromName = String(process.env.EMAIL_FROM_NAME || settings.email_from_name || "CIBI").replace(/"/g, "").trim() || "CIBI";
+  const fromAddress = String(process.env.EMAIL_FROM_ADDRESS || settings.email_from_address || "noreply@cibionline.org").trim();
+  const replyTo = String(process.env.EMAIL_REPLY_TO || settings.email_reply_to || "support@cibionline.org").trim();
+  const baseUrl = String(settings.email_base_url || CLIENT_URL).replace(/\/$/, "");
+  const finalCtaUrl = ctaUrl ? (String(ctaUrl).startsWith("http") ? ctaUrl : `${baseUrl}${ctaUrl.startsWith("/") ? "" : "/"}${ctaUrl}`) : "";
+  const html = emailTemplate({ heading: heading || subject, body, ctaText, ctaUrl: finalCtaUrl, settings });
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: `${fromName} <${fromAddress}>`,
+      to,
+      reply_to: replyTo,
+      subject,
+      text: `${heading || subject}\n\n${body || ""}\n\n${finalCtaUrl || ""}`,
+      html
+    })
+  });
+
+  const resultText = await response.text();
+  let result = {};
+  try { result = resultText ? JSON.parse(resultText) : {}; } catch { result = { message: resultText }; }
+
+  if (!response.ok) {
+    const message = result?.message || result?.error || `Resend returned ${response.status}`;
+    const error = new Error(message);
+    error.statusCode = response.status;
+    throw error;
+  }
+
+  return result;
+}
+
 async function sendEmailNotification({ to, subject, heading, body, ctaText, ctaUrl }) {
   const settings = await getEmailSettings();
   const recipients = Array.isArray(to) ? to.filter(Boolean) : splitEmailList(to);
   if (!recipients.length) return { skipped: true, reason: "No recipient" };
 
   if (process.env.RESEND_API_KEY) {
-    return sendTransactionalEmail({
+    return sendResendEmail({
       to: recipients,
       subject,
-      title: heading || subject,
-      text: body,
-      buttonText: ctaText,
-      buttonUrl: ctaUrl ? (String(ctaUrl).startsWith("http") ? ctaUrl : `${CLIENT_URL.replace(/\/$/, "")}${ctaUrl.startsWith("/") ? "" : "/"}${ctaUrl}`) : undefined
+      heading: heading || subject,
+      body,
+      ctaText,
+      ctaUrl,
+      settings
     });
   }
 
@@ -1262,6 +1305,80 @@ app.post(
   }
 });
 
+
+app.post("/api/auth/forgot-password", otpLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: "Email address is required." });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    const safeMessage = "If that email exists on CIBI, a password reset link has been sent.";
+    if (!user) return res.json({ message: safeMessage });
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordResetTokenHash: tokenHash, passwordResetExpiresAt: expiresAt }
+    });
+
+    const resetUrl = `${CLIENT_URL.replace(/\/$/, "")}/reset-password?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(token)}`;
+    await sendEmailNotification({
+      to: user.email,
+      subject: "Reset your CIBI password",
+      heading: "Reset Your Password",
+      body: `Dear ${user.name},\n\nA password reset was requested for your CIBI portal account. Click the button below to set a new password. This link expires in 1 hour.\n\nIf you did not request this, you can ignore this email.`,
+      ctaText: "Reset Password",
+      ctaUrl: resetUrl
+    });
+
+    res.json({ message: safeMessage });
+  } catch (error) {
+    res.status(500).json({ message: `Could not send reset email: ${error.message}` });
+  }
+});
+
+app.post("/api/auth/reset-password", otpLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const token = String(req.body?.token || "").trim();
+    const password = String(req.body?.password || "");
+
+    if (!email || !token || !password) return res.status(400).json({ message: "Email, reset token and new password are required." });
+    if (password.length < 8) return res.status(400).json({ message: "Password must be at least 8 characters." });
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await prisma.user.findFirst({
+      where: {
+        email,
+        passwordResetTokenHash: tokenHash,
+        passwordResetExpiresAt: { gt: new Date() }
+      }
+    });
+
+    if (!user) return res.status(400).json({ message: "This reset link is invalid or expired. Please request a new one." });
+
+    const hashed = await bcrypt.hash(password, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashed,
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        refreshTokenHash: null
+      }
+    });
+
+    res.json({ message: "Password reset successful. You can now login with your new password." });
+  } catch (error) {
+    res.status(500).json({ message: `Could not reset password: ${error.message}` });
+  }
+});
+
 app.post("/api/auth/refresh", otpLimiter, refreshAccessToken);
 
 app.post("/api/auth/logout", requireAuth, async (req, res) => {
@@ -1312,13 +1429,13 @@ app.post("/api/admin/email/test", requireAuth, requireAdmin, async (req, res) =>
       to,
       subject: "CIBI email notification test",
       heading: "Email Notifications Are Working",
-      body: "This is a test email from your CIBI platform. If you received this, your SMTP settings are correct.",
+      body: "This is a test email from your CIBI platform. If you received this, noreply email automation is working.",
       ctaText: "Open CIBI",
       ctaUrl: "/admin"
     });
     res.json({ message: result?.skipped ? `Email not sent: ${result.reason}` : "Test email sent successfully.", result: result?.skipped ? result : { accepted: result.accepted, rejected: result.rejected } });
   } catch (error) {
-    res.status(500).json({ message: "Could not send test email", error: error.message });
+    res.status(500).json({ message: `Could not send test email: ${error.message}`, error: error.message });
   }
 });
 

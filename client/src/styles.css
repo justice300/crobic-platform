@@ -10698,3 +10698,35 @@ body .auth-backdrop .auth-modal-premium .auth-form-panel .premium-auth-form .pho
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Password reset and safer portal polish */
+.auth-forgot-link {
+  border: 0;
+  background: transparent;
+  color: var(--gold);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  font-size: 10px;
+  padding: 10px 0 4px;
+  text-align: center;
+}
+.auth-forgot-link:hover { color: var(--black); }
+.reset-password-page { padding-top: 150px; }
+.reset-password-card {
+  max-width: 620px;
+  background: white;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 44px;
+}
+.reset-password-card h1 {
+  font-size: clamp(36px, 5vw, 64px);
+  margin-bottom: 14px;
+}
+.forgot-password-modal .auth-brand-panel h2 { color: white; }
+@media (max-width: 720px) {
+  .reset-password-card { padding: 28px; }
+  .reset-password-page { padding-top: 120px; }
+}

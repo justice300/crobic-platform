@@ -449,6 +449,7 @@ function App() {
       {page === "contact" && <Contact settings={data.settings} />}
       {page === "payment-callback" && <PaymentCallback user={user} goTo={goTo} />}
       {page === "certificate-verification" && <CertificateVerification />}
+      {page === "reset-password" && <ResetPasswordPage goTo={goTo} openAuth={openAuth} />}
 
       {page === "student" && (
         user ? <StudentPortal user={user} setUser={setUser} goTo={goTo} /> : <AccessGate title="Student Portal" openAuth={() => openAuth("login")} />
@@ -635,8 +636,7 @@ function Navbar({ page, goTo, user, logout, openAuth, mobileOpen, setMobileOpen 
       {mobileOpen && (
         <div className="mobile-nav">
           {links.map(([key, label]) => <button key={key} onClick={() => goTo(key)}>{label}</button>)}
-          <button onClick={() => goTo("student")}>Student Portal</button>
-          <button onClick={() => goTo("admin")}>Admin Dashboard</button>
+          {user ? <button onClick={() => goTo(isStaffUser(user) ? "admin" : "student")}>Portal</button> : <button onClick={() => openAuth("login")}>Student Login</button>}
         </div>
       )}
     </header>
@@ -7632,7 +7632,129 @@ function findCountry(value) {
   );
 }
 
+
+function ResetPasswordPage({ goTo, openAuth }) {
+  const [form, setForm] = useState({ email: "", token: "", password: "", confirmPassword: "" });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search || "");
+    setForm((current) => ({
+      ...current,
+      email: params.get("email") || "",
+      token: params.get("token") || ""
+    }));
+  }, []);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.email || !form.token) {
+      showToast("This reset link is incomplete. Request a new password reset link.", "error");
+      return;
+    }
+    if (form.password.length < 8) {
+      showToast("Password must be at least 8 characters.", "error");
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      showToast("Passwords do not match.", "error");
+      return;
+    }
+    try {
+      setSaving(true);
+      const result = await api("/auth/reset-password", { method: "POST", body: { email: form.email, token: form.token, password: form.password } });
+      showToast(result.message || "Password reset successful. Login with your new password.", "success");
+      goTo("home");
+      openAuth("login");
+    } catch (error) {
+      showToast(error.message || "Could not reset password.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main className="page reset-password-page">
+      <div className="container narrow-container reset-password-card">
+        <Kicker text="Account Recovery" />
+        <h1>Reset Password</h1>
+        <p>Enter a new password for your CIBI portal account.</p>
+        <form className="auth-form premium-auth-form" onSubmit={submit}>
+          <label className="auth-field">
+            <span>Email address</span>
+            <input type="email" value={form.email} onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))} required />
+          </label>
+          <label className="auth-field auth-password-field">
+            <span>New password</span>
+            <input type="password" value={form.password} onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))} required minLength={8} />
+          </label>
+          <label className="auth-field auth-password-field">
+            <span>Confirm new password</span>
+            <input type="password" value={form.confirmPassword} onChange={(e) => setForm((current) => ({ ...current, confirmPassword: e.target.value }))} required minLength={8} />
+          </label>
+          <button className="gold-btn full" type="submit" disabled={saving}>{saving ? "Saving..." : "Reset Password"}</button>
+        </form>
+      </div>
+    </main>
+  );
+}
+
+function ForgotPasswordModal({ setMode, close }) {
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!email) {
+      showToast("Enter your account email address first.", "error");
+      return;
+    }
+    try {
+      setSending(true);
+      const result = await api("/auth/forgot-password", { method: "POST", body: { email } });
+      showToast(result.message || "Password reset email sent. Check your inbox or spam folder.", "success");
+      setMode("login");
+    } catch (error) {
+      showToast(error.message || "Could not send password reset email.", "error");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop auth-backdrop">
+      <div className="auth-modal auth-modal-premium auth-modal-login forgot-password-modal">
+        <button type="button" className="close-btn auth-close-btn" onClick={close} aria-label="Close"><X /></button>
+        <div className="auth-modal-grid">
+          <aside className="auth-brand-panel">
+            <img src={LOGO} alt="CIBI Logo" />
+            <p className="eyebrow framed">Account Recovery</p>
+            <h2>Forgot Password?</h2>
+            <p>Enter your portal email. The website will send a secure reset link automatically through noreply.</p>
+          </aside>
+          <section className="auth-form-panel">
+            <div className="auth-heading-block">
+              <span>Password Help</span>
+              <h2>Reset your password</h2>
+              <p>Use the same email address you used for registration or admin login.</p>
+            </div>
+            <form className="auth-form premium-auth-form" onSubmit={submit}>
+              <label className="auth-field">
+                <span>Email address</span>
+                <input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </label>
+              <button className="gold-btn full auth-submit-btn" type="submit" disabled={sending}>{sending ? "Sending..." : "Send Reset Link"}</button>
+              <button className="dark-btn full" type="button" onClick={() => setMode("login")}>Back to Login</button>
+            </form>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programmes = [], settings = {} }) {
+  if (mode === "forgot") return <ForgotPasswordModal setMode={setMode} close={close} />;
   const availableCourses = registrationProgrammeList(programmes, courses);
   const learningStreams = settingPoints(settings, "admission_learning_streams", ["Regular Classes", "Executive Classes"]);
   const [form, setForm] = useState({
@@ -7893,6 +8015,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
               )}
 
               <button className="gold-btn full auth-submit-btn" type="submit" disabled={isRegister && !availableCourses.length}>{isRegister ? "Create Application" : "Login Securely"}</button>
+              {!isRegister ? <button className="auth-forgot-link" type="button" onClick={() => setMode("forgot")}>Forgot password?</button> : null}
               {isRegister ? <button className="dark-btn full" type="button" onClick={() => { close(); goTo("admissions"); scrollToAdmissionPayment(); }}>Use Full Admission Form</button> : null}
             </form>
           </section>

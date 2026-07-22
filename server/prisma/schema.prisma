@@ -63,6 +63,8 @@ model User {
   failedLoginAttempts Int      @default(0)
   lockedUntil         DateTime?
   refreshTokenHash    String?
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
 
   enrollments             Enrollment[]
   lessonProgresses        LessonProgress[]
@@ -427,19 +429,14 @@ model Slide {
 }
 
 model Gallery {
-  id           Int      @id @default(autoincrement())
-  title        String
-  category     String?
-  imageUrl     String
-  description  String?
-  featured     Boolean  @default(false)
-  galleryOrder Int      @default(100)
-  published    Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([featured])
-  @@index([galleryOrder])
+  id          Int      @id @default(autoincrement())
+  title       String
+  category    String?
+  imageUrl    String
+  description String?
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Announcement {
