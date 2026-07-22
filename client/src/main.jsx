@@ -695,8 +695,6 @@ function SiteRegistrationCTA({ page, goTo, openAuth, settings = {} }) {
         <div className="site-registration-actions">
           <button className="gold-btn big" type="button" onClick={() => openAuth("register")}>Enroll Now</button>
           <button className="white-btn big" type="button" onClick={() => goTo("admissions")}>Admission Details</button>
-          <BrochureDownloadButton settings={settings} className="ghost-btn big">Download Brochure</BrochureDownloadButton>
-          <a className="ghost-btn big" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a>
         </div>
       </div>
     </section>
@@ -8185,8 +8183,7 @@ function FooterSocialLinks({ settings = {} }) {
     ["Instagram", settings.footer_instagram_url],
     ["YouTube", settings.footer_youtube_url],
     ["TikTok", settings.footer_tiktok_url],
-    ["X", settings.footer_x_url],
-    ["WhatsApp", CIBI_WHATSAPP_LINK]
+    ["X", settings.footer_x_url]
   ].filter(([, url]) => String(url || "").trim());
 
   if (!links.length) return null;
