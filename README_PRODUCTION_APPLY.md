@@ -8,7 +8,9 @@ Set these required values on Render backend:
 
 ```env
 NODE_ENV=production
-CLIENT_URL=https://crobic.org
+CLIENT_URL=https://cibionline.org
+# Optional, but recommended when the API has any legacy frontend configuration.
+PASSWORD_RESET_URL_BASE=https://cibionline.org
 PUBLIC_API_URL=https://api.crobic.org
 DATABASE_URL=<Render PostgreSQL internal connection string>
 JWT_SECRET=<long random secret>
@@ -16,14 +18,17 @@ JWT_REFRESH_SECRET=<long random secret>
 
 DAILY_API_KEY=
 RESEND_API_KEY=
-RESEND_FROM_EMAIL=CIBI <no-reply@crobic.org>
-RESEND_REPLY_TO=
+RESEND_FROM_EMAIL=CIBI <noreply@cibionline.org>
+EMAIL_FROM_ADDRESS=noreply@cibionline.org
+RESEND_REPLY_TO=support@cibionline.org
 
 ONESIGNAL_APP_ID=
 ONESIGNAL_API_KEY=
 
 SENTRY_DSN=
 ```
+
+`cibionline.org` must be verified in Resend so it can send from `noreply@cibionline.org`. No manual database step is required: the Render build runs the included Prisma migration automatically.
 
 Optional only if you still want Bunny for PDFs/documents:
 

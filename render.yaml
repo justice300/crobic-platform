@@ -17,6 +17,8 @@ services:
           property: connectionString
       - key: CLIENT_URL
         sync: false
+      - key: PASSWORD_RESET_URL_BASE
+        value: https://cibionline.org
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -37,6 +39,12 @@ services:
         sync: false
       - key: RESEND_FROM_EMAIL
         sync: false
+      - key: EMAIL_FROM_NAME
+        value: CIBI
+      - key: EMAIL_FROM_ADDRESS
+        value: noreply@cibionline.org
+      - key: EMAIL_REPLY_TO
+        value: support@cibionline.org
       - key: ONESIGNAL_APP_ID
         sync: false
       - key: ONESIGNAL_API_KEY

@@ -38,6 +38,8 @@ import { initSentry, sentryErrorHandler } from "./sentry.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+// Keep reset links on the public CIBI site even if an older API deployment still has a legacy CLIENT_URL.
+const PASSWORD_RESET_URL_BASE = (process.env.PASSWORD_RESET_URL_BASE || "https://cibionline.org").replace(/\/$/, "");
 const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 const PAYMENT_PROOF_DIR = path.join(UPLOAD_ROOT, "payment-proofs");
 const CERTIFICATE_ASSET_DIR = path.join(UPLOAD_ROOT, "certificate-assets");
@@ -164,7 +166,7 @@ async function sendResendEmail({ to, subject, heading, body, ctaText, ctaUrl, se
 
   const fromName = String(process.env.EMAIL_FROM_NAME || settings.email_from_name || "CIBI").replace(/"/g, "").trim() || "CIBI";
   const fromAddress = String(process.env.EMAIL_FROM_ADDRESS || settings.email_from_address || "noreply@cibionline.org").trim();
-  const replyTo = String(process.env.EMAIL_REPLY_TO || settings.email_reply_to || "support@cibionline.org").trim();
+  const replyTo = String(process.env.EMAIL_REPLY_TO || process.env.RESEND_REPLY_TO || settings.email_reply_to || "support@cibionline.org").trim();
   const baseUrl = String(settings.email_base_url || CLIENT_URL).replace(/\/$/, "");
   const finalCtaUrl = ctaUrl ? (String(ctaUrl).startsWith("http") ? ctaUrl : `${baseUrl}${ctaUrl.startsWith("/") ? "" : "/"}${ctaUrl}`) : "";
   const html = emailTemplate({ heading: heading || subject, body, ctaText, ctaUrl: finalCtaUrl, settings });
@@ -1324,19 +1326,39 @@ app.post("/api/auth/forgot-password", otpLimiter, async (req, res) => {
       data: { passwordResetTokenHash: tokenHash, passwordResetExpiresAt: expiresAt }
     });
 
-    const resetUrl = `${CLIENT_URL.replace(/\/$/, "")}/reset-password?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(token)}`;
-    await sendEmailNotification({
-      to: user.email,
-      subject: "Reset your CIBI password",
-      heading: "Reset Your Password",
-      body: `Dear ${user.name},\n\nA password reset was requested for your CIBI portal account. Click the button below to set a new password. This link expires in 1 hour.\n\nIf you did not request this, you can ignore this email.`,
-      ctaText: "Reset Password",
-      ctaUrl: resetUrl
-    });
+    const resetUrl = `${PASSWORD_RESET_URL_BASE}/reset-password?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(token)}`;
+    try {
+      const delivery = await sendEmailNotification({
+        to: user.email,
+        subject: "Reset your CIBI password",
+        heading: "Reset Your Password",
+        body: `Dear ${user.name},\n\nA password reset was requested for your CIBI portal account. Click the button below to set a new password. This link expires in 1 hour.\n\nIf you did not request this, you can ignore this email.`,
+        ctaText: "Reset Password",
+        ctaUrl: resetUrl
+      });
+
+      if (delivery?.skipped) {
+        const error = new Error("Password-reset email delivery is not configured.");
+        error.statusCode = 503;
+        throw error;
+      }
+    } catch (error) {
+      // Do not leave an unusable token active when the email provider rejects the message.
+      await prisma.user.updateMany({
+        where: { id: user.id, passwordResetTokenHash: tokenHash },
+        data: { passwordResetTokenHash: null, passwordResetExpiresAt: null }
+      });
+      throw error;
+    }
 
     res.json({ message: safeMessage });
   } catch (error) {
-    res.status(500).json({ message: `Could not send reset email: ${error.message}` });
+    console.error("Password reset email failed:", error.message);
+    res.status(error.statusCode || 500).json({
+      message: error.statusCode === 503
+        ? "Password reset is temporarily unavailable. Please contact support."
+        : "Could not send reset email. Please try again shortly."
+    });
   }
 });
 

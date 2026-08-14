@@ -7676,12 +7676,8 @@ function ResetPasswordPage({ goTo, openAuth }) {
       <div className="container narrow-container reset-password-card">
         <Kicker text="Account Recovery" />
         <h1>Reset Password</h1>
-        <p>Enter a new password for your CIBI portal account.</p>
+        <p>Choose a new password for <strong>{form.email || "your CIBI portal account"}</strong>.</p>
         <form className="auth-form premium-auth-form" onSubmit={submit}>
-          <label className="auth-field">
-            <span>Email address</span>
-            <input type="email" value={form.email} onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))} required />
-          </label>
           <label className="auth-field auth-password-field">
             <span>New password</span>
             <input type="password" value={form.password} onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))} required minLength={8} />
@@ -7728,7 +7724,7 @@ function ForgotPasswordModal({ setMode, close }) {
             <img src={LOGO} alt="CIBI Logo" />
             <p className="eyebrow framed">Account Recovery</p>
             <h2>Forgot Password?</h2>
-            <p>Enter your portal email. The website will send a secure reset link automatically through noreply.</p>
+            <p>Enter your portal email. We will send a secure reset link automatically from noreply@cibionline.org.</p>
           </aside>
           <section className="auth-form-panel">
             <div className="auth-heading-block">
