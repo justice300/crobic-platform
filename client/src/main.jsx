@@ -8413,7 +8413,6 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
 
               <button className="gold-btn full auth-submit-btn" type="submit" disabled={isRegister && !availableCourses.length}>{isRegister ? "Create Application" : isLecturerLogin ? "Login as Lecturer" : "Login Securely"}</button>
               {!isRegister && !isLecturerLogin ? <button className="auth-forgot-link" type="button" onClick={() => setMode("forgot")}>Forgot password?</button> : null}
-              {!isRegister && !isLecturerLogin ? <button className="auth-forgot-link" type="button" onClick={() => setMode("lecturer-login")}>Lecturer login</button> : null}
               {isRegister ? <button className="dark-btn full" type="button" onClick={() => { close(); goTo("admissions"); scrollToAdmissionPayment(); }}>Use Full Admission Form</button> : null}
             </form>
           </section>
