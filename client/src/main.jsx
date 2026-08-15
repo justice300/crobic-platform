@@ -8047,20 +8047,56 @@ function findCountry(value) {
 function ResetPasswordPage({ goTo, openAuth }) {
   const [form, setForm] = useState({ email: "", token: "", password: "", confirmPassword: "" });
   const [saving, setSaving] = useState(false);
+  const [checkingLink, setCheckingLink] = useState(true);
+  const [linkError, setLinkError] = useState("");
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search || "");
+    const nextEmail = params.get("email") || "";
+    const nextToken = params.get("token") || "";
+
     setForm((current) => ({
       ...current,
-      email: params.get("email") || "",
-      token: params.get("token") || ""
+      email: nextEmail,
+      token: nextToken
     }));
+
+    let cancelled = false;
+
+    async function verifyResetLink() {
+      if (!nextEmail || !nextToken) {
+        if (!cancelled) {
+          setLinkError("This reset link is incomplete. Please request a new password reset link.");
+          setCheckingLink(false);
+        }
+        return;
+      }
+
+      try {
+        await api(`/auth/reset-password/verify?email=${encodeURIComponent(nextEmail)}&token=${encodeURIComponent(nextToken)}`);
+        if (!cancelled) setLinkError("");
+      } catch (error) {
+        if (!cancelled) setLinkError(error.message || "This reset link is invalid or expired. Please request a new one.");
+      } finally {
+        if (!cancelled) setCheckingLink(false);
+      }
+    }
+
+    verifyResetLink();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function submit(e) {
     e.preventDefault();
+    if (checkingLink || linkError) {
+      showToast(linkError || "Please wait while we check this reset link.", "error");
+      return;
+    }
     if (!form.email || !form.token) {
       showToast("This reset link is incomplete. Request a new password reset link.", "error");
       return;
@@ -8077,10 +8113,13 @@ function ResetPasswordPage({ goTo, openAuth }) {
       setSaving(true);
       const result = await api("/auth/reset-password", { method: "POST", body: { email: form.email, token: form.token, password: form.password } });
       showToast(result.message || "Password reset successful. Login with your new password.", "success");
+      setLinkError("This reset link has already been used. Please request a new one if you need to reset your password again.");
       goTo("home");
       openAuth("login");
     } catch (error) {
-      showToast(error.message || "Could not reset password.", "error");
+      const message = error.message || "Could not reset password.";
+      setLinkError(message);
+      showToast(message, "error");
     } finally {
       setSaving(false);
     }
@@ -8092,31 +8131,52 @@ function ResetPasswordPage({ goTo, openAuth }) {
         <Kicker text="Account Recovery" />
         <h1>Reset Password</h1>
         <p>Choose a new password for <strong>{form.email || "your CIBI portal account"}</strong>.</p>
-        <form className="auth-form premium-auth-form" onSubmit={submit}>
-          <label className="auth-field auth-password-field">
-            <span>New password</span>
-            <div className="password-input-wrap">
-              <input type={showResetPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))} required minLength={8} />
-              <button type="button" onClick={() => setShowResetPassword((value) => !value)} aria-label={showResetPassword ? "Hide password" : "Show password"} title={showResetPassword ? "Hide password" : "Show password"}>
-                {showResetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </label>
-          <label className="auth-field auth-password-field">
-            <span>Confirm new password</span>
-            <div className="password-input-wrap">
-              <input type={showResetConfirmPassword ? "text" : "password"} value={form.confirmPassword} onChange={(e) => setForm((current) => ({ ...current, confirmPassword: e.target.value }))} required minLength={8} />
-              <button type="button" onClick={() => setShowResetConfirmPassword((value) => !value)} aria-label={showResetConfirmPassword ? "Hide confirm password" : "Show confirm password"} title={showResetConfirmPassword ? "Hide password" : "Show password"}>
-                {showResetConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </label>
-          <button className="gold-btn full" type="submit" disabled={saving}>{saving ? "Saving..." : "Reset Password"}</button>
-        </form>
+
+        {checkingLink && (
+          <div className="empty-state">
+            <strong>Checking reset link...</strong>
+            <p>Please wait while CIBI confirms this password reset link is still valid.</p>
+          </div>
+        )}
+
+        {!checkingLink && linkError && (
+          <div className="empty-state">
+            <strong>Reset link unavailable</strong>
+            <p>{linkError}</p>
+            <button type="button" className="gold-btn" onClick={() => openAuth("forgot-password")}>
+              Request New Reset Link
+            </button>
+          </div>
+        )}
+
+        {!checkingLink && !linkError && (
+          <form className="auth-form premium-auth-form" onSubmit={submit}>
+            <label className="auth-field auth-password-field">
+              <span>New password</span>
+              <div className="password-input-wrap">
+                <input type={showResetPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))} required minLength={8} autoComplete="new-password" />
+                <button type="button" onClick={() => setShowResetPassword((value) => !value)} aria-label={showResetPassword ? "Hide password" : "Show password"} title={showResetPassword ? "Hide password" : "Show password"}>
+                  {showResetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </label>
+            <label className="auth-field auth-password-field">
+              <span>Confirm new password</span>
+              <div className="password-input-wrap">
+                <input type={showResetConfirmPassword ? "text" : "password"} value={form.confirmPassword} onChange={(e) => setForm((current) => ({ ...current, confirmPassword: e.target.value }))} required minLength={8} autoComplete="new-password" />
+                <button type="button" onClick={() => setShowResetConfirmPassword((value) => !value)} aria-label={showResetConfirmPassword ? "Hide confirm password" : "Show confirm password"} title={showResetConfirmPassword ? "Hide password" : "Show password"}>
+                  {showResetConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </label>
+            <button className="gold-btn full" type="submit" disabled={saving}>{saving ? "Saving..." : "Reset Password"}</button>
+          </form>
+        )}
       </div>
     </main>
   );
 }
+
 
 function ForgotPasswordModal({ setMode, close }) {
   const [email, setEmail] = useState("");

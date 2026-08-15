@@ -1447,6 +1447,36 @@ app.post("/api/auth/forgot-password", otpLimiter, async (req, res) => {
   }
 });
 
+
+app.get("/api/auth/reset-password/verify", otpLimiter, async (req, res) => {
+  try {
+    const email = String(req.query?.email || "").trim().toLowerCase();
+    const token = String(req.query?.token || "").trim();
+
+    if (!email || !token) {
+      return res.status(400).json({ message: "This reset link is incomplete. Please request a new one." });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await prisma.user.findFirst({
+      where: {
+        email,
+        passwordResetTokenHash: tokenHash,
+        passwordResetExpiresAt: { gt: new Date() }
+      },
+      select: { id: true, email: true }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "This reset link is invalid or expired. Please request a new one." });
+    }
+
+    res.json({ message: "Reset link is valid." });
+  } catch (error) {
+    res.status(500).json({ message: `Could not verify reset link: ${error.message}` });
+  }
+});
+
 app.post("/api/auth/reset-password", otpLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
