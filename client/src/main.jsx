@@ -451,6 +451,14 @@ function App() {
       {page === "certificate-verification" && <CertificateVerification />}
       {page === "reset-password" && <ResetPasswordPage goTo={goTo} openAuth={openAuth} />}
 
+      {page === "lecturer" && (
+        user?.role === "LECTURER" ? (
+          <AdminDashboard reloadPublic={loadPublicData} currentUser={user} />
+        ) : (
+          <AccessGate title="Lecturer Portal" openAuth={() => openAuth("lecturer-login")} />
+        )
+      )}
+
       {page === "student" && (
         user ? <StudentPortal user={user} setUser={setUser} goTo={goTo} /> : <AccessGate title="Student Portal" openAuth={() => openAuth("login")} />
       )}
@@ -463,10 +471,10 @@ function App() {
         )
       )}
 
-      {!['student', 'admin', 'payment-callback', 'certificate-verification'].includes(page) && (
+      {!['student', 'admin', 'lecturer', 'payment-callback', 'certificate-verification'].includes(page) && (
         <SiteRegistrationCTA page={page} goTo={goTo} openAuth={openAuth} settings={data.settings} />
       )}
-      {!['student', 'admin'].includes(page) && <Footer goTo={goTo} settings={data.settings} />}
+      {!['student', 'admin', 'lecturer'].includes(page) && <Footer goTo={goTo} settings={data.settings} />}
       <FloatingWhatsApp settings={data.settings} />
       <NotificationCenter />
 
@@ -8152,6 +8160,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const isRegister = mode === "register";
+  const isLecturerLogin = mode === "lecturer-login";
   const countrySearchText = String(countrySearch || "").trim().toLowerCase();
   const countryMatches = countrySearchText
     ? COUNTRY_OPTIONS.filter((country) =>
@@ -8174,7 +8183,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
   async function submit(e) {
     e.preventDefault();
     try {
-      const endpoint = isRegister ? "/auth/register" : "/auth/login";
+      const endpoint = isRegister ? "/auth/register" : isLecturerLogin ? "/auth/lecturer-login" : "/auth/login";
       const selectedProgramme = availableCourses.find((course) => String(course.id) === String(form.courseId));
       const selectedProgrammeId = registrationProgrammePayloadId(selectedProgramme);
 
@@ -8201,7 +8210,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
             phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",
             applicationSource: "QUICK_REGISTER"
           }
-        : { identifier: form.email, email: form.email, password: form.password };
+        : isLecturerLogin ? { username: form.email, password: form.password } : { email: form.email, password: form.password };
       const result = await api(endpoint, { method: "POST", body: payload });
       setToken(null);
       setUser(result.user);
@@ -8223,11 +8232,11 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
           <aside className="auth-brand-panel">
             <img src={LOGO} alt="CIBI Logo" />
             <p className="eyebrow framed">Champion International Bible Institute</p>
-            <h2>{isRegister ? "Begin Your CIBI Journey" : "Welcome Back"}</h2>
+            <h2>{isRegister ? "Begin Your CIBI Journey" : isLecturerLogin ? "Lecturer Portal" : "Welcome Back"}</h2>
             <p>
               {isRegister
                 ? "Create your student application. Programme and learning stream are required before payment and admin approval."
-                : "Login securely to continue to your student or admin portal."}
+                : isLecturerLogin ? "Login with your lecturer username to manage only your assigned courses." : "Login securely with your email to continue to your student or admin portal."}
             </p>
             <div className="auth-mini-points">
               <span><CheckCircle size={14} /> Secure portal access</span>
@@ -8238,14 +8247,23 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
 
           <section className="auth-form-panel">
             <div className="auth-tabs auth-tabs-premium">
-              <button type="button" className={mode === "login" ? "active-auth" : ""} onClick={() => setMode("login")}>Login</button>
-              <button type="button" className={mode === "register" ? "active-auth" : ""} onClick={() => setMode("register")}>Register</button>
+              {isLecturerLogin ? (
+                <>
+                  <button type="button" className="active-auth">Lecturer Login</button>
+                  <button type="button" onClick={() => setMode("login")}>Student/Admin Login</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className={mode === "login" ? "active-auth" : ""} onClick={() => setMode("login")}>Login</button>
+                  <button type="button" className={mode === "register" ? "active-auth" : ""} onClick={() => setMode("register")}>Register</button>
+                </>
+              )}
             </div>
 
             <div className="auth-heading-block">
-              <span>{isRegister ? "Student Application" : "Portal Login"}</span>
-              <h2>{isRegister ? "Create Application" : "Login"}</h2>
-              <p>{isRegister ? "Use your correct details and choose your programme before payment." : "Enter your email and password to continue."}</p>
+              <span>{isRegister ? "Student Application" : isLecturerLogin ? "Lecturer Portal" : "Portal Login"}</span>
+              <h2>{isRegister ? "Create Application" : isLecturerLogin ? "Lecturer Login" : "Login"}</h2>
+              <p>{isRegister ? "Use your correct details and choose your programme before payment." : isLecturerLogin ? "Lecturers should use their assigned username and password." : "Enter your email and password to continue."}</p>
             </div>
 
             <form onSubmit={submit} className="auth-form premium-auth-form">
@@ -8355,8 +8373,8 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
               )}
 
               <label className="auth-field">
-                <span>{isRegister ? "Email address" : "Email or Username"}</span>
-                <input type={isRegister ? "email" : "text"} placeholder={isRegister ? "you@example.com" : "email or lecturer username"} value={form.email} onChange={(e) => updateField("email", e.target.value)} required />
+                <span>{isLecturerLogin ? "Lecturer username" : "Email address"}</span>
+                <input type={isLecturerLogin ? "text" : "email"} placeholder={isLecturerLogin ? "e.g pst.kolo.james" : "you@example.com"} value={form.email} onChange={(e) => updateField("email", e.target.value)} required />
               </label>
 
               <label className="auth-field auth-password-field">
@@ -8393,8 +8411,9 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                 </label>
               )}
 
-              <button className="gold-btn full auth-submit-btn" type="submit" disabled={isRegister && !availableCourses.length}>{isRegister ? "Create Application" : "Login Securely"}</button>
-              {!isRegister ? <button className="auth-forgot-link" type="button" onClick={() => setMode("forgot")}>Forgot password?</button> : null}
+              <button className="gold-btn full auth-submit-btn" type="submit" disabled={isRegister && !availableCourses.length}>{isRegister ? "Create Application" : isLecturerLogin ? "Login as Lecturer" : "Login Securely"}</button>
+              {!isRegister && !isLecturerLogin ? <button className="auth-forgot-link" type="button" onClick={() => setMode("forgot")}>Forgot password?</button> : null}
+              {!isRegister && !isLecturerLogin ? <button className="auth-forgot-link" type="button" onClick={() => setMode("lecturer-login")}>Lecturer login</button> : null}
               {isRegister ? <button className="dark-btn full" type="button" onClick={() => { close(); goTo("admissions"); scrollToAdmissionPayment(); }}>Use Full Admission Form</button> : null}
             </form>
           </section>

@@ -1316,16 +1316,15 @@ app.post(
   validateRequest,
   async (req, res) => {
   try {
-    const identifier = String(req.body?.identifier || req.body?.email || req.body?.username || "").trim().toLowerCase();
+    const email = String(req.body?.email || "").trim().toLowerCase();
     const password = String(req.body?.password || "");
-    if (!identifier || !password) return res.status(400).json({ message: "Email/username and password are required." });
+    if (!email || !email.includes("@") || !password) {
+      return res.status(400).json({ message: "Email and password are required." });
+    }
 
-    const isEmailLogin = identifier.includes("@");
-    const user = isEmailLogin
-      ? await prisma.user.findUnique({ where: { email: identifier } })
-      : await prisma.user.findFirst({ where: { username: identifier, role: "LECTURER" } });
+    const user = await prisma.user.findUnique({ where: { email } });
 
-    if (!user) return res.status(401).json({ message: "Invalid login details" });
+    if (!user || user.role === "LECTURER") return res.status(401).json({ message: "Invalid login details" });
 
     if (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
       return res.status(423).json({ message: "Account temporarily locked after too many failed login attempts. Please try again later." });
@@ -1352,6 +1351,47 @@ app.post(
   }
 });
 
+app.post(
+  "/api/auth/lecturer-login",
+  loginLimiter,
+  [validators.password],
+  validateRequest,
+  async (req, res) => {
+  try {
+    const username = String(req.body?.username || req.body?.identifier || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+    if (!username || username.includes("@") || !password) {
+      return res.status(400).json({ message: "Lecturer username and password are required." });
+    }
+
+    const user = await prisma.user.findFirst({ where: { username, role: "LECTURER" } });
+
+    if (!user) return res.status(401).json({ message: "Invalid lecturer login details" });
+
+    if (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
+      return res.status(423).json({ message: "Account temporarily locked after too many failed login attempts. Please try again later." });
+    }
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      const attempts = Number(user.failedLoginAttempts || 0) + 1;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: attempts,
+          lockedUntil: attempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null
+        }
+      });
+      return res.status(401).json({ message: "Invalid lecturer login details" });
+    }
+
+    await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+    await setAuthCookies(res, user);
+    res.json({ user: publicUser(user) });
+  } catch (error) {
+    res.status(500).json({ message: "Lecturer login failed", error: error.message });
+  }
+});
 
 app.post("/api/auth/forgot-password", otpLimiter, async (req, res) => {
   try {
