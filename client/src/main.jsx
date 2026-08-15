@@ -15,6 +15,8 @@ import {
   Clock,
   CreditCard,
   GraduationCap,
+  Eye,
+  EyeOff,
   Library,
   MapPin,
   Megaphone,
@@ -1637,6 +1639,7 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
     additionalQuestions: ""
   });
   const [submitting, setSubmitting] = useState(false);
+  const [showApplicationPassword, setShowApplicationPassword] = useState(false);
   const selectedCourse = availableCourses.find((course) => String(course.id) === String(form.courseId));
   const selectedProgrammeId = registrationProgrammePayloadId(selectedCourse);
 
@@ -1736,7 +1739,12 @@ function AdmissionApplicationForm({ programmes = [], courses = [], settings = {}
 
         <label className="content-field">
           <span>Create password</span>
-          <input type="password" placeholder="Create a secure password" value={form.password} onChange={(e) => updateField("password", e.target.value)} required minLength={6} />
+          <div className="password-input-wrap">
+            <input type={showApplicationPassword ? "text" : "password"} placeholder="Create a secure password" value={form.password} onChange={(e) => updateField("password", e.target.value)} required minLength={6} />
+            <button type="button" onClick={() => setShowApplicationPassword((value) => !value)} aria-label={showApplicationPassword ? "Hide password" : "Show password"} title={showApplicationPassword ? "Hide password" : "Show password"}>
+              {showApplicationPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </label>
 
         <h3>Programme Selection</h3>
@@ -4135,6 +4143,7 @@ function UsersRolesAdmin() {
   const [data, setData] = useState({ rawUsers: [], courses: [] });
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "LECTURER" });
   const [generatedCredentials, setGeneratedCredentials] = useState(null);
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
   const [accessForm, setAccessForm] = useState({ lecturerId: "", courseId: "" });
 
   async function load() {
@@ -4200,7 +4209,12 @@ function UsersRolesAdmin() {
           ) : (
             <>
               <input placeholder="Email address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-              <input placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+              <div className="password-input-wrap">
+                <input type={showStaffPassword ? "text" : "password"} placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+                <button type="button" onClick={() => setShowStaffPassword((value) => !value)} aria-label={showStaffPassword ? "Hide password" : "Show password"} title={showStaffPassword ? "Hide password" : "Show password"}>
+                  {showStaffPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </>
           )}
           <button className="gold-btn" type="submit">Create Account</button>
@@ -7768,6 +7782,7 @@ function EmailSettingsAdmin() {
   const [testing, setTesting] = useState(false);
   const [testEmail, setTestEmail] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
 
   async function load() {
     const result = await api("/admin/settings");
@@ -7951,7 +7966,12 @@ function EmailSettingsAdmin() {
               </label>
               <label className="content-field content-field-wide">
                 <span>SMTP password / app password</span>
-                <input type="password" value={settings.email_smtp_password || ""} onChange={(e) => updateField("email_smtp_password", e.target.value)} placeholder="SMTP password" />
+                <div className="password-input-wrap">
+                  <input type={showSmtpPassword ? "text" : "password"} value={settings.email_smtp_password || ""} onChange={(e) => updateField("email_smtp_password", e.target.value)} placeholder="SMTP password" />
+                  <button type="button" onClick={() => setShowSmtpPassword((value) => !value)} aria-label={showSmtpPassword ? "Hide SMTP password" : "Show SMTP password"} title={showSmtpPassword ? "Hide password" : "Show password"}>
+                    {showSmtpPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </label>
             </div>
           </div>
@@ -8027,6 +8047,8 @@ function findCountry(value) {
 function ResetPasswordPage({ goTo, openAuth }) {
   const [form, setForm] = useState({ email: "", token: "", password: "", confirmPassword: "" });
   const [saving, setSaving] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search || "");
@@ -8073,11 +8095,21 @@ function ResetPasswordPage({ goTo, openAuth }) {
         <form className="auth-form premium-auth-form" onSubmit={submit}>
           <label className="auth-field auth-password-field">
             <span>New password</span>
-            <input type="password" value={form.password} onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))} required minLength={8} />
+            <div className="password-input-wrap">
+              <input type={showResetPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))} required minLength={8} />
+              <button type="button" onClick={() => setShowResetPassword((value) => !value)} aria-label={showResetPassword ? "Hide password" : "Show password"} title={showResetPassword ? "Hide password" : "Show password"}>
+                {showResetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </label>
           <label className="auth-field auth-password-field">
             <span>Confirm new password</span>
-            <input type="password" value={form.confirmPassword} onChange={(e) => setForm((current) => ({ ...current, confirmPassword: e.target.value }))} required minLength={8} />
+            <div className="password-input-wrap">
+              <input type={showResetConfirmPassword ? "text" : "password"} value={form.confirmPassword} onChange={(e) => setForm((current) => ({ ...current, confirmPassword: e.target.value }))} required minLength={8} />
+              <button type="button" onClick={() => setShowResetConfirmPassword((value) => !value)} aria-label={showResetConfirmPassword ? "Hide confirm password" : "Show confirm password"} title={showResetConfirmPassword ? "Hide password" : "Show password"}>
+                {showResetConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </label>
           <button className="gold-btn full" type="submit" disabled={saving}>{saving ? "Saving..." : "Reset Password"}</button>
         </form>
@@ -8387,8 +8419,8 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                     onChange={(e) => updateField("password", e.target.value)}
                     required
                   />
-                  <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Toggle password visibility">
-                    {showPassword ? "HIDE" : "SHOW"}
+                  <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} title={showPassword ? "Hide password" : "Show password"}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </label>
@@ -8404,8 +8436,8 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
                       onChange={(e) => updateField("confirmPassword", e.target.value)}
                       required
                     />
-                    <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} aria-label="Toggle confirm password visibility">
-                      {showConfirmPassword ? "HIDE" : "SHOW"}
+                    <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"} title={showConfirmPassword ? "Hide password" : "Show password"}>
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </label>
