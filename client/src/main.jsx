@@ -3287,6 +3287,14 @@ function VideoLinkModal({ course, close, onSaved }) {
   const [form, setForm] = useState({ title: "", description: "", chapter: 1, videoUrl: "" });
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") close();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [close]);
+
   function validateLink(value) {
     const videoId = extractYouTubeVideoId(value);
     return Boolean(videoId && /^[A-Za-z0-9_-]{6,}$/.test(videoId));
@@ -3317,9 +3325,54 @@ function VideoLinkModal({ course, close, onSaved }) {
   }
 
   return (
-    <div className="modal-backdrop">
-      <form className="auth-modal video-upload-modal admin-form" onSubmit={submit}>
-        <button type="button" className="close-btn" onClick={close}><X /></button>
+    <div
+      className="modal-backdrop lecturer-video-modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) close();
+      }}
+      style={{ alignItems: "flex-start", overflowY: "auto", padding: "24px 12px" }}
+    >
+      <form
+        className="auth-modal video-upload-modal admin-form lecturer-video-modal"
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+        style={{ maxHeight: "92vh", overflowY: "auto", position: "relative" }}
+      >
+        <div
+          className="lecturer-modal-topbar"
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 5,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            background: "#fff",
+            padding: "0 0 14px",
+            marginBottom: "10px",
+            borderBottom: "1px solid rgba(0,0,0,0.08)"
+          }}
+        >
+          <button
+            type="button"
+            className="ghost-btn mini-btn"
+            onClick={close}
+            style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}
+          >
+            ← Back to Course
+          </button>
+          <button
+            type="button"
+            className="close-btn"
+            onClick={close}
+            aria-label="Close video form"
+            style={{ position: "static", minWidth: "44px", minHeight: "44px" }}
+          >
+            <X />
+          </button>
+        </div>
+
         <h3>Add Course Video</h3>
         <p>Paste a YouTube unlisted link. CIBI will play it with a platform player, no upload storage cost.</p>
         <input placeholder="Video title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
@@ -3335,7 +3388,10 @@ function VideoLinkModal({ course, close, onSaved }) {
           <strong>Storage-saving mode active.</strong>
           <p>The video file stays on YouTube. Students only see the CIBI player inside the course page.</p>
         </div>
-        <button className="gold-btn full" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Video Link"}</button>
+        <div className="modal-action-row" style={{ display: "grid", gap: "10px" }}>
+          <button className="gold-btn full" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Video Link"}</button>
+          <button className="ghost-btn full" type="button" onClick={close} disabled={saving}>Cancel / Back to Course</button>
+        </div>
       </form>
     </div>
   );
