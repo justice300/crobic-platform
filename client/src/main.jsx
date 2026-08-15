@@ -3741,7 +3741,227 @@ function PaymentCallback({ goTo }) {
   return <main className="page container gate"><CheckCircle size={56} /><h1>Payment Status</h1><p>{message}</p><button className="gold-btn big" onClick={() => goTo("student")}>Go to Student Portal</button></main>;
 }
 
+
+function getCourseProgrammeTitle(course = {}) {
+  return course.programme?.title || course.programmeTitle || (course.generalForAllProgrammes ? "General Courses" : "Unassigned Programme");
+}
+
+function getCourseStageLabel(course = {}) {
+  return course.levelStage || course.level || "Courses";
+}
+
+function stageSortWeight(label = "") {
+  const value = String(label || "").toLowerCase();
+  if (value.includes("foundation")) return 10;
+  if (value.includes("100") && value.includes("first")) return 20;
+  if (value.includes("100") && value.includes("second")) return 30;
+  if (value.includes("200") && value.includes("first")) return 40;
+  if (value.includes("200") && value.includes("second")) return 50;
+  if (value.includes("advanced")) return 60;
+  return 999;
+}
+
+function groupCoursesForLecturer(courses = []) {
+  const programmeMap = new Map();
+
+  (courses || []).forEach((course) => {
+    const programmeTitle = getCourseProgrammeTitle(course);
+    const stageTitle = getCourseStageLabel(course);
+
+    if (!programmeMap.has(programmeTitle)) {
+      programmeMap.set(programmeTitle, { title: programmeTitle, stages: new Map(), count: 0 });
+    }
+
+    const programme = programmeMap.get(programmeTitle);
+    if (!programme.stages.has(stageTitle)) {
+      programme.stages.set(stageTitle, { title: stageTitle, courses: [] });
+    }
+
+    programme.stages.get(stageTitle).courses.push(course);
+    programme.count += 1;
+  });
+
+  return Array.from(programmeMap.values())
+    .map((programme) => ({
+      ...programme,
+      stages: Array.from(programme.stages.values())
+        .map((stage) => ({ ...stage, courses: stage.courses.sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""))) }))
+        .sort((a, b) => stageSortWeight(a.title) - stageSortWeight(b.title) || String(a.title).localeCompare(String(b.title)))
+    }))
+    .sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+}
+
+function LecturerProgrammesSidebar({ lecturer, courses, selectedCourseId, onSelectCourse, tab, setTab }) {
+  const groups = useMemo(() => groupCoursesForLecturer(courses), [courses]);
+
+  return (
+    <div className="portal-sidebar portal-sidebar-grouped lecturer-sidebar">
+      <img src={LOGO} alt="CIBI" />
+      <h3>Lecturer Dashboard</h3>
+      <p className="sidebar-user-name">{lecturer?.name || "Lecturer"}</p>
+
+      <div className="portal-nav-group lecturer-tools">
+        <strong>Teaching Tools</strong>
+        <div className="portal-nav-group-items">
+          {["Overview", "Course Builder", "Assignments & Quiz", "Attendance Records", "Course Discussions", "Live"].map((item) => (
+            <button
+              key={item}
+              className={tab === item.toLowerCase() ? "side-active" : ""}
+              onClick={() => setTab(item.toLowerCase())}
+              type="button"
+            >
+              {item === "Course Builder" ? "Add Lessons / Videos" : item}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="portal-nav-groups lecturer-programme-nav">
+        <p className="sidebar-section-label">Assigned Programmes</p>
+        {!groups.length && <p className="muted small">No course assignment yet.</p>}
+
+        {groups.map((programme) => (
+          <details className="portal-nav-group" key={programme.title} open>
+            <summary>
+              <span>
+                <strong>{programme.title}</strong>
+                <small>{programme.count} course{programme.count === 1 ? "" : "s"}</small>
+              </span>
+              <ChevronDown size={15} />
+            </summary>
+
+            <div className="lecturer-stage-list">
+              {programme.stages.map((stage) => (
+                <details className="portal-nav-group lecturer-stage-group" key={`${programme.title}-${stage.title}`} open>
+                  <summary>
+                    <span>
+                      <strong>{stage.title}</strong>
+                      <small>{stage.courses.length} course{stage.courses.length === 1 ? "" : "s"}</small>
+                    </span>
+                    <ChevronDown size={14} />
+                  </summary>
+
+                  <div className="portal-nav-group-items lecturer-course-list">
+                    {stage.courses.map((course) => (
+                      <button
+                        key={course.id}
+                        className={String(selectedCourseId) === String(course.id) ? "side-active lecturer-course-active" : ""}
+                        onClick={() => onSelectCourse(course.id)}
+                        type="button"
+                        title={course.title}
+                      >
+                        {course.title}
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LecturerOverview({ lecturer, courses, selectedCourse }) {
+  const grouped = groupCoursesForLecturer(courses);
+  const stageCount = grouped.reduce((total, programme) => total + programme.stages.length, 0);
+
+  return (
+    <section className="admin-section lecturer-overview-section">
+      <div className="dashboard-grid">
+        <DashboardCard icon={<GraduationCap />} label="Assigned Programmes" value={grouped.length} />
+        <DashboardCard icon={<BookOpen />} label="Assigned Courses" value={courses.length} />
+        <DashboardCard icon={<Library />} label="Levels / Semesters" value={stageCount} />
+        <DashboardCard icon={<Video />} label="Selected Course" value={selectedCourse ? "Ready" : "Select"} />
+      </div>
+
+      {selectedCourse ? (
+        <div className="admin-form lecturer-selected-course-card">
+          <span>Current course</span>
+          <h3>{selectedCourse.title}</h3>
+          <p>{getCourseProgrammeTitle(selectedCourse)} · {getCourseStageLabel(selectedCourse)}</p>
+          <p className="muted">Use Add Lessons / Videos to upload class content for this course.</p>
+        </div>
+      ) : (
+        <div className="empty-state"><strong>No course selected.</strong><p>Select a programme, level and course from the left panel.</p></div>
+      )}
+    </section>
+  );
+}
+
+function LecturerDashboard({ reloadPublic, currentUser }) {
+  const allowedTabs = ["overview", "course builder", "assignments & quiz", "attendance records", "course discussions", "live"];
+  const [tab, setTab] = useState(() => getPortalInitialTab("overview", allowedTabs));
+  const [courses, setCourses] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+
+  async function loadLecturerCourses() {
+    const result = await api("/admin/course-builder");
+    setCourses(result || []);
+    if (!selectedCourseId && result?.[0]?.id) setSelectedCourseId(String(result[0].id));
+  }
+
+  function switchLecturerTab(nextTab) {
+    setTab(nextTab);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function selectCourse(courseId) {
+    setSelectedCourseId(String(courseId));
+    setTab("course builder");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  useEffect(() => { loadLecturerCourses().catch((error) => showToast(error.message, "error")); }, []);
+
+  const selectedCourse = courses.find((course) => String(course.id) === String(selectedCourseId));
+
+  return (
+    <main className="portal-page lecturer-dashboard-page">
+      <LecturerProgrammesSidebar
+        lecturer={currentUser}
+        courses={courses}
+        selectedCourseId={selectedCourseId}
+        onSelectCourse={selectCourse}
+        tab={tab}
+        setTab={switchLecturerTab}
+      />
+
+      <div className="portal-main">
+        <div className="portal-header lecturer-portal-header">
+          <div>
+            <p className="eyebrow dark">Lecturer Dashboard</p>
+            <h1>{currentUser?.name || "Lecturer"}</h1>
+            <p className="muted">Your assigned programmes, levels and courses are listed on the left.</p>
+          </div>
+          {selectedCourse && (
+            <div className="lecturer-current-pill">
+              <span>{getCourseStageLabel(selectedCourse)}</span>
+              <strong>{selectedCourse.title}</strong>
+            </div>
+          )}
+        </div>
+
+        {tab === "overview" && <LecturerOverview lecturer={currentUser} courses={courses} selectedCourse={selectedCourse} />}
+        {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} currentUser={currentUser} selectedCourseIdOverride={selectedCourseId} compactHeader />}
+        {tab === "assignments & quiz" && <AssessmentsAdmin />}
+        {tab === "attendance records" && <AttendanceRecordsAdmin />}
+        {tab === "course discussions" && <CourseDiscussionsAdmin />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}
+      </div>
+    </main>
+  );
+}
+
+
+
 function AdminDashboard({ reloadPublic, currentUser }) {
+  if (currentUser?.role === "LECTURER") {
+    return <LecturerDashboard reloadPublic={reloadPublic} currentUser={currentUser} />;
+  }
+
   const [tab, setTab] = useState(() => getPortalInitialTab("overview", ["overview", "website content", "programmes", "courses", "currency settings", "users & roles", "admissions", "students", "books", "course builder", "progress", "gradebook", "student groups", "activity log", "attendance records", "course discussions", "certificates", "assignments & quiz", "slides", "gallery", "announcements", "live", "appeals & support", "email settings", "settings"]));
   const [overview, setOverview] = useState(null);
 
@@ -5383,7 +5603,7 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
   );
 }
 
-function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null }) {
+function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null, selectedCourseIdOverride = "", compactHeader = false }) {
   const blankModule = { title: "", description: "", moduleOrder: 1, published: true };
   const blankLesson = { moduleId: "", title: "", videoUrl: "", notesUrl: "", duration: "", lessonOrder: 1, completionPercentRequired: 90, required: true, published: true };
   const [courses, setCourses] = useState([]);
@@ -5398,10 +5618,24 @@ function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null 
   async function load() {
     const result = await api("/admin/course-builder");
     setCourses(result);
-    if (!selectedCourseId && result[0]?.id) setSelectedCourseId(String(result[0].id));
+    const requestedCourseId = selectedCourseIdOverride ? String(selectedCourseIdOverride) : "";
+    if (requestedCourseId && result.some((course) => String(course.id) === requestedCourseId)) {
+      setSelectedCourseId(requestedCourseId);
+    } else if (!selectedCourseId && result[0]?.id) {
+      setSelectedCourseId(String(result[0].id));
+    }
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (selectedCourseIdOverride) {
+      setSelectedCourseId(String(selectedCourseIdOverride));
+      resetModuleForm();
+      resetLessonForm(1, "");
+      setPreviewLesson(null);
+    }
+  }, [selectedCourseIdOverride]);
 
   const selectedCourse = courses.find((course) => String(course.id) === String(selectedCourseId));
   const sortedModules = [...(selectedCourse?.modules || [])].sort((a, b) => Number(a.moduleOrder || 0) - Number(b.moduleOrder || 0));
@@ -5581,9 +5815,9 @@ function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null 
     <section className="admin-section course-builder-admin course-builder-polish">
       <div className="content-editor-header">
         <div>
-          <span>LMS Builder</span>
-          <h2>Course Builder</h2>
-          <p>Create modules/stages, edit lessons, preview videos, publish/hide content and control learning order.</p>
+          <span>{compactHeader ? "Lecturer Course" : "LMS Builder"}</span>
+          <h2>{compactHeader && selectedCourse ? selectedCourse.title : "Course Builder"}</h2>
+          <p>{compactHeader ? "Add modules, video lessons, notes and learning order for the selected course." : "Create modules/stages, edit lessons, preview videos, publish/hide content and control learning order."}</p>
         </div>
         <button className="gold-btn" type="button" onClick={load}>Refresh</button>
       </div>
