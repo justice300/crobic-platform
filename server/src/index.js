@@ -67,12 +67,50 @@ function publicUser(user) {
     id: user.id,
     name: user.name,
     email: user.email,
+    username: user.username,
     phone: user.phone,
     country: user.country,
     role: user.role,
     status: user.status,
     createdAt: user.createdAt
   };
+}
+
+
+function makeLecturerUsername(name = "") {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s.]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(".")
+    .replace(/\.+/g, ".")
+    .replace(/^\.+|\.+$/g, "");
+}
+
+function makeLecturerPassword(name = "") {
+  const clean = String(name || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+  return `${clean || "Lecturer"}@2026`;
+}
+
+async function generateUniqueLecturerUsername(name = "") {
+  const base = makeLecturerUsername(name) || `lecturer.${Date.now()}`;
+  let username = base;
+  let counter = 2;
+
+  while (await prisma.user.findUnique({ where: { username } })) {
+    username = `${base}.${counter}`;
+    counter += 1;
+  }
+
+  return username;
 }
 
 function amountToKobo(amount) {
@@ -1274,12 +1312,19 @@ The student may proceed to payment.`,
 app.post(
   "/api/auth/login",
   loginLimiter,
-  [validators.email, validators.password],
+  [validators.password],
   validateRequest,
   async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { email } });
+    const identifier = String(req.body?.identifier || req.body?.email || req.body?.username || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+    if (!identifier || !password) return res.status(400).json({ message: "Email/username and password are required." });
+
+    const isEmailLogin = identifier.includes("@");
+    const user = isEmailLogin
+      ? await prisma.user.findUnique({ where: { email: identifier } })
+      : await prisma.user.findFirst({ where: { username: identifier, role: "LECTURER" } });
+
     if (!user) return res.status(401).json({ message: "Invalid login details" });
 
     if (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
@@ -3028,19 +3073,44 @@ app.get("/api/admin/users-roles", requireAuth, requireAdmin, async (req, res) =>
 app.post("/api/admin/users-roles", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const name = String(req.body?.name || "").trim();
-    const email = String(req.body?.email || "").trim().toLowerCase();
-    const password = String(req.body?.password || "").trim();
+    const requestedEmail = String(req.body?.email || "").trim().toLowerCase();
+    const requestedPassword = String(req.body?.password || "").trim();
     const role = String(req.body?.role || "LECTURER").toUpperCase();
-    if (!name || !email || !password) return res.status(400).json({ message: "Name, email and password are required." });
+
+    if (!name) return res.status(400).json({ message: "Name is required." });
     if (!["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"].includes(role)) return res.status(400).json({ message: "Invalid staff role." });
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return res.status(409).json({ message: "Email already exists." });
-    const hashed = await bcrypt.hash(password, 12);
+
+    let email = requestedEmail;
+    let plainPassword = requestedPassword;
+    let username = null;
+
+    if (role === "LECTURER") {
+      username = await generateUniqueLecturerUsername(name);
+      plainPassword = plainPassword || makeLecturerPassword(name);
+      email = email || `${username}@lecturer.cibi.local`;
+    } else if (!email || !plainPassword) {
+      return res.status(400).json({ message: "Email and password are required for admin staff accounts." });
+    }
+
+    const existingEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingEmail) return res.status(409).json({ message: "Email already exists." });
+
+    if (username) {
+      const existingUsername = await prisma.user.findUnique({ where: { username } });
+      if (existingUsername) return res.status(409).json({ message: "Username already exists." });
+    }
+
+    const hashed = await bcrypt.hash(plainPassword, 12);
     const created = await prisma.user.create({
-      data: { name, email, password: hashed, role, status: "ACTIVE" }
+      data: { name, email, username, password: hashed, role, status: "ACTIVE" }
     });
-    await logAdminActivity(req, { action: "CREATED_STAFF_ACCOUNT", entityType: "User", entityId: created.id, details: { email, role } });
-    res.status(201).json({ message: "Staff account created.", user: publicUser(created) });
+    await logAdminActivity(req, { action: "CREATED_STAFF_ACCOUNT", entityType: "User", entityId: created.id, details: { email, username, role } });
+
+    res.status(201).json({
+      message: role === "LECTURER" ? "Lecturer account created." : "Staff account created.",
+      user: publicUser(created),
+      generatedCredentials: role === "LECTURER" ? { name, username, password: plainPassword } : null
+    });
   } catch (error) {
     res.status(400).json({ message: "Could not create staff account", error: error.message });
   }

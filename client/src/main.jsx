@@ -3799,6 +3799,7 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 function UsersRolesAdmin() {
   const [data, setData] = useState({ rawUsers: [], courses: [] });
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "LECTURER" });
+  const [generatedCredentials, setGeneratedCredentials] = useState(null);
   const [accessForm, setAccessForm] = useState({ lecturerId: "", courseId: "" });
 
   async function load() {
@@ -3813,10 +3814,11 @@ function UsersRolesAdmin() {
   async function createUser(e) {
     e.preventDefault();
     try {
-      await api("/admin/users-roles", { method: "POST", body: form });
+      const result = await api("/admin/users-roles", { method: "POST", body: form });
       setForm({ name: "", email: "", password: "", role: "LECTURER" });
+      setGeneratedCredentials(result.generatedCredentials || null);
       await load();
-      showToast("Staff account created.", "success");
+      showToast(result.message || "Staff account created.", "success");
     } catch (error) {
       showToast(error.message || "Could not create staff account", "error");
     }
@@ -3843,22 +3845,42 @@ function UsersRolesAdmin() {
   return (
     <section className="admin-section phase2-panel">
       <h2>Users & Roles</h2>
-      <p>Super Admin can create Rector, Admin and Lecturer accounts, then assign courses to lecturers.</p>
+      <p>Super Admin can create Rector, Admin and Lecturer accounts. Lecturer login username and password are generated automatically, then courses can be assigned.</p>
 
       <div className="phase2-grid">
         <form className="admin-form phase2-card" onSubmit={createUser}>
-          <h3>Create Staff Account</h3>
+          <h3>{form.role === "LECTURER" ? "Create Lecturer Account" : "Create Staff Account"}</h3>
           <input placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <input placeholder="Email address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-          <input placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+          <select value={form.role} onChange={(e) => { setForm({ ...form, role: e.target.value, email: "", password: "" }); setGeneratedCredentials(null); }}>
             <option value="LECTURER">Lecturer</option>
             <option value="ADMIN">Admin</option>
             <option value="RECTOR">Rector / Senior Admin</option>
             <option value="SUPER_ADMIN">Super Admin</option>
           </select>
+          {form.role === "LECTURER" ? (
+            <div className="quiet-banner compact">
+              <strong>Lecturer login will be generated automatically.</strong>
+              <p>Example: peter.lasisi / PeterLasisi@2026. Email is optional for lecturers.</p>
+            </div>
+          ) : (
+            <>
+              <input placeholder="Email address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+              <input placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+            </>
+          )}
           <button className="gold-btn" type="submit">Create Account</button>
         </form>
+
+        {generatedCredentials && (
+          <div className="phase2-card lecturer-credentials-card">
+            <h3>Lecturer Login Details</h3>
+            <p>Copy this and give it privately to the lecturer. It is shown only once after account creation.</p>
+            <div className="credential-line"><span>Name</span><strong>{generatedCredentials.name}</strong></div>
+            <div className="credential-line"><span>Username</span><strong>{generatedCredentials.username}</strong></div>
+            <div className="credential-line"><span>Password</span><strong>{generatedCredentials.password}</strong></div>
+            <button className="dark-btn full" type="button" onClick={() => navigator.clipboard?.writeText(`Name: ${generatedCredentials.name}\nUsername: ${generatedCredentials.username}\nPassword: ${generatedCredentials.password}`)}>Copy Login Details</button>
+          </div>
+        )}
 
         <form className="admin-form phase2-card" onSubmit={assignCourse}>
           <h3>Assign Course to Lecturer</h3>
@@ -3877,7 +3899,7 @@ function UsersRolesAdmin() {
           <div className="admin-item phase2-staff-row" key={user.id}>
             <div>
               <strong>{user.name}</strong>
-              <p>{user.email} · {formatPortalStatus(user.role)}</p>
+              <p>{user.username ? `Username: ${user.username} · ` : ""}{user.email} · {formatPortalStatus(user.role)}</p>
               <div className="mini-chip-row">
                 {(user.lecturerCourseAccesses || []).map((access) => (
                   <span className="mini-chip" key={access.id}>{access.course?.title}<button type="button" onClick={() => removeAccess(access.id)}>×</button></span>
@@ -7816,7 +7838,7 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
             phone: form.phone ? `${selectedCountry?.dialCode || ""} ${form.phone}`.trim() : "",
             applicationSource: "QUICK_REGISTER"
           }
-        : { email: form.email, password: form.password };
+        : { identifier: form.email, email: form.email, password: form.password };
       const result = await api(endpoint, { method: "POST", body: payload });
       setToken(null);
       setUser(result.user);
@@ -7970,8 +7992,8 @@ function AuthModal({ mode, setMode, close, setUser, goTo, courses = [], programm
               )}
 
               <label className="auth-field">
-                <span>Email address</span>
-                <input type="email" placeholder="you@example.com" value={form.email} onChange={(e) => updateField("email", e.target.value)} required />
+                <span>{isRegister ? "Email address" : "Email or Username"}</span>
+                <input type={isRegister ? "email" : "text"} placeholder={isRegister ? "you@example.com" : "email or lecturer username"} value={form.email} onChange={(e) => updateField("email", e.target.value)} required />
               </label>
 
               <label className="auth-field auth-password-field">
