@@ -3800,20 +3800,9 @@ function LecturerProgrammesSidebar({ lecturer, courses, selectedCourseId, onSele
       <h3>Lecturer Dashboard</h3>
       <p className="sidebar-user-name">{lecturer?.name || "Lecturer"}</p>
 
-      <div className="portal-nav-group lecturer-tools">
-        <strong>Teaching Tools</strong>
-        <div className="portal-nav-group-items">
-          {["Overview", "Course Builder", "Assignments & Quiz", "Attendance Records", "Course Discussions", "Live"].map((item) => (
-            <button
-              key={item}
-              className={tab === item.toLowerCase() ? "side-active" : ""}
-              onClick={() => setTab(item.toLowerCase())}
-              type="button"
-            >
-              {item === "Course Builder" ? "Add Lessons / Videos" : item}
-            </button>
-          ))}
-        </div>
+      <div className="quiet-banner compact">
+        <strong>My assigned classes</strong>
+        <p>Select a programme, level and course below. Everything you need for that course will open on the right.</p>
       </div>
 
       <div className="portal-nav-groups lecturer-programme-nav">
@@ -3864,9 +3853,51 @@ function LecturerProgrammesSidebar({ lecturer, courses, selectedCourseId, onSele
   );
 }
 
-function LecturerOverview({ lecturer, courses, selectedCourse }) {
+function LecturerOverview({ lecturer, courses, selectedCourse, setTab }) {
   const grouped = groupCoursesForLecturer(courses);
   const stageCount = grouped.reduce((total, programme) => total + programme.stages.length, 0);
+
+  const actionCards = [
+    {
+      title: "Add Lesson Video",
+      text: "Paste a YouTube/Vimeo/Loom link or add the lesson video details.",
+      tab: "course builder",
+      icon: <Video size={24} />
+    },
+    {
+      title: "Add Class Material",
+      text: "Attach a notes/PDF link for students to read.",
+      tab: "course builder",
+      icon: <Library size={24} />
+    },
+    {
+      title: "Add Assignment",
+      text: "Create class work and instructions for students.",
+      tab: "assignments & quiz",
+      icon: <BookOpen size={24} />
+    },
+    {
+      title: "Add Quiz",
+      text: "Create simple questions for this course.",
+      tab: "assignments & quiz",
+      icon: <CheckCircle size={24} />
+    },
+    {
+      title: "Go Live",
+      text: "Start or manage a live class for this course.",
+      tab: "live",
+      icon: <Radio size={24} />
+    }
+  ];
+
+  function openTool(nextTab) {
+    if (!selectedCourse) {
+      showToast("Select a course from the left first.", "error");
+      return;
+    }
+    setTab(nextTab);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   return (
     <section className="admin-section lecturer-overview-section">
@@ -3879,10 +3910,30 @@ function LecturerOverview({ lecturer, courses, selectedCourse }) {
 
       {selectedCourse ? (
         <div className="admin-form lecturer-selected-course-card">
-          <span>Current course</span>
+          <span>Course workspace</span>
           <h3>{selectedCourse.title}</h3>
           <p>{getCourseProgrammeTitle(selectedCourse)} · {getCourseStageLabel(selectedCourse)}</p>
-          <p className="muted">Use Add Lessons / Videos to upload class content for this course.</p>
+          <p className="muted">Choose what you want to add. The system will handle the technical setup in the background.</p>
+
+          <div className="dashboard-grid lecturer-action-grid">
+            {actionCards.map((action) => (
+              <button
+                key={action.title}
+                type="button"
+                className="admin-form phase2-card lecturer-action-card"
+                onClick={() => openTool(action.tab)}
+              >
+                <span>{action.icon}</span>
+                <strong>{action.title}</strong>
+                <small>{action.text}</small>
+              </button>
+            ))}
+          </div>
+
+          <div className="quiet-banner compact">
+            <strong>Simple lecturer flow</strong>
+            <p>Select course → choose Add Lesson Video, Assignment, Quiz, Material or Go Live → publish for students.</p>
+          </div>
         </div>
       ) : (
         <div className="empty-state"><strong>No course selected.</strong><p>Select a programme, level and course from the left panel.</p></div>
@@ -3910,7 +3961,7 @@ function LecturerDashboard({ reloadPublic, currentUser }) {
 
   function selectCourse(courseId) {
     setSelectedCourseId(String(courseId));
-    setTab("course builder");
+    setTab("overview");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -3934,7 +3985,7 @@ function LecturerDashboard({ reloadPublic, currentUser }) {
           <div>
             <p className="eyebrow dark">Lecturer Dashboard</p>
             <h1>{currentUser?.name || "Lecturer"}</h1>
-            <p className="muted">Your assigned programmes, levels and courses are listed on the left.</p>
+            <p className="muted">Select a course from the left, then use the simple buttons to add videos, materials, assignments, quizzes or live classes.</p>
           </div>
           {selectedCourse && (
             <div className="lecturer-current-pill">
@@ -3944,8 +3995,8 @@ function LecturerDashboard({ reloadPublic, currentUser }) {
           )}
         </div>
 
-        {tab === "overview" && <LecturerOverview lecturer={currentUser} courses={courses} selectedCourse={selectedCourse} />}
-        {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} currentUser={currentUser} selectedCourseIdOverride={selectedCourseId} compactHeader />}
+        {tab === "overview" && <LecturerOverview lecturer={currentUser} courses={courses} selectedCourse={selectedCourse} setTab={switchLecturerTab} />}
+        {tab === "course builder" && <CourseBuilderAdmin reloadPublic={reloadPublic} currentUser={currentUser} selectedCourseIdOverride={selectedCourseId} compactHeader lecturerSimpleMode />}
         {tab === "assignments & quiz" && <AssessmentsAdmin />}
         {tab === "attendance records" && <AttendanceRecordsAdmin />}
         {tab === "course discussions" && <CourseDiscussionsAdmin />}
@@ -5603,7 +5654,7 @@ function CrudAdmin({ title, path, fields, reloadPublic }) {
   );
 }
 
-function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null, selectedCourseIdOverride = "", compactHeader = false }) {
+function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null, selectedCourseIdOverride = "", compactHeader = false, lecturerSimpleMode = false }) {
   const blankModule = { title: "", description: "", moduleOrder: 1, published: true };
   const blankLesson = { moduleId: "", title: "", videoUrl: "", notesUrl: "", duration: "", lessonOrder: 1, completionPercentRequired: 90, required: true, published: true };
   const [courses, setCourses] = useState([]);
@@ -5614,6 +5665,7 @@ function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null,
   const [editingLessonId, setEditingLessonId] = useState(null);
   const [previewLesson, setPreviewLesson] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
+  const isLecturerSimple = lecturerSimpleMode || (compactHeader && currentUser?.role === "LECTURER");
 
   async function load() {
     const result = await api("/admin/course-builder");
@@ -5815,19 +5867,35 @@ function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null,
     <section className="admin-section course-builder-admin course-builder-polish">
       <div className="content-editor-header">
         <div>
-          <span>{compactHeader ? "Lecturer Course" : "LMS Builder"}</span>
+          <span>{isLecturerSimple ? "Simple Class Workspace" : compactHeader ? "Lecturer Course" : "LMS Builder"}</span>
           <h2>{compactHeader && selectedCourse ? selectedCourse.title : "Course Builder"}</h2>
-          <p>{compactHeader ? "Add modules, video lessons, notes and learning order for the selected course." : "Create modules/stages, edit lessons, preview videos, publish/hide content and control learning order."}</p>
+          <p>{isLecturerSimple ? "Add lesson videos and class materials in a simple guided way. No admin settings are required." : compactHeader ? "Add modules, video lessons, notes and learning order for the selected course." : "Create modules/stages, edit lessons, preview videos, publish/hide content and control learning order."}</p>
         </div>
         <button className="gold-btn" type="button" onClick={load}>Refresh</button>
       </div>
 
-      <div className="admin-form builder-course-select">
-        <select value={selectedCourseId} onChange={(e) => { setSelectedCourseId(e.target.value); resetModuleForm(); resetLessonForm(1, ""); setPreviewLesson(null); }}>
-          <option value="">Select programme/course</option>
-          {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
-        </select>
-      </div>
+      {isLecturerSimple && selectedCourse && (
+        <div className="admin-form lecturer-simple-guide">
+          <span>Selected course</span>
+          <h3>{selectedCourse.title}</h3>
+          <p>{getCourseProgrammeTitle(selectedCourse)} · {getCourseStageLabel(selectedCourse)}</p>
+          <div className="dashboard-grid">
+            <div className="phase2-card"><strong>1. Create Topic / Week</strong><p>Example: Week 1 - Introduction.</p></div>
+            <div className="phase2-card"><strong>2. Add Lesson Video</strong><p>Paste the video link and lesson title.</p></div>
+            <div className="phase2-card"><strong>3. Add Notes / PDF</strong><p>Paste an optional notes or material link.</p></div>
+            <div className="phase2-card"><strong>4. Publish</strong><p>Leave Show to students on, then click Add Lesson.</p></div>
+          </div>
+        </div>
+      )}
+
+      {(!isLecturerSimple || !selectedCourseIdOverride) && (
+        <div className="admin-form builder-course-select">
+          <select value={selectedCourseId} onChange={(e) => { setSelectedCourseId(e.target.value); resetModuleForm(); resetLessonForm(1, ""); setPreviewLesson(null); }}>
+            <option value="">Select programme/course</option>
+            {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.title}</option>)}
+          </select>
+        </div>
+      )}
 
       {statusMessage && <p className="editing-note">{statusMessage}</p>}
 
@@ -5836,37 +5904,42 @@ function CourseBuilderAdmin({ reloadPublic = async () => {}, currentUser = null,
           <div className="builder-forms">
             <form className="admin-form builder-box builder-editor-card" onSubmit={saveModule}>
               <div className="builder-form-title-row">
-                <h3>{editingModuleId ? "Edit Module / Stage" : "Add Module / Stage"}</h3>
+                <h3>{editingModuleId ? (isLecturerSimple ? "Edit Topic / Week" : "Edit Module / Stage") : (isLecturerSimple ? "Step 1: Add Topic / Week" : "Add Module / Stage")}</h3>
                 {editingModuleId && <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => resetModuleForm()}>Cancel</button>}
               </div>
-              <input placeholder="Module title e.g Stage 1: Foundations" value={moduleForm.title} onChange={(e) => setModuleForm({ ...moduleForm, title: e.target.value })} required />
-              <textarea placeholder="Module description" value={moduleForm.description} onChange={(e) => setModuleForm({ ...moduleForm, description: e.target.value })} />
-              <input type="number" placeholder="Module order" value={moduleForm.moduleOrder} onChange={(e) => setModuleForm({ ...moduleForm, moduleOrder: Number(e.target.value) })} />
-              <label className="checkbox-field"><input type="checkbox" checked={moduleForm.published} onChange={(e) => setModuleForm({ ...moduleForm, published: e.target.checked })} /> Show this module to students</label>
-              <button className="gold-btn" type="submit">{editingModuleId ? "Update Module" : "Add Module"}</button>
+              <input placeholder={isLecturerSimple ? "Topic / Week title e.g Week 1: Introduction" : "Module title e.g Stage 1: Foundations"} value={moduleForm.title} onChange={(e) => setModuleForm({ ...moduleForm, title: e.target.value })} required />
+              <textarea placeholder={isLecturerSimple ? "Short description students will understand" : "Module description"} value={moduleForm.description} onChange={(e) => setModuleForm({ ...moduleForm, description: e.target.value })} />
+              {!isLecturerSimple && <input type="number" placeholder="Module order" value={moduleForm.moduleOrder} onChange={(e) => setModuleForm({ ...moduleForm, moduleOrder: Number(e.target.value) })} />}
+              {!isLecturerSimple && <label className="checkbox-field"><input type="checkbox" checked={moduleForm.published} onChange={(e) => setModuleForm({ ...moduleForm, published: e.target.checked })} /> Show this module to students</label>}
+              <button className="gold-btn" type="submit">{editingModuleId ? (isLecturerSimple ? "Update Topic" : "Update Module") : (isLecturerSimple ? "Save Topic / Week" : "Add Module")}</button>
             </form>
 
             <form className="admin-form builder-box builder-editor-card" onSubmit={saveLesson}>
               <div className="builder-form-title-row">
-                <h3>{editingLessonId ? "Edit Video Lesson" : "Add Video Lesson"}</h3>
+                <h3>{editingLessonId ? "Edit Lesson Video" : (isLecturerSimple ? "Step 2: Add Lesson Video / Material" : "Add Video Lesson")}</h3>
                 {editingLessonId && <button type="button" className="ghost-btn admin-cancel-btn mini-btn" onClick={() => { resetLessonForm(); setPreviewLesson(null); }}>Cancel</button>}
               </div>
               <select value={lessonForm.moduleId} onChange={(e) => setLessonForm({ ...lessonForm, moduleId: e.target.value })}>
-                <option value="">General Lessons / No Module</option>
+                <option value="">{isLecturerSimple ? "Choose Topic / Week or leave as General Lesson" : "General Lessons / No Module"}</option>
                 {sortedModules.map((module) => <option key={module.id} value={module.id}>{module.moduleOrder}. {module.title}</option>)}
               </select>
-              <input placeholder="Lesson title" value={lessonForm.title} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} required />
-              <input placeholder="Video link or embed code" value={lessonForm.videoUrl} onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })} />
-              <input placeholder="Notes/PDF link optional" value={lessonForm.notesUrl} onChange={(e) => setLessonForm({ ...lessonForm, notesUrl: e.target.value })} />
-              <div className="form-row builder-three-cols">
-                <input type="text" placeholder="Duration e.g 18 mins" value={lessonForm.duration} onChange={(e) => setLessonForm({ ...lessonForm, duration: e.target.value })} />
-                <input type="number" placeholder="Lesson order" value={lessonForm.lessonOrder} onChange={(e) => setLessonForm({ ...lessonForm, lessonOrder: Number(e.target.value) })} />
-                <input type="number" placeholder="Completion %" value={lessonForm.completionPercentRequired} onChange={(e) => setLessonForm({ ...lessonForm, completionPercentRequired: Number(e.target.value) })} />
-              </div>
-              <label className="checkbox-field"><input type="checkbox" checked={lessonForm.required} onChange={(e) => setLessonForm({ ...lessonForm, required: e.target.checked })} /> Required before next lesson opens</label>
-              <label className="checkbox-field"><input type="checkbox" checked={lessonForm.published} onChange={(e) => setLessonForm({ ...lessonForm, published: e.target.checked })} /> Show this lesson to students</label>
+              <input placeholder={isLecturerSimple ? "Lesson title e.g Introduction to the Holy Spirit" : "Lesson title"} value={lessonForm.title} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} required />
+              <input placeholder={isLecturerSimple ? "Paste video link here - YouTube, Vimeo or Loom" : "Video link or embed code"} value={lessonForm.videoUrl} onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })} />
+              <input placeholder={isLecturerSimple ? "Class material / notes / PDF link optional" : "Notes/PDF link optional"} value={lessonForm.notesUrl} onChange={(e) => setLessonForm({ ...lessonForm, notesUrl: e.target.value })} />
+              {isLecturerSimple ? (
+                <input type="text" placeholder="Duration e.g 18 mins optional" value={lessonForm.duration} onChange={(e) => setLessonForm({ ...lessonForm, duration: e.target.value })} />
+              ) : (
+                <div className="form-row builder-three-cols">
+                  <input type="text" placeholder="Duration e.g 18 mins" value={lessonForm.duration} onChange={(e) => setLessonForm({ ...lessonForm, duration: e.target.value })} />
+                  <input type="number" placeholder="Lesson order" value={lessonForm.lessonOrder} onChange={(e) => setLessonForm({ ...lessonForm, lessonOrder: Number(e.target.value) })} />
+                  <input type="number" placeholder="Completion %" value={lessonForm.completionPercentRequired} onChange={(e) => setLessonForm({ ...lessonForm, completionPercentRequired: Number(e.target.value) })} />
+                </div>
+              )}
+              {!isLecturerSimple && <label className="checkbox-field"><input type="checkbox" checked={lessonForm.required} onChange={(e) => setLessonForm({ ...lessonForm, required: e.target.checked })} /> Required before next lesson opens</label>}
+              {!isLecturerSimple && <label className="checkbox-field"><input type="checkbox" checked={lessonForm.published} onChange={(e) => setLessonForm({ ...lessonForm, published: e.target.checked })} /> Show this lesson to students</label>}
+              {isLecturerSimple && <div className="quiet-banner compact"><strong>Tip:</strong><p>Paste the video link and click Add Lesson. Leave the material link empty if there is no PDF or note.</p></div>}
               {lessonForm.videoUrl && <div className="admin-video-preview builder-form-preview"><PortalVideoPlayer url={lessonForm.videoUrl} title={lessonForm.title || "Lesson preview"} /></div>}
-              <button className="gold-btn" type="submit">{editingLessonId ? "Update Lesson" : "Add Lesson"}</button>
+              <button className="gold-btn" type="submit">{editingLessonId ? "Update Lesson" : (isLecturerSimple ? "Publish Lesson to Students" : "Add Lesson")}</button>
             </form>
           </div>
 
