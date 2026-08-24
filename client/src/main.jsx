@@ -7987,11 +7987,123 @@ function EmailSettingsAdmin() {
 }
 
 function SettingsAdmin({ reloadPublic }) {
+  const OFFICIAL_BANK_SETTINGS = {
+    bank_name: "FCMB — First City Monument Bank",
+    account_name: "CHAMPIONS ROYAL ASSEMBLY CIBI",
+    ngn_account_number: "2009387697",
+    usd_account_number: "1051261762"
+  };
+
   const [settings, setSettings] = useState({});
-  async function load() { setSettings(await api("/admin/settings")); }
+
+  function cleanSettings(raw = {}) {
+    const next = { ...OFFICIAL_BANK_SETTINGS, ...raw };
+
+    const bankName = String(next.bank_name || "").trim();
+    const accountName = String(next.account_name || "").trim();
+    const legacyAccountNumber = String(next.account_number || "").trim();
+
+    if (!bankName || bankName.toUpperCase().includes("PUT BANK")) next.bank_name = OFFICIAL_BANK_SETTINGS.bank_name;
+    if (!accountName || /champions royal bible college/i.test(accountName)) next.account_name = OFFICIAL_BANK_SETTINGS.account_name;
+
+    if (!String(next.ngn_account_number || "").trim()) {
+      const ngnMatch = legacyAccountNumber.match(/(?:NGN|Naira)?\D*(\d{10})/i);
+      next.ngn_account_number = ngnMatch?.[1] || OFFICIAL_BANK_SETTINGS.ngn_account_number;
+    }
+
+    if (!String(next.usd_account_number || "").trim()) {
+      const usdMatch = legacyAccountNumber.match(/(?:USD|Dollar)\D*(\d{10})/i);
+      next.usd_account_number = usdMatch?.[1] || OFFICIAL_BANK_SETTINGS.usd_account_number;
+    }
+
+    if (!legacyAccountNumber || /^0+$/.test(legacyAccountNumber.replace(/\D/g, ""))) {
+      next.account_number = `NGN: ${next.ngn_account_number}\nUSD: ${next.usd_account_number}`;
+    }
+
+    return next;
+  }
+
+  async function load() {
+    const currentSettings = await api("/admin/settings");
+    setSettings(cleanSettings(currentSettings));
+  }
+
   useEffect(() => { load(); }, []);
-  async function submit(e) { e.preventDefault(); const savedSettings = await api("/admin/settings", { method: "PATCH", body: settings }); setSettings(savedSettings); await reloadPublic(); showToast("Settings saved and synced", "success"); }
-  return <section className="admin-section"><h2>Settings</h2><form className="admin-form" onSubmit={submit}><input placeholder="Student WhatsApp Group Link" value={settings.student_whatsapp_group_link || ""} onChange={(e) => setSettings({ ...settings, student_whatsapp_group_link: e.target.value })} /><input placeholder="Bank Name" value={settings.bank_name || ""} onChange={(e) => setSettings({ ...settings, bank_name: e.target.value })} /><input placeholder="Account Name" value={settings.account_name || ""} onChange={(e) => setSettings({ ...settings, account_name: e.target.value })} /><input placeholder="Account Number" value={settings.account_number || ""} onChange={(e) => setSettings({ ...settings, account_number: e.target.value })} /><button className="gold-btn">Save Settings</button></form></section>;
+
+  function updateField(key, value) {
+    setSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    const body = {
+      ...settings,
+      account_number: `NGN: ${settings.ngn_account_number || ""}\nUSD: ${settings.usd_account_number || ""}`
+    };
+    const savedSettings = await api("/admin/settings", { method: "PATCH", body });
+    setSettings(cleanSettings(savedSettings));
+    await reloadPublic();
+    showToast("Settings saved and synced", "success");
+  }
+
+  return (
+    <section className="admin-section">
+      <h2>Settings</h2>
+      <form className="admin-form" onSubmit={submit}>
+        <label>
+          Student WhatsApp Group Link
+          <input
+            placeholder="https://chat.whatsapp.com/your-student-group-link"
+            value={settings.student_whatsapp_group_link || ""}
+            onChange={(e) => updateField("student_whatsapp_group_link", e.target.value)}
+          />
+        </label>
+
+        <div className="admin-soft-card">
+          <h3>Official Bank Payment Details</h3>
+          <p className="muted">These details appear on the payment/manual transfer section.</p>
+
+          <label>
+            Bank Name
+            <input
+              placeholder={OFFICIAL_BANK_SETTINGS.bank_name}
+              value={settings.bank_name || ""}
+              onChange={(e) => updateField("bank_name", e.target.value)}
+            />
+          </label>
+
+          <label>
+            Account Name
+            <input
+              placeholder={OFFICIAL_BANK_SETTINGS.account_name}
+              value={settings.account_name || ""}
+              onChange={(e) => updateField("account_name", e.target.value)}
+            />
+          </label>
+
+          <label>
+            NGN Account Number
+            <input
+              placeholder={OFFICIAL_BANK_SETTINGS.ngn_account_number}
+              value={settings.ngn_account_number || ""}
+              onChange={(e) => updateField("ngn_account_number", e.target.value)}
+            />
+          </label>
+
+          <label>
+            USD Account Number
+            <input
+              placeholder={OFFICIAL_BANK_SETTINGS.usd_account_number}
+              value={settings.usd_account_number || ""}
+              onChange={(e) => updateField("usd_account_number", e.target.value)}
+            />
+          </label>
+        </div>
+
+        <button className="gold-btn">Save Settings</button>
+      </form>
+    </section>
+  );
 }
 
 const COUNTRY_OPTIONS = [
