@@ -3769,9 +3769,10 @@ function PaymentPanel({ programmes = [], courses = [], settings }) {
 
       <div className="bank-box premium-bank-box">
         <h4>Manual Bank Transfer</h4>
-        <p><strong>Bank:</strong> {settings.bank_name}</p>
-        <p><strong>Account Name:</strong> {settings.account_name}</p>
-        <p><strong>Account Number:</strong> {settings.account_number}</p>
+        <p><strong>Bank:</strong> FCMB — First City Monument Bank</p>
+        <p><strong>Account Name:</strong> CHAMPIONS ROYAL ASSEMBLY CIBI</p>
+        <p><strong>Naira Account:</strong> 2009387697</p>
+        <p><strong>Dollar Account:</strong> 1051261762</p>
       </div>
 
       <form className="admin-form manual-payment-form" onSubmit={submitManual}>
