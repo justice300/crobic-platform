@@ -5055,8 +5055,9 @@ function StudentsAdmin() {
       "send-payment-notice": { title: "Send payment notice?", message: "The student will see a payment notice inside the portal.", confirmText: "Send Notice" },
       "hide-payment-notice": { title: "Hide payment notice?", message: "The payment notice will be removed from the student portal.", confirmText: "Hide Notice" },
       "mark-payment-due": { title: "Mark payment due?", message: "Admin will see this as payment due. Student will not see notice until you send it.", confirmText: "Mark Due" },
-      "block-access": { title: "Block student access?", message: "This will block the student's course access and show a notice.", confirmText: "Block Access", danger: true },
-      "restore-access": { title: "Restore access?", message: "This will restore course access and hide payment notice.", confirmText: "Restore" },
+      "suspend-access": { title: "Suspend course access?", message: "This will stop the student from opening courses without marking payment as received or rejected.", confirmText: "Suspend Access", danger: true },
+      "block-access": { title: "Block student access?", message: "This will block the student's course access without changing payment status.", confirmText: "Block Access", danger: true },
+      "restore-access": { title: "Restore access?", message: "This will restore course access without changing payment status.", confirmText: "Restore" },
       "confirm-next-payment": { title: "Confirm next payment?", message: "This will confirm payment and refresh the student's access period.", confirmText: "Confirm Payment" }
     };
 
@@ -5093,9 +5094,9 @@ function StudentsAdmin() {
         danger: true
       },
       suspend: {
-        title: "Suspend student?",
-        message: "This will block the student's portal access until you reactivate them.",
-        confirmText: "Suspend",
+        title: "Suspend admission record?",
+        message: "This closes the admission record. To only stop course access, use Suspend Access under Level and Notices.",
+        confirmText: "Suspend Admission",
         danger: true
       },
       graduate: {
@@ -5368,6 +5369,7 @@ function StudentsAdmin() {
                         {enrollment ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "promote-level")}>Promote Level</button> : null}
                         {enrollment ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "send-payment-notice")}>Send Payment Notice</button> : null}
                         {enrollment?.studentPaymentNotice ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, "hide-payment-notice")}>Hide Notice</button> : null}
+                        {enrollment ? <button className="ghost-btn admin-cancel-btn" type="button" onClick={() => accessAction(enrollment, enrollment.accessStatus === "SUSPENDED" ? "restore-access" : "suspend-access")}>{enrollment.accessStatus === "SUSPENDED" ? "Restore Access" : "Suspend Access"}</button> : null}
                         {enrollment ? <button className="dark-btn" type="button" onClick={() => accessAction(enrollment, enrollment.accessStatus === "BLOCKED" ? "restore-access" : "block-access")}>{enrollment.accessStatus === "BLOCKED" ? "Restore Access" : "Block Access"}</button> : null}
                       </div>
                     </div>

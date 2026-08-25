@@ -393,7 +393,7 @@ async function canAccessCourseContent(user, courseId) {
       where: {
         userId: user.id,
         admissionStatus: { in: ["APPROVED", "GRADUATED"] },
-        accessStatus: { not: "BLOCKED" },
+        accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] },
         OR: [
           { courseId: id },
           course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
@@ -424,7 +424,7 @@ async function enrolledStudentsForCourse(courseId) {
   const id = Number(courseId || 0);
   if (!id) {
     return prisma.user.findMany({
-      where: { role: "STUDENT", enrollments: { some: { admissionStatus: { in: ["APPROVED", "GRADUATED"] }, accessStatus: { not: "BLOCKED" } } } },
+      where: { role: "STUDENT", enrollments: { some: { admissionStatus: { in: ["APPROVED", "GRADUATED"] }, accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] } } } },
       select: { id: true, name: true, email: true }
     });
   }
@@ -438,7 +438,7 @@ async function enrolledStudentsForCourse(courseId) {
       enrollments: {
         some: {
           admissionStatus: { in: ["APPROVED", "GRADUATED"] },
-          accessStatus: { not: "BLOCKED" },
+          accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] },
           OR: [
             { courseId: id },
             course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
@@ -542,15 +542,39 @@ function programmeDisplayTitle(enrollment = {}) {
   return enrollment.programme?.title || enrollment.course?.programme?.title || enrollment.course?.title || "Selected programme";
 }
 
+function studentAccessIsOpen(accessStatus = "") {
+  return !["BLOCKED", "SUSPENDED"].includes(String(accessStatus || "").trim().toUpperCase());
+}
+
+function normaliseLearningStage(value = "") {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (/\b100\s*l\b|\b100\s*level\b|\b100\b/.test(raw)) return "100";
+  if (/\b200\s*l\b|\b200\s*level\b|\b200\b/.test(raw)) return "200";
+  if (raw.includes("foundation")) return "foundation";
+  if (raw.includes("advanced")) return "advanced";
+  if (raw.includes("general")) return "general";
+  return raw.replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function enrollmentStageAllowsCourse(enrollmentStageValue = "", courseStageValue = "") {
+  const enrollmentStage = normaliseLearningStage(enrollmentStageValue);
+  const courseStage = normaliseLearningStage(courseStageValue);
+  if (!courseStage || courseStage === "general") return true;
+  if (!enrollmentStage) return true;
+  if (courseStage === enrollmentStage) return true;
+  const rawEnrollment = String(enrollmentStageValue || "").toLowerCase();
+  const rawCourse = String(courseStageValue || "").toLowerCase();
+  return Boolean(rawEnrollment && rawCourse && (rawCourse.includes(rawEnrollment) || rawEnrollment.includes(rawCourse)));
+}
+
 function canEnrollmentUseCourse(enrollment = {}, course = {}) {
   if (!enrollment || !course) return false;
-  if (enrollment.accessStatus === "BLOCKED") return false;
+  if (!studentAccessIsOpen(enrollment.accessStatus)) return false;
   if (course.generalForAllProgrammes) return true;
   if (enrollment.courseId && course.id === enrollment.courseId) return true;
   if (enrollment.programmeId && course.programmeId === enrollment.programmeId) {
-    const enrollmentStage = String(enrollment.currentLevelStage || "").trim().toLowerCase();
-    const courseStage = String(course.levelStage || "").trim().toLowerCase();
-    return !courseStage || courseStage === "general" || !enrollmentStage || courseStage === enrollmentStage;
+    return enrollmentStageAllowsCourse(enrollment.currentLevelStage, course.levelStage);
   }
   return false;
 }
@@ -1080,7 +1104,7 @@ async function getStudentLearningCourse(userId, courseId) {
     where: {
       userId,
       admissionStatus: { in: ["APPROVED", "GRADUATED"] },
-      accessStatus: { not: "BLOCKED" },
+      accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] },
       OR: [
         { courseId: id },
         course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
@@ -1606,7 +1630,7 @@ app.get("/api/public/bootstrap", async (req, res) => {
 app.get("/api/student/dashboard", requireAuth, requireActiveStudent, async (req, res) => {
   const [enrollments, generalCourses, announcements, liveSession, settingsRows] = await Promise.all([
     prisma.enrollment.findMany({
-      where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] }, accessStatus: { not: "BLOCKED" } },
+      where: { userId: req.user.id, admissionStatus: { in: ["APPROVED", "GRADUATED"] }, accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] } },
       include: {
         certificate: true,
         programme: {
@@ -1737,7 +1761,7 @@ async function studentCanSeeLiveCourse(userId, courseId) {
     where: {
       userId,
       admissionStatus: { in: ["APPROVED", "GRADUATED"] },
-      accessStatus: { not: "BLOCKED" },
+      accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] },
       OR: [
         { courseId: id },
         course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
@@ -3421,8 +3445,8 @@ app.patch("/api/admin/enrollments/:id/status", requireAuth, requireAdmin, async 
       suspend: {
         admissionStatus: "SUSPENDED",
         userStatus: "SUSPENDED",
-        approvedAt: null,
-        message: "Student suspended. Portal access has been blocked."
+        approvedAt: enrollment.approvedAt,
+        message: "Student suspended. Use Restore Access to reopen portal without changing payment status."
       },
       graduate: {
         admissionStatus: "GRADUATED",
@@ -3501,18 +3525,28 @@ app.patch("/api/admin/enrollments/:id/access", requireAuth, requireAdmin, async 
       data.accessStatus = "PAYMENT_DUE";
       data.nextPaymentDueAt = req.body?.nextPaymentDueAt ? new Date(req.body.nextPaymentDueAt) : enrollment.nextPaymentDueAt || new Date();
       message = "Student marked as payment due. Student notice is still hidden until admin sends it.";
+    } else if (action === "suspend-access") {
+      data.accessStatus = "SUSPENDED";
+      data.studentPaymentNotice = true;
+      data.studentPaymentNoticeMessage = String(req.body?.message || "Your programme access is temporarily suspended. Please contact CIBI admin.").trim();
+      data.studentPaymentNoticeSentAt = new Date();
+      message = "Student access suspended without changing payment status.";
     } else if (action === "block-access") {
       data.accessStatus = "BLOCKED";
       data.studentPaymentNotice = true;
       data.studentPaymentNoticeMessage = String(req.body?.message || "Your programme access is currently on hold. Please contact CIBI admin.").trim();
       data.studentPaymentNoticeSentAt = new Date();
-      message = "Student access blocked and notice shown.";
+      message = "Student access blocked without changing payment status.";
     } else if (action === "restore-access") {
       data.accessStatus = "ACTIVE";
+      if (enrollment.admissionStatus === "SUSPENDED") {
+        data.admissionStatus = "APPROVED";
+        data.approvedAt = enrollment.approvedAt || new Date();
+      }
       data.studentPaymentNotice = false;
       data.studentPaymentNoticeMessage = null;
       data.studentPaymentNoticeSentAt = null;
-      message = "Student access restored.";
+      message = "Student access restored without changing payment status.";
     } else if (action === "promote-level") {
       const nextLevel = String(req.body?.currentLevelStage || "").trim();
       if (!nextLevel) return res.status(400).json({ message: "Next level/stage is required." });
@@ -3544,7 +3578,13 @@ app.patch("/api/admin/enrollments/:id/access", requireAuth, requireAdmin, async 
       include: { user: true, programme: true, course: { include: { programme: true } } }
     });
 
-    if (["send-payment-notice", "block-access", "promote-level", "confirm-next-payment"].includes(action) && updated.user?.email) {
+    if (["suspend-access", "block-access"].includes(action)) {
+      await prisma.user.update({ where: { id: enrollment.userId }, data: { status: "SUSPENDED" } });
+    } else if (action === "restore-access") {
+      await prisma.user.update({ where: { id: enrollment.userId }, data: { status: "ACTIVE" } });
+    }
+
+    if (["send-payment-notice", "suspend-access", "block-access", "restore-access", "promote-level", "confirm-next-payment"].includes(action) && updated.user?.email) {
       queueEmailNotification({
         to: updated.user.email,
         subject: "CIBI programme access update",
