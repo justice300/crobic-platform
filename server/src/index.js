@@ -309,7 +309,7 @@ function requestMeta(req) {
 
 async function logAdminActivity(req, { action, entityType = "SYSTEM", entityId = null, details = {} } = {}) {
   try {
-    if (!req.user || req.user.role !== "ADMIN" || !action) return;
+    if (!req.user || !isAdminRole(req.user.role) || !action) return;
     const meta = requestMeta(req);
     await prisma.adminActivityLog.create({
       data: {
