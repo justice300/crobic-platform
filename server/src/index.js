@@ -1838,7 +1838,7 @@ async function buildLiveClassroomPayload(liveSession, viewerUserId = null) {
   const [chatMessages, questions, attendances, attendance] = await Promise.all([
     prisma.liveChatMessage.findMany({
       where: { liveSessionId: liveSession.id },
-      include: { user: { select: { id: true, name: true, role: true } } },
+      include: { user: { select: { id: true, name: true, role: true } }, replyTo: { include: { user: { select: { id: true, name: true, role: true } } } } },
       orderBy: { createdAt: "asc" },
       take: 120
     }),
@@ -1903,7 +1903,7 @@ app.post("/api/student/live/chat", requireAuth, requireActiveStudent, async (req
   });
 
   const chat = await prisma.liveChatMessage.create({
-    data: { liveSessionId: liveSession.id, userId: req.user.id, message },
+    data: { liveSessionId: liveSession.id, userId: req.user.id, message, replyToId: req.body?.replyToId ? Number(req.body.replyToId) : null },
     include: { user: { select: { id: true, name: true, role: true } } }
   });
 

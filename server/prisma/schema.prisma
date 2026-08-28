@@ -487,10 +487,14 @@ model LiveChatMessage {
   liveSessionId Int
   userId        Int
   message       String
+  replyToId     Int?
   createdAt     DateTime @default(now())
 
   liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  replyTo     LiveChatMessage? @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies     LiveChatMessage[] @relation("MessageReplies")
 }
 
 model LiveQuestion {

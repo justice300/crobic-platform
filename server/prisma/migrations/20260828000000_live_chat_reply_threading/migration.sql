@@ -1,0 +1,1 @@
+ALTER TABLE "LiveChatMessage" ADD COLUMN "replyToId" INTEGER;
