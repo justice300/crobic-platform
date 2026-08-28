@@ -65,6 +65,8 @@ const CIBI_IMAGES = {
 };
 
 const CIBI_PHONE_DISPLAY = "0812 130 0287";
+const CIBI_SECOND_PHONE_DISPLAY = "+234 706 774 9979";
+const CIBI_PHONE_DISPLAY_BOTH = `${CIBI_PHONE_DISPLAY} · ${CIBI_SECOND_PHONE_DISPLAY}`;
 const CIBI_PHONE_E164 = "2348121300287";
 const CIBI_ADDRESS = "Champions Royal Assembly, Chikakore Kubwa, Abuja, Nigeria.";
 const CIBI_MAP_QUERY = "Champions Royal Assembly, Chikakore Kubwa Abuja Nigeria";
@@ -89,7 +91,7 @@ const DEFAULT_FAQS = [
   },
   {
     question: "How can I contact CIBI?",
-    answer: `You can contact CIBI on WhatsApp or phone through ${CIBI_PHONE_DISPLAY}.`
+    answer: `You can contact CIBI on WhatsApp or phone through ${CIBI_PHONE_DISPLAY_BOTH}.`
   }
 ];
 
@@ -1586,7 +1588,7 @@ function Admissions({ courses, programmes = [], settings, user, openAuth, goTo, 
         </div>
         <div className="admission-fees-contact-note">
           <p>For Workers and Leadership Training Program fees, contact the admissions office.</p>
-          <strong>{CIBI_PHONE_DISPLAY}</strong>
+          <strong>{CIBI_PHONE_DISPLAY_BOTH}</strong>
         </div>
       </section>
 
@@ -1607,7 +1609,7 @@ function Admissions({ courses, programmes = [], settings, user, openAuth, goTo, 
       <section className="admission-section container">
         <SectionIntro eyebrow={getSetting(settings, "admission_contact_eyebrow", "Get in Touch")} title={getSetting(settings, "admission_contact_title", "Contact Admissions Office")} text={getSetting(settings, "admission_contact_text", "For help with application, payment confirmation or programme selection.")} />
         <div className="contact-grid admission-contact-grid">
-          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY_BOTH}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
           <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "admission_contact_location_title", "Location")}</h3><p>{CIBI_ADDRESS}</p></div>
           <div className="content-card contact-card"><Clock /><h3>{getSetting(settings, "admission_contact_hours_title", "Office Hours")}</h3><p>{getSetting(settings, "office_hours", "Monday to Saturday, 9 AM to 5 PM")}</p></div>
         </div>
@@ -1860,7 +1862,7 @@ function Contact({ settings = {} }) {
       <PageHero eyebrow={getSetting(settings, "contact_hero_eyebrow", "Contact")} title={getSetting(settings, "contact_hero_title", "Get in Touch with CIBI")} text={getSetting(settings, "contact_hero_text", "Contact the college for admissions, book enquiries, student support and general information.")} image={getSetting(settings, "contact_hero_image_url", CIBI_IMAGES.classroom)} />
       <section className="page container contact-page-section">
         <div className="contact-grid">
-          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY_BOTH}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
           <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{CIBI_ADDRESS}</p></div>
           <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CIBI information.")}</p><a className="contact-card-link" href="mailto:info@cibionline.org">{getSetting(settings, "contact_email", "info@cibionline.org")}</a></div>
         </div>
@@ -2605,7 +2607,7 @@ function StudentPortal({ user, setUser, goTo }) {
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [error, setError] = useState("");
   const [activeEnrollmentId, setActiveEnrollmentId] = useState(null);
-  const [studentTab, setStudentTab] = useState(() => getPortalInitialTab("dashboard", ["dashboard", "my profile", "my courses", "live classes", "attendance", "book library", "my results", "certificates", "support & appeals"]));
+  const [studentTab, setStudentTab] = useState(() => getPortalInitialTab("dashboard", ["dashboard", "my profile", "my courses", "assignments", "live classes", "attendance", "book library", "my results", "certificates", "support & appeals"]));
   const [publicBooks, setPublicBooks] = useState([]);
 
   async function loadDashboard() {
@@ -2654,7 +2656,7 @@ function StudentPortal({ user, setUser, goTo }) {
     <main className="portal-page student-portal-page">
       <PortalSidebar
         title="Student Portal"
-        items={["Dashboard", "My Profile", "My Courses", "Live Classes", "Attendance", "Book Library", "My Results", "Certificates", "Support & Appeals"]}
+        items={["Dashboard", "My Profile", "My Courses", "Assignments", "Live Classes", "Attendance", "Book Library", "My Results", "Certificates", "Support & Appeals"]}
         tab={studentTab}
         setTab={switchStudentTab}
       />
@@ -2752,6 +2754,12 @@ function StudentPortal({ user, setUser, goTo }) {
               </section>
             )}
 
+            {studentTab === "assignments" && (
+              <section className="student-tab-panel">
+                <StudentAssignmentsPanel enrollments={dashboard.enrollments} reloadDashboard={loadDashboard} />
+              </section>
+            )}
+
             {studentTab === "live classes" && (
               <section className="student-tab-panel">
                 <div className="student-tab-heading">
@@ -2804,6 +2812,67 @@ function StudentPortal({ user, setUser, goTo }) {
         )}
       </div>
     </main>
+  );
+}
+
+
+function StudentAssignmentsPanel({ enrollments = [], reloadDashboard }) {
+  const rows = enrollments
+    .filter((enrollment) => enrollment?.course)
+    .map((enrollment) => ({
+      enrollment,
+      course: enrollment.course,
+      assignments: (enrollment.course.assignments || []).filter((item) => item.published !== false)
+    }))
+    .filter((row) => row.assignments.length);
+
+  const grouped = rows.reduce((acc, row) => {
+    const key = `${row.course.id}`;
+    if (!acc[key]) acc[key] = row;
+    return acc;
+  }, {});
+
+  const groups = Object.values(grouped);
+
+  return (
+    <div className="student-assignments-panel">
+      <div className="student-tab-heading">
+        <span>Assessments</span>
+        <h2>Assignments</h2>
+        <p>All assignments given for your approved courses, organised by course and level.</p>
+      </div>
+
+      {!groups.length ? (
+        <div className="quiet-banner">
+          <strong>No assignments yet.</strong>
+          <p>Assignments will appear here when your lecturer publishes them for your approved courses.</p>
+        </div>
+      ) : (
+        <div className="student-assignment-groups">
+          {groups.map(({ enrollment, course, assignments }) => (
+            <section className="student-assignment-course" key={course.id}>
+              <div className="student-assignment-course-head">
+                <div>
+                  <span>{course.levelStage || course.level || enrollment.currentLevelStage || "Course"}</span>
+                  <h3>{course.title}</h3>
+                  <p>{enrollment.programmeTitle || course.programme?.title || "Approved course"}</p>
+                </div>
+                <strong>{assignments.length} assignment{assignments.length === 1 ? "" : "s"}</strong>
+              </div>
+              <div className="student-assignment-list">
+                {assignments.map((assignment) => (
+                  <StudentAssignmentCard
+                    key={assignment.id}
+                    assignment={assignment}
+                    reloadCourse={reloadDashboard}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -4934,6 +5003,13 @@ function Overview({ overview }) {
 }
 
 
+function formatAdminDateTime(value) {
+  if (!value) return "Not recorded";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not recorded";
+  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 function formatAdminStatusLabel(value) {
   return String(value || "UNKNOWN").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -5287,6 +5363,9 @@ function StudentsAdmin() {
               {isOpen ? (
                 <div className="lms-record-details">
                   <div className="lms-detail-grid">
+                    <div><small>Registration Date & Time</small><strong>{formatAdminDateTime(student.createdAt || enrollment?.createdAt)}</strong></div>
+                    <div><small>Admission Granted</small><strong>{enrollment?.approvedAt ? formatAdminDateTime(enrollment.approvedAt) : "Not granted yet"}</strong></div>
+                    <div><small>Days Since Admission</small><strong>{enrollment?.approvedAt ? `${Math.max(0, Math.floor((Date.now() - new Date(enrollment.approvedAt).getTime()) / 86400000))} day(s)` : "—"}</strong></div>
                     <div><small>Learning Stream</small><strong>{enrollment?.learningStream || applicationDetails.learningStream || "Not selected"}</strong></div>
                     <div><small>Current Level</small><strong>{row.level}</strong></div>
                     <div><small>Amount</small><strong>{enrollment ? formatAdminAmount(enrollment) : "No payment"}</strong></div>
@@ -8839,7 +8918,7 @@ function Footer({ goTo, settings = {} }) {
         <div>
           <h4>Contact</h4>
           <p>{getSetting(settings, "footer_address", CIBI_ADDRESS)}</p>
-          <p>{getSetting(settings, "footer_phone", CIBI_PHONE_DISPLAY)}</p>
+          <p>{getSetting(settings, "footer_phone", CIBI_PHONE_DISPLAY_BOTH)}</p>
           <p>{getSetting(settings, "footer_email", getSetting(settings, "contact_email", "info@cibionline.org"))}</p>
           <FooterSocialLinks settings={settings} />
         </div>
