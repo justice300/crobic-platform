@@ -3386,7 +3386,7 @@ app.get("/api/admin/students", requireAuth, requireAdmin, async (req, res) => {
     include: { enrollments: { where: staffCanSeeAllCourses(req.user) ? {} : { OR: [{ courseId: { in: courseIds } }, { programme: { courses: { some: { id: { in: courseIds } } } } }] }, include: { programme: true, course: { include: { programme: true } } } } },
     orderBy: { createdAt: "desc" }
   });
-  res.json(students.map((student) => ({ ...publicUser(student), enrollments: student.enrollments })));
+  res.json(students.map((student) => ({ ...publicUser(student), registrationDate: student.createdAt, registrationDateTime: student.createdAt, enrollments: student.enrollments.map((enrollment) => ({ ...enrollment, registrationDateTime: enrollment.createdAt, admissionGrantedAt: enrollment.approvedAt, daysSinceAdmission: enrollment.approvedAt ? Math.max(0, Math.floor((Date.now() - new Date(enrollment.approvedAt).getTime()) / 86400000)) : null })) })));
 });
 
 app.patch("/api/admin/students/:id", requireAuth, requireAdmin, async (req, res) => {
