@@ -2126,6 +2126,7 @@ function PortalVideoPlayer({ url, title }) {
 function LiveClassroom({ initialLiveSession }) {
   const [classroom, setClassroom] = useState(initialLiveSession ? { liveSession: initialLiveSession, chatMessages: [], questions: [], attendanceCount: 0, attendance: null } : null);
   const [chatMessage, setChatMessage] = useState("");
+  const [chatReplyTo, setChatReplyTo] = useState(null);
   const [question, setQuestion] = useState("");
   const [message, setMessage] = useState("");
 
@@ -2154,8 +2155,9 @@ function LiveClassroom({ initialLiveSession }) {
     e.preventDefault();
     if (!chatMessage.trim()) return;
     try {
-      await api("/student/live/chat", { method: "POST", body: { message: chatMessage } });
+      await api("/student/live/chat", { method: "POST", body: { message: chatMessage, replyToId: chatReplyTo?.id || null } });
       setChatMessage("");
+      setChatReplyTo(null);
       await loadClassroom();
     } catch (error) {
       showToast(error.message, "error");
@@ -2219,7 +2221,16 @@ function LiveClassroom({ initialLiveSession }) {
             <div className="chat-thread">
               {(classroom?.chatMessages || []).map((chat) => (
                 <div className="chat-bubble" key={chat.id}>
-                  <strong>{chat.user?.name || "Student"}</strong>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                    <strong>{chat.user?.name || "Student"}</strong>
+                    {liveSession.chatEnabled !== false && <button type="button" className="delete-mini-btn" onClick={() => setChatReplyTo(chat)}>Reply</button>}
+                  </div>
+                  {chat.replyTo && (
+                    <div style={{ margin: "6px 0", padding: "7px 9px", borderLeft: "3px solid currentColor", opacity: 0.75, fontSize: 12 }}>
+                      <strong>{chat.replyTo.user?.name || "User"}</strong>
+                      <div>{chat.replyTo.message}</div>
+                    </div>
+                  )}
                   <p>{chat.message}</p>
                 </div>
               ))}
@@ -2228,10 +2239,21 @@ function LiveClassroom({ initialLiveSession }) {
             {liveSession.chatEnabled === false ? (
               <div className="quiet-banner small-quiet">Live chat is turned off by the lecturer.</div>
             ) : (
-              <form className="chat-form" onSubmit={sendChat}>
-                <input placeholder="Type class message..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} />
-                <button className="gold-btn" type="submit">Send</button>
-              </form>
+              <>
+                {chatReplyTo && (
+                  <div style={{ margin: "10px 0 6px", padding: "8px 10px", borderLeft: "3px solid currentColor", background: "rgba(0,0,0,.04)", borderRadius: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <strong>Replying to {chatReplyTo.user?.name || "User"}</strong>
+                      <button type="button" className="delete-mini-btn" onClick={() => setChatReplyTo(null)}>Cancel</button>
+                    </div>
+                    <small>{chatReplyTo.message}</small>
+                  </div>
+                )}
+                <form className="chat-form" onSubmit={sendChat}>
+                  <input placeholder={chatReplyTo ? "Write your reply..." : "Type class message..."} value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} />
+                  <button className="gold-btn" type="submit">Send</button>
+                </form>
+              </>
             )}
           </div>
 
@@ -7025,6 +7047,8 @@ function LiveAdmin({ reloadPublic }) {
   const [courses, setCourses] = useState([]);
   const [programmes, setProgrammes] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [chatReplyTo, setChatReplyTo] = useState(null);
+  const [chatMessage, setChatMessage] = useState("");
 
   async function loadCourses() {
     const [courseRows, programmeRows] = await Promise.all([
@@ -7081,6 +7105,19 @@ function LiveAdmin({ reloadPublic }) {
   async function markQuestionStatus(questionId, status) {
     await api(`/admin/live/questions/${questionId}`, { method: "PATCH", body: { status } });
     await loadClassroom();
+  }
+
+  async function sendChat(e) {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+    try {
+      await api("/admin/live/chat", { method: "POST", body: { message: chatMessage, replyToId: chatReplyTo?.id || null } });
+      setChatMessage("");
+      setChatReplyTo(null);
+      await loadClassroom();
+    } catch (error) {
+      showToast(error.message || "Could not send chat message", "error");
+    }
   }
 
   async function deleteChat(chatId) {
@@ -7246,13 +7283,37 @@ function LiveAdmin({ reloadPublic }) {
               <div className="chat-thread">
                 {(classroom?.chatMessages || []).map((chat) => (
                   <div className="chat-bubble" key={chat.id}>
-                    <strong>{chat.user?.name || "Student"}</strong>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                      <strong>{chat.user?.name || "Student"}</strong>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button className="delete-mini-btn" type="button" onClick={() => setChatReplyTo(chat)}>Reply</button>
+                        <button className="delete-mini-btn" type="button" onClick={() => deleteChat(chat.id)}>Delete</button>
+                      </div>
+                    </div>
+                    {chat.replyTo && (
+                      <div style={{ margin: "6px 0", padding: "7px 9px", borderLeft: "3px solid currentColor", opacity: 0.75, fontSize: 12 }}>
+                        <strong>{chat.replyTo.user?.name || "User"}</strong>
+                        <div>{chat.replyTo.message}</div>
+                      </div>
+                    )}
                     <p>{chat.message}</p>
-                    <button className="delete-mini-btn" type="button" onClick={() => deleteChat(chat.id)}>Delete</button>
                   </div>
                 ))}
                 {!(classroom?.chatMessages || []).length && <p className="empty-small">No chat messages yet.</p>}
               </div>
+              {chatReplyTo && (
+                <div style={{ marginTop: 10, padding: "8px 10px", borderLeft: "3px solid currentColor", background: "rgba(0,0,0,.04)", borderRadius: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <strong>Replying to {chatReplyTo.user?.name || "User"}</strong>
+                    <button type="button" className="delete-mini-btn" onClick={() => setChatReplyTo(null)}>Cancel</button>
+                  </div>
+                  <small>{chatReplyTo.message}</small>
+                </div>
+              )}
+              <form className="chat-form" onSubmit={sendChat}>
+                <input placeholder={chatReplyTo ? "Write your reply..." : "Send a message to the class..."} value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} />
+                <button className="gold-btn" type="submit">Send</button>
+              </form>
             </div>
 
             <div className="classroom-box">

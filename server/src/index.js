@@ -4462,6 +4462,36 @@ app.patch("/api/admin/live/questions/:id", requireAuth, requireAdmin, async (req
   }
 });
 
+app.post("/api/admin/live/chat", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const liveSession = await findAllowedLiveSessionForStaff({ user: req.user, activeOnly: true });
+    if (!liveSession) return res.status(404).json({ message: "No active live class currently." });
+    if (liveSession.chatEnabled === false) return res.status(403).json({ message: "Live chat is currently turned off." });
+
+    const message = String(req.body?.message || "").trim();
+    if (!message) return res.status(400).json({ message: "Chat message is required." });
+    if (message.length > 500) return res.status(400).json({ message: "Chat message is too long. Keep it under 500 characters." });
+
+    let replyToId = req.body?.replyToId ? Number(req.body.replyToId) : null;
+    if (replyToId) {
+      const original = await prisma.liveChatMessage.findFirst({ where: { id: replyToId, liveSessionId: liveSession.id } });
+      if (!original) return res.status(400).json({ message: "The message you are replying to is no longer in this live class." });
+    }
+
+    const chat = await prisma.liveChatMessage.create({
+      data: { liveSessionId: liveSession.id, userId: req.user.id, message, replyToId },
+      include: {
+        user: { select: { id: true, name: true, role: true } },
+        replyTo: { include: { user: { select: { id: true, name: true, role: true } } } }
+      }
+    });
+
+    res.status(201).json(chat);
+  } catch (error) {
+    res.status(400).json({ message: "Could not send chat message", error: error.message });
+  }
+});
+
 app.delete("/api/admin/live/chat/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     await prisma.liveChatMessage.delete({ where: { id: Number(req.params.id) } });
