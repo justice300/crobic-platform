@@ -4051,6 +4051,12 @@ function LecturerOverview({ lecturer, courses, selectedCourse, setTab }) {
       text: "Start or manage a live class for this course.",
       tab: "live",
       icon: <Radio size={24} />
+    },
+    {
+      title: "Gradebook",
+      text: "Review and record student performance for this course.",
+      tab: "gradebook",
+      icon: <CheckCircle size={24} />
     }
   ];
 
@@ -4107,7 +4113,7 @@ function LecturerOverview({ lecturer, courses, selectedCourse, setTab }) {
 }
 
 function LecturerDashboard({ reloadPublic, currentUser }) {
-  const allowedTabs = ["overview", "course builder", "assignments & quiz", "attendance records", "course discussions", "live"];
+  const allowedTabs = ["overview", "course builder", "assignments & quiz", "attendance records", "course discussions", "live", "gradebook"];
   const [tab, setTab] = useState(() => getPortalInitialTab("overview", allowedTabs));
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
@@ -4164,7 +4170,7 @@ function LecturerDashboard({ reloadPublic, currentUser }) {
         {tab === "assignments & quiz" && <AssessmentsAdmin />}
         {tab === "attendance records" && <AttendanceRecordsAdmin />}
         {tab === "course discussions" && <CourseDiscussionsAdmin />}
-        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}\n        {tab === "gradebook" && <LecturerGradebook courseId={selectedCourseId} course={selectedCourse} />}
       </div>
     </main>
   );
@@ -4215,7 +4221,7 @@ function AdminDashboard({ reloadPublic, currentUser }) {
         {tab === "slides" && <SlidesAdmin reloadPublic={reloadPublic} />}
         {tab === "gallery" && <CrudAdmin title="Gallery" path="gallery" reloadPublic={reloadPublic} fields={galleryFields} />}
         {tab === "announcements" && <CrudAdmin title="Announcements" path="announcements" reloadPublic={reloadPublic} fields={announcementFields} />}
-        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}\n        {tab === "gradebook" && <LecturerGradebook courseId={selectedCourseId} course={selectedCourse} />}
         {tab === "appeals & support" && <SupportAdmin />}
         {tab === "website content" && <WebsiteContentAdmin reloadPublic={reloadPublic} />}
         {tab === "currency settings" && <CurrencySettingsAdmin />}
@@ -6916,9 +6922,10 @@ function CertificateVerification() {
 
 function GradebookAdmin() {
   const [rows, setRows] = useState([]);
-  const [filter, setFilter] = useState("ALL");
+  const [programmeId, setProgrammeId] = useState("ALL");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selectedStudent, setSelectedStudent] = useState(null);
 
   async function load() {
     try {
@@ -6933,75 +6940,86 @@ function GradebookAdmin() {
 
   useEffect(() => { load(); }, []);
 
-  const stats = useMemo(() => ({
-    total: rows.length,
-    ready: rows.filter((row) => row.status === "CERTIFICATE_READY").length,
-    issued: rows.filter((row) => row.status === "CERTIFICATE_ISSUED").length,
-    attention: rows.filter((row) => row.status === "NEEDS_ATTENTION").length,
-    pending: rows.filter((row) => ["IN_PROGRESS", "PENDING_REQUIREMENTS"].includes(row.status)).length
-  }), [rows]);
+  const programmes = useMemo(() => {
+    const map = new Map();
+    rows.forEach((row) => {
+      const id = row.course?.programmeId;
+      const title = row.course?.programmeTitle;
+      if (id && title && !map.has(String(id))) map.set(String(id), title);
+    });
+    return [...map.entries()].map(([id, title]) => ({ id, title })).sort((a, b) => a.title.localeCompare(b.title));
+  }, [rows]);
 
-  const filtered = rows.filter((row) => {
-    const haystack = `${row.student?.name || ""} ${row.student?.email || ""} ${row.course?.title || ""}`.toLowerCase();
-    const matchesSearch = !search.trim() || haystack.includes(search.toLowerCase());
-    const matchesFilter = filter === "ALL" || row.status === filter;
-    return matchesSearch && matchesFilter;
+  const students = useMemo(() => {
+    const grouped = new Map();
+    rows
+      .filter((row) => programmeId === "ALL" || String(row.course?.programmeId || "") === String(programmeId))
+      .forEach((row) => {
+        const key = `${row.student?.id || row.student?.email}|${row.course?.programmeId || "none"}`;
+        if (!grouped.has(key)) grouped.set(key, { student: row.student, programmeId: row.course?.programmeId || null, programmeTitle: row.course?.programmeTitle || "General", courses: [] });
+        grouped.get(key).courses.push(row);
+      });
+
+    return [...grouped.values()].map((group) => {
+      const scores = group.courses.map((item) => item.overallScore).filter((value) => value !== null && value !== undefined);
+      const avg = scores.length ? Math.round(scores.reduce((a, b) => a + Number(b), 0) / scores.length) : 0;
+      const assignmentScores = group.courses.flatMap((course) => (course.assignments || []).map((item) => item.score === null || item.score === undefined ? null : Math.round((Number(item.score) / Number(item.maxScore || 100)) * 100))).filter((v) => v !== null);
+      const completed = group.courses.reduce((sum, course) => sum + Number(course.passedAssignments || 0) + Number(course.passedQuizzes || 0), 0);
+      const total = group.courses.reduce((sum, course) => sum + Number(course.totalAssignments || 0) + Number(course.totalQuizzes || 0), 0);
+      return { ...group, averageScore: avg, assignmentAverage: assignmentScores.length ? Math.round(assignmentScores.reduce((a, b) => a + b, 0) / assignmentScores.length) : null, completed, total };
+    })
+      .sort((a, b) => b.averageScore - a.averageScore || String(a.student?.name || "").localeCompare(String(b.student?.name || "")));
+  }, [rows, programmeId]);
+
+  const filteredStudents = students.filter((item) => {
+    const haystack = `${item.student?.name || ""} ${item.student?.email || ""} ${item.programmeTitle || ""}`.toLowerCase();
+    return !search.trim() || haystack.includes(search.toLowerCase());
   });
 
-  return (
-    <section className="admin-section gradebook-admin-panel">
-      <div className="content-editor-header students-admin-header">
-        <div>
-          <span>Academic Results</span>
-          <h2>Gradebook</h2>
-          <p>Review lesson completion, assignment grades, quiz scores, overall progress and certificate readiness in one place.</p>
+  const stats = {
+    students: students.length,
+    ready: students.filter((item) => item.courses.some((course) => course.status === "CERTIFICATE_READY")).length,
+    attention: students.filter((item) => item.courses.some((course) => course.status === "NEEDS_ATTENTION")).length,
+    inProgress: students.filter((item) => item.courses.some((course) => ["IN_PROGRESS", "PENDING_REQUIREMENTS"].includes(course.status))).length,
+    issued: students.filter((item) => item.courses.some((course) => course.status === "CERTIFICATE_ISSUED")).length
+  };
+
+  if (selectedStudent) {
+    const courseRows = selectedStudent.courses;
+    return (
+      <section className="admin-section gradebook-admin-panel">
+        <div className="content-editor-header students-admin-header">
+          <div>
+            <span>Student Academic Record</span>
+            <h2>{selectedStudent.student?.name || "Student"}</h2>
+            <p>{selectedStudent.student?.email} · {selectedStudent.programmeTitle}</p>
+          </div>
+          <button className="gold-btn" type="button" onClick={() => setSelectedStudent(null)}>Back to Gradebook</button>
         </div>
-        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
-      </div>
 
-      <div className="gradebook-stats-grid">
-        <button type="button" className={filter === "ALL" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("ALL")}><span>All Records</span><strong>{stats.total}</strong><small>All approved students</small></button>
-        <button type="button" className={filter === "CERTIFICATE_READY" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("CERTIFICATE_READY")}><span>Ready</span><strong>{stats.ready}</strong><small>Can issue certificate</small></button>
-        <button type="button" className={filter === "NEEDS_ATTENTION" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("NEEDS_ATTENTION")}><span>Needs Attention</span><strong>{stats.attention}</strong><small>Failed or revision</small></button>
-        <button type="button" className={filter === "IN_PROGRESS" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("IN_PROGRESS")}><span>In Progress</span><strong>{stats.pending}</strong><small>Still learning</small></button>
-        <button type="button" className={filter === "CERTIFICATE_ISSUED" ? "support-stat-card active-support-filter" : "support-stat-card"} onClick={() => setFilter("CERTIFICATE_ISSUED")}><span>Issued</span><strong>{stats.issued}</strong><small>Certificate issued</small></button>
-      </div>
+        <div className="gradebook-stats-grid">
+          <div className="support-stat-card active-support-filter"><span>Overall Average</span><strong>{selectedStudent.averageScore}%</strong><small>Across listed courses</small></div>
+          <div className="support-stat-card"><span>Courses</span><strong>{courseRows.length}</strong><small>Courses in programme</small></div>
+          <div className="support-stat-card"><span>Assignments</span><strong>{selectedStudent.completed}/{selectedStudent.total}</strong><small>Passed / total assessments</small></div>
+          <div className="support-stat-card"><span>Assignment Average</span><strong>{selectedStudent.assignmentAverage === null ? "—" : `${selectedStudent.assignmentAverage}%`}</strong><small>Graded submissions</small></div>
+        </div>
 
-      <div className="library-tools gradebook-toolbar">
-        <div className="search-box"><Search size={18} /><input placeholder="Search by student, email or course..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-      </div>
-
-      {loading ? <p>Loading gradebook...</p> : (
         <div className="gradebook-list">
-          {filtered.map((row) => (
+          {courseRows.map((row) => (
             <article className="gradebook-card" key={row.enrollmentId}>
               <div className="gradebook-card-head">
-                <div>
-                  <span>{row.course?.level || "Programme"}</span>
-                  <h3>{row.student?.name}</h3>
-                  <p>{row.student?.email} · {row.course?.title}</p>
-                </div>
-                <div className="gradebook-score-box">
-                  <strong>{row.percent}%</strong>
-                  <ResultStatusPill status={row.status} />
-                </div>
+                <div><span>{row.course?.level || "Course"}</span><h3>{row.course?.title}</h3><p>{row.course?.programmeTitle || selectedStudent.programmeTitle}</p></div>
+                <div className="gradebook-score-box"><strong>{row.overallScore ?? 0}%</strong><ResultStatusPill status={row.status} /></div>
               </div>
-
-              <div className="learning-progress-mini admin-progress-mini">
-                <div><strong>{row.completedRequirements}/{row.totalRequirements}</strong><small>required items completed</small></div>
-                <i><b style={{ width: `${row.percent}%` }} /></i>
-              </div>
-
               <div className="gradebook-metrics">
                 <div><small>Lessons</small><strong>{row.completedLessons}/{row.totalLessons}</strong></div>
                 <div><small>Assignments</small><strong>{row.passedAssignments}/{row.totalAssignments}</strong></div>
                 <div><small>Quizzes</small><strong>{row.passedQuizzes}/{row.totalQuizzes}</strong></div>
-                <div><small>Overall Score</small><strong>{scoreLabel(row.overallScore)}</strong></div>
+                <div><small>Progress</small><strong>{row.percent}%</strong></div>
                 <div><small>Certificate</small><strong>{row.certificate?.status || "Not issued"}</strong></div>
               </div>
-
               <details className="gradebook-details">
-                <summary>View assignment and quiz breakdown</summary>
+                <summary>View course assessment record</summary>
                 <div className="result-detail-grid">
                   <div className="result-detail-panel">
                     <h4>Assignments</h4>
@@ -7009,32 +7027,169 @@ function GradebookAdmin() {
                       <div className="result-item-row" key={item.id}>
                         <div><strong>{item.title}</strong><small>{item.studentSubmittedAt ? `Submitted: ${new Date(item.studentSubmittedAt).toLocaleDateString()}` : "Not submitted"}</small></div>
                         <div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.score, `/${item.maxScore}`)}</small></div>
-                        {item.fileUrl && <a href={item.fileUrl} target="_blank" rel="noreferrer">View file</a>}
-                        {item.feedback && <p><b>Feedback:</b> {item.feedback}</p>}
+                        {item.feedback && <p><b>Lecturer feedback:</b> {item.feedback}</p>}
                       </div>
                     ))}
-                    {!row.assignments?.length && <p className="empty-small">No assignments for this course.</p>}
+                    {!row.assignments?.length && <p className="empty-small">No assignments.</p>}
                   </div>
                   <div className="result-detail-panel">
-                    <h4>Quizzes</h4>
-                    {(row.quizzes || []).map((item) => (
-                      <div className="result-item-row" key={item.id}>
-                        <div><strong>{item.title}</strong><small>{item.attemptCount} attempt(s) · Pass mark {item.passScore}%</small></div>
-                        <div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.bestScore)}</small></div>
-                      </div>
-                    ))}
-                    {!row.quizzes?.length && <p className="empty-small">No quizzes for this course.</p>}
+                    <h4>Quizzes & Lecturer Record</h4>
+                    {(row.quizzes || []).map((item) => <div className="result-item-row" key={item.id}><div><strong>{item.title}</strong><small>{item.attemptCount} attempt(s)</small></div><div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.bestScore)}</small></div></div>)}
+                    {(row.lecturerAssessments || []).map((item) => <div className="result-item-row" key={`lecturer-${item.id}`}><div><strong>{item.category}</strong><small>Recorded by {item.lecturer?.name || "Lecturer"}</small></div><div><strong>{scoreLabel(item.score, `/${item.maxScore}`)}</strong></div>{item.comment && <p><b>Lecturer note:</b> {item.comment}</p>}</div>)}
+                    {!row.quizzes?.length && !row.lecturerAssessments?.length && <p className="empty-small">No quiz or lecturer records yet.</p>}
                   </div>
                 </div>
               </details>
             </article>
           ))}
-          {!filtered.length && <div className="quiet-banner"><strong>No gradebook records found.</strong><p>Approved students with course activities will appear here.</p></div>}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="admin-section gradebook-admin-panel">
+      <div className="content-editor-header students-admin-header">
+        <div><span>Academic Results</span><h2>Gradebook</h2><p>Select a programme, then review approved students from best performing to lowest performing.</p></div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="admin-form gradebook-programme-selector">
+        <label className="content-field">
+          <span>Programme</span>
+          <select value={programmeId} onChange={(e) => setProgrammeId(e.target.value)}>
+            <option value="ALL">All programmes</option>
+            {programmes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="gradebook-stats-grid">
+        <div className="support-stat-card active-support-filter"><span>Approved Students</span><strong>{stats.students}</strong><small>Unique students</small></div>
+        <div className="support-stat-card"><span>Ready</span><strong>{stats.ready}</strong><small>Certificate ready</small></div>
+        <div className="support-stat-card"><span>Needs Attention</span><strong>{stats.attention}</strong><small>Requires review</small></div>
+        <div className="support-stat-card"><span>In Progress</span><strong>{stats.inProgress}</strong><small>Still learning</small></div>
+        <div className="support-stat-card"><span>Issued</span><strong>{stats.issued}</strong><small>Certificate issued</small></div>
+      </div>
+
+      <div className="library-tools gradebook-toolbar">
+        <div className="search-box"><Search size={18} /><input placeholder="Search student or email..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+      </div>
+
+      {loading ? <p>Loading gradebook...</p> : (
+        <div className="gradebook-list">
+          {filteredStudents.map((item, index) => (
+            <button type="button" className="gradebook-card gradebook-student-row" key={`${item.student?.id}-${item.programmeId}`} onClick={() => setSelectedStudent(item)}>
+              <div className="gradebook-card-head">
+                <div><span>Rank #{index + 1} · {item.programmeTitle}</span><h3>{item.student?.name}</h3><p>{item.student?.email}</p></div>
+                <div className="gradebook-score-box"><strong>{item.averageScore}%</strong><small>Overall</small></div>
+              </div>
+              <div className="gradebook-metrics">
+                <div><small>Courses</small><strong>{item.courses.length}</strong></div>
+                <div><small>Assignments / Quizzes</small><strong>{item.completed}/{item.total}</strong></div>
+                <div><small>Assignment Avg.</small><strong>{item.assignmentAverage === null ? "—" : `${item.assignmentAverage}%`}</strong></div>
+                <div><small>Top Course</small><strong>{item.courses[0]?.course?.title || "—"}</strong></div>
+              </div>
+            </button>
+          ))}
+          {!filteredStudents.length && <div className="quiet-banner"><strong>No approved students found.</strong><p>Select another programme or search term.</p></div>}
         </div>
       )}
     </section>
   );
 }
+
+function LecturerGradebook({ courseId, course }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [drafts, setDrafts] = useState({});
+
+  async function load() {
+    if (!courseId) return;
+    try {
+      setLoading(true);
+      const result = await api(`/admin/gradebook?courseId=${encodeURIComponent(courseId)}`);
+      setRows((result || []).sort((a, b) => Number(b.overallScore || 0) - Number(a.overallScore || 0)));
+    } catch (error) {
+      showToast(error.message || "Could not load course gradebook", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [courseId]);
+
+  function currentAssessment(row) {
+    return (row.lecturerAssessments || []).find((item) => item.category === "LECTURER_ASSESSMENT") || null;
+  }
+
+  function updateDraft(studentId, field, value) {
+    setDrafts((current) => ({ ...current, [studentId]: { ...(current[studentId] || {}), [field]: value } }));
+  }
+
+  async function save(row) {
+    const current = currentAssessment(row);
+    const draft = drafts[row.student?.id] || {};
+    try {
+      await api("/admin/lecturer-assessments", {
+        method: "POST",
+        body: {
+          courseId: Number(courseId),
+          studentId: Number(row.student?.id),
+          category: "LECTURER_ASSESSMENT",
+          score: draft.score === undefined ? (current?.score ?? "") : draft.score,
+          maxScore: 100,
+          comment: draft.comment === undefined ? (current?.comment || "") : draft.comment
+        }
+      });
+      showToast(`Record saved for ${row.student?.name}.`, "success");
+      await load();
+    } catch (error) {
+      showToast(error.message || "Could not save lecturer record", "error");
+    }
+  }
+
+  if (!course) return <section className="admin-section"><div className="empty-state"><strong>Select a course first.</strong><p>Choose a course from the left sidebar.</p></div></section>;
+
+  return (
+    <section className="admin-section gradebook-admin-panel">
+      <div className="content-editor-header students-admin-header">
+        <div><span>Lecturer Gradebook</span><h2>{course.title}</h2><p>Approved students are ranked by their current course performance. Record your lecturer assessment and comments here.</p></div>
+        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
+      </div>
+      <div className="quiet-banner compact"><strong>Course access only</strong><p>You can only see students who have approved access to this course.</p></div>
+      {loading ? <p>Loading course gradebook...</p> : (
+        <div className="gradebook-list">
+          {rows.map((row, index) => {
+            const assessment = currentAssessment(row);
+            const draft = drafts[row.student?.id] || {};
+            return (
+              <article className="gradebook-card" key={row.enrollmentId}>
+                <div className="gradebook-card-head">
+                  <div><span>Rank #{index + 1}</span><h3>{row.student?.name}</h3><p>{row.student?.email}</p></div>
+                  <div className="gradebook-score-box"><strong>{row.overallScore ?? 0}%</strong><small>Current overall</small></div>
+                </div>
+                <div className="gradebook-metrics">
+                  <div><small>Lessons</small><strong>{row.completedLessons}/{row.totalLessons}</strong></div>
+                  <div><small>Assignments</small><strong>{row.passedAssignments}/{row.totalAssignments}</strong></div>
+                  <div><small>Quizzes</small><strong>{row.passedQuizzes}/{row.totalQuizzes}</strong></div>
+                  <div><small>Progress</small><strong>{row.percent}%</strong></div>
+                </div>
+                <div className="admin-form lecturer-grade-entry">
+                  <label className="content-field"><span>Lecturer assessment / 100</span><input type="number" min="0" max="100" value={draft.score ?? assessment?.score ?? ""} onChange={(e) => updateDraft(row.student?.id, "score", e.target.value)} placeholder="Enter score" /></label>
+                  <label className="content-field"><span>Lecturer comment</span><textarea rows="3" value={draft.comment ?? assessment?.comment ?? ""} onChange={(e) => updateDraft(row.student?.id, "comment", e.target.value)} placeholder="Add academic feedback or observation..." /></label>
+                  <button className="gold-btn" type="button" onClick={() => save(row)}>Save Record</button>
+                </div>
+              </article>
+            );
+          })}
+          {!rows.length && <div className="quiet-banner"><strong>No approved students in this course.</strong><p>Students will appear here after admission is approved.</p></div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
 
 function ProgressAdmin() {
   const [rows, setRows] = useState([]);

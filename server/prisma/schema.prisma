@@ -89,6 +89,8 @@ model User {
   uploadedDocuments       CourseDocument[]       @relation("DocumentUploader")
   startedLiveSessions     LiveSession[]          @relation("LiveSessionStarter")
   notifications           Notification[]
+  lecturerAssessmentsAsStudent LecturerAssessment[] @relation("LecturerAssessmentStudent")
+  lecturerAssessmentsAsLecturer LecturerAssessment[] @relation("LecturerAssessmentAuthor")
 }
 
 model Programme {
@@ -144,6 +146,7 @@ model Course {
   videos           CourseVideo[]
   documents        CourseDocument[]
   notifications    Notification[]
+  lecturerAssessments LecturerAssessment[]
 
   programme Programme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
 
@@ -592,6 +595,28 @@ model CourseDiscussionReply {
 
   @@index([discussionId])
   @@index([userId])
+}
+
+model LecturerAssessment {
+  id         Int      @id @default(autoincrement())
+  courseId   Int
+  studentId  Int
+  lecturerId Int
+  category   String   @default("LECTURER_ASSESSMENT")
+  score      Int?
+  maxScore   Int      @default(100)
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student  User   @relation("LecturerAssessmentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  lecturer User   @relation("LecturerAssessmentAuthor", fields: [lecturerId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, studentId, lecturerId, category])
+  @@index([courseId])
+  @@index([studentId])
+  @@index([lecturerId])
 }
 
 model CourseLecturerAccess {

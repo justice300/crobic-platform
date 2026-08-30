@@ -701,7 +701,8 @@ function adminCourseInclude() {
     modules: { include: { lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } } }, orderBy: { moduleOrder: "asc" } },
     lessons: { include: { progress: true }, orderBy: { lessonOrder: "asc" } },
     assignments: { include: { submissions: true }, orderBy: { createdAt: "asc" } },
-    quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } }
+    quizzes: { include: { questions: { orderBy: { questionOrder: "asc" } }, attempts: true }, orderBy: { createdAt: "asc" } },
+    lecturerAssessments: { include: { lecturer: { select: { id: true, name: true, email: true } } }, orderBy: { updatedAt: "desc" } }
   };
 }
 
@@ -977,7 +978,19 @@ function buildGradebookRow(enrollment) {
   const assignmentPercentScores = assignments
     .map((item) => item.score === null || item.score === undefined ? null : Math.round((Number(item.score) / Number(item.maxScore || 100)) * 100));
   const quizScores = quizzes.map((item) => item.bestScore);
-  const overallScore = average([summary.lessonPercent, average(assignmentPercentScores), average(quizScores)]);
+  const lecturerAssessments = (course.lecturerAssessments || [])
+    .filter((item) => item.studentId === userId && item.score !== null && item.score !== undefined)
+    .map((item) => ({
+      id: item.id,
+      category: item.category || "LECTURER_ASSESSMENT",
+      score: item.score,
+      maxScore: item.maxScore || 100,
+      comment: item.comment || "",
+      lecturer: item.lecturer || null,
+      updatedAt: item.updatedAt || item.createdAt
+    }));
+  const lecturerScores = lecturerAssessments.map((item) => Math.round((Number(item.score) / Number(item.maxScore || 100)) * 100));
+  const overallScore = average([summary.lessonPercent, average(assignmentPercentScores), average(quizScores), average(lecturerScores)]);
   const requiredAssignments = assignments.filter((item) => item.required !== false);
   const requiredQuizzes = quizzes.filter((item) => item.required !== false);
   const pendingRequired = (summary.totalRequired - summary.completedRequired) + (requiredAssignments.length - summary.completedAssignments) + (requiredQuizzes.length - summary.completedQuizzes);
@@ -995,7 +1008,7 @@ function buildGradebookRow(enrollment) {
   return {
     enrollmentId: enrollment.id,
     student: enrollment.user ? publicUser(enrollment.user) : null,
-    course: { id: course.id, title: course.title, level: course.level, duration: course.duration },
+    course: { id: course.id, title: course.title, level: course.level, duration: course.duration, programmeId: course.programmeId || enrollment.programmeId || null, programmeTitle: enrollment.programmeTitle || course.programme?.title || "" },
     certificate: enrollment.certificate,
     completedRequirements: summary.completedRequirements,
     totalRequirements: summary.totalRequirements,
@@ -1011,7 +1024,8 @@ function buildGradebookRow(enrollment) {
     overallScore,
     status,
     assignments,
-    quizzes
+    quizzes,
+    lecturerAssessments
   };
 }
 
@@ -2901,26 +2915,85 @@ app.delete("/api/admin/quiz-questions/:id", requireAuth, requireAdmin, async (re
 
 
 app.get("/api/admin/gradebook", requireAuth, requireAdmin, async (req, res) => {
-  const activeEnrollmentWhere = {
-    OR: [
-      { admissionStatus: { in: ["APPROVED", "GRADUATED"] } },
-      { paymentStatus: "PAYMENT_CONFIRMED" },
-      { user: { status: { in: ["ACTIVE", "GRADUATED"] } } }
-    ]
-  };
+  try {
+    const requestedCourseId = req.query.courseId ? Number(req.query.courseId) : null;
+    if (requestedCourseId && !(await canManageCourse(req, requestedCourseId))) {
+      return res.status(403).json({ message: "You do not have access to this course." });
+    }
 
-  const enrollments = await prisma.enrollment.findMany({
-    where: activeEnrollmentWhere,
-    include: {
-      certificate: true,
-      programme: { include: { courses: { include: adminCourseInclude(), orderBy: { title: "asc" } } } },
-      user: { select: { id: true, name: true, email: true, phone: true, country: true, role: true, status: true, createdAt: true } },
-      course: { include: adminCourseInclude() }
-    },
-    orderBy: { updatedAt: "desc" }
-  });
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+        accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] },
+        ...(requestedCourseId ? { OR: [{ courseId: requestedCourseId }, { programme: { courses: { some: { id: requestedCourseId } } } }] } : {})
+      },
+      include: {
+        certificate: true,
+        programme: { include: { courses: { include: adminCourseInclude(), orderBy: { title: "asc" } } } },
+        user: { select: { id: true, name: true, email: true, phone: true, country: true, role: true, status: true, createdAt: true } },
+        course: { include: adminCourseInclude() }
+      },
+      orderBy: { updatedAt: "desc" }
+    });
 
-  res.json(expandProgrammeCourseEnrollments(enrollments).map(buildGradebookRow));
+    let rows = expandProgrammeCourseEnrollments(enrollments);
+    if (requestedCourseId) rows = rows.filter((row) => Number(row.courseId) === requestedCourseId);
+    if (isLecturerOnly(req.user)) {
+      const accessibleCourses = await prisma.course.findMany({
+        where: { lecturerAccesses: { some: { lecturerId: req.user.id } } },
+        select: { id: true }
+      });
+      const ids = new Set(accessibleCourses.map((item) => item.id));
+      rows = rows.filter((row) => ids.has(Number(row.courseId)));
+    }
+
+    res.json(rows.map(buildGradebookRow));
+  } catch (error) {
+    res.status(500).json({ message: "Could not load gradebook", error: error.message });
+  }
+});
+
+app.post("/api/admin/lecturer-assessments", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const courseId = Number(req.body?.courseId);
+    const studentId = Number(req.body?.studentId);
+    const score = req.body?.score === "" || req.body?.score === null || req.body?.score === undefined ? null : Number(req.body.score);
+    const maxScore = Math.max(1, Number(req.body?.maxScore || 100));
+    const category = String(req.body?.category || "LECTURER_ASSESSMENT").trim() || "LECTURER_ASSESSMENT";
+    const comment = String(req.body?.comment || "").trim();
+
+    if (!courseId || !studentId) return res.status(400).json({ message: "Course and student are required." });
+    if (!(await canManageCourse(req, courseId))) return res.status(403).json({ message: "You do not have access to this course." });
+    if (score !== null && (!Number.isFinite(score) || score < 0 || score > maxScore)) return res.status(400).json({ message: `Score must be between 0 and ${maxScore}.` });
+
+    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { id: true, programmeId: true, generalForAllProgrammes: true } });
+    const student = await prisma.user.findUnique({ where: { id: studentId }, select: { id: true, role: true } });
+    if (!course || !student || student.role !== "STUDENT") return res.status(404).json({ message: "Student or course not found." });
+
+    const enrollment = await prisma.enrollment.findFirst({
+      where: {
+        userId: studentId,
+        admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+        accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] },
+        OR: [
+          { courseId },
+          course.generalForAllProgrammes ? { admissionStatus: { in: ["APPROVED", "GRADUATED"] } } : { id: -1 },
+          course.programmeId ? { programmeId: course.programmeId } : { id: -1 }
+        ]
+      }
+    });
+    if (!enrollment) return res.status(403).json({ message: "This student is not approved for the selected course." });
+
+    const saved = await prisma.lecturerAssessment.upsert({
+      where: { courseId_studentId_lecturerId_category: { courseId, studentId, lecturerId: req.user.id, category } },
+      update: { score, maxScore, comment },
+      create: { courseId, studentId, lecturerId: req.user.id, category, score, maxScore, comment }
+    });
+
+    res.json(saved);
+  } catch (error) {
+    res.status(400).json({ message: "Could not save lecturer assessment", error: error.message });
+  }
 });
 
 app.get("/api/student/results", requireAuth, requireActiveStudent, async (req, res) => {
