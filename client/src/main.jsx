@@ -4183,7 +4183,7 @@ function LecturerDashboard({ reloadPublic, currentUser }) {
         {tab === "assignments & quiz" && <AssessmentsAdmin />}
         {tab === "attendance records" && <AttendanceRecordsAdmin />}
         {tab === "course discussions" && <CourseDiscussionsAdmin />}
-        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} currentUser={currentUser} />}\n        {tab === "gradebook" && <LecturerGradebook courseId={selectedCourseId} course={selectedCourse} />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} currentUser={currentUser} />}
       </div>
     </main>
   );
