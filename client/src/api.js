@@ -42,7 +42,17 @@ export async function api(path, options = {}) {
   try {
     return await request(path, options);
   } catch (error) {
-    if (error.status !== 401 || path === "/auth/refresh") throw error;
+    // Authentication entry points must never trigger the refresh-token flow.
+    // A failed fresh login should return its real error (e.g. "Invalid login details")
+    // instead of masking it with "Refresh token required".
+    const authEntryPoints = [
+      "/auth/login",
+      "/auth/lecturer-login",
+      "/auth/register",
+      "/auth/forgot-password",
+      "/auth/reset-password"
+    ];
+    if (error.status !== 401 || authEntryPoints.includes(path) || path === "/auth/refresh") throw error;
 
     refreshing = refreshing || request("/auth/refresh", { method: "POST" }).finally(() => {
       refreshing = null;
