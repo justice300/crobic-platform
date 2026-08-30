@@ -1351,7 +1351,11 @@ app.post(
     if (!user || user.role === "LECTURER") return res.status(401).json({ message: "Invalid login details" });
 
     if (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
-      return res.status(423).json({ message: "Account temporarily locked after too many failed login attempts. Please try again later." });
+      const remainingMinutes = Math.max(1, Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 60000));
+      return res.status(423).json({
+        message: `Account temporarily locked after too many failed login attempts. Try again in ${remainingMinutes} minute${remainingMinutes === 1 ? "" : "s"}.`,
+        lockedUntil: user.lockedUntil
+      });
     }
 
     const valid = await bcrypt.compare(password, user.password);
@@ -1393,7 +1397,11 @@ app.post(
     if (!user) return res.status(401).json({ message: "Invalid lecturer login details" });
 
     if (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
-      return res.status(423).json({ message: "Account temporarily locked after too many failed login attempts. Please try again later." });
+      const remainingMinutes = Math.max(1, Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 60000));
+      return res.status(423).json({
+        message: `Account temporarily locked after too many failed login attempts. Try again in ${remainingMinutes} minute${remainingMinutes === 1 ? "" : "s"}.`,
+        lockedUntil: user.lockedUntil
+      });
     }
 
     const valid = await bcrypt.compare(password, user.password);
@@ -3147,6 +3155,45 @@ app.delete("/api/admin/course-discussions/:id", requireAuth, requireAdmin, async
 });
 
 
+app.post("/api/admin/users/:id/unlock", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    if (!userId) return res.status(400).json({ message: "Invalid account ID." });
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, username: true, role: true, failedLoginAttempts: true, lockedUntil: true }
+    });
+    if (!target) return res.status(404).json({ message: "Account not found." });
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { failedLoginAttempts: 0, lockedUntil: null }
+    });
+
+    await logAdminActivity(req, {
+      action: "UNLOCKED_USER_ACCOUNT",
+      entityType: "User",
+      entityId: updated.id,
+      details: {
+        accountName: target.name,
+        email: target.email,
+        username: target.username,
+        role: target.role,
+        previousFailedLoginAttempts: target.failedLoginAttempts,
+        previousLockedUntil: target.lockedUntil
+      }
+    });
+
+    res.json({
+      message: `${target.name || target.email || "Account"} has been unlocked.`,
+      user: publicUser(updated)
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Could not unlock account.", error: error.message });
+  }
+});
+
 app.get("/api/admin/users-roles", requireAuth, requireAdmin, async (req, res) => {
   try {
     if (!isSuperAdminRole(req.user.role)) return res.status(403).json({ message: "Super Admin access required" });
@@ -3386,7 +3433,19 @@ app.get("/api/admin/students", requireAuth, requireAdmin, async (req, res) => {
     include: { enrollments: { where: staffCanSeeAllCourses(req.user) ? {} : { OR: [{ courseId: { in: courseIds } }, { programme: { courses: { some: { id: { in: courseIds } } } } }] }, include: { programme: true, course: { include: { programme: true } } } } },
     orderBy: { createdAt: "desc" }
   });
-  res.json(students.map((student) => ({ ...publicUser(student), registrationDate: student.createdAt, registrationDateTime: student.createdAt, enrollments: student.enrollments.map((enrollment) => ({ ...enrollment, registrationDateTime: enrollment.createdAt, admissionGrantedAt: enrollment.approvedAt, daysSinceAdmission: enrollment.approvedAt ? Math.max(0, Math.floor((Date.now() - new Date(enrollment.approvedAt).getTime()) / 86400000)) : null })) })));
+  res.json(students.map((student) => ({
+    ...publicUser(student),
+    registrationDate: student.createdAt,
+    registrationDateTime: student.createdAt,
+    failedLoginAttempts: student.failedLoginAttempts,
+    lockedUntil: student.lockedUntil,
+    enrollments: student.enrollments.map((enrollment) => ({
+      ...enrollment,
+      registrationDateTime: enrollment.createdAt,
+      admissionGrantedAt: enrollment.approvedAt,
+      daysSinceAdmission: enrollment.approvedAt ? Math.max(0, Math.floor((Date.now() - new Date(enrollment.approvedAt).getTime()) / 86400000)) : null
+    }))
+  })));
 });
 
 app.patch("/api/admin/students/:id", requireAuth, requireAdmin, async (req, res) => {

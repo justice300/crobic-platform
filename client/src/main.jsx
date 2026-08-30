@@ -4199,7 +4199,7 @@ function AdminDashboard({ reloadPublic, currentUser }) {
         <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CIBI Management</h1></div></div>
         {tab === "overview" && <Overview overview={overview} />}
         {tab === "users & roles" && <UsersRolesAdmin />}
-        {(tab === "students" || tab === "admissions") && <StudentsAdmin />}
+        {(tab === "students" || tab === "admissions") && <StudentsAdmin currentUser={currentUser} />}
         {tab === "books" && <CrudAdmin title="Books" path="books" reloadPublic={reloadPublic} fields={bookFields} />}
         {tab === "programmes" && <CrudAdmin title="Programmes" path="programmes" reloadPublic={reloadPublic} fields={programmeFields} />}
         {tab === "courses" && <CoursesAdmin reloadPublic={reloadPublic} />}
@@ -4277,6 +4277,22 @@ function UsersRolesAdmin() {
     await load();
   }
 
+  async function unlockAccount(user) {
+    if (!(await showConfirm({
+      title: "Unlock account?",
+      message: `Reset failed login attempts and unlock ${user.name || user.email}?`,
+      confirmText: "Unlock Account"
+    }))) return;
+
+    try {
+      const result = await api(`/admin/users/${user.id}/unlock`, { method: "POST" });
+      await load();
+      showToast(result.message || "Account unlocked.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not unlock account.", "error");
+    }
+  }
+
   const staff = data.rawUsers || [];
   return (
     <section className="admin-section phase2-panel">
@@ -4341,6 +4357,12 @@ function UsersRolesAdmin() {
             <div>
               <strong>{user.name}</strong>
               <p>{user.username ? `Username: ${user.username} · ` : ""}{user.email} · {formatPortalStatus(user.role)}</p>
+              {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() ? (
+                <div className="mini-chip-row">
+                  <span className="mini-chip">Login locked until {formatAdminDateTime(user.lockedUntil)}</span>
+                  <button className="dark-btn" type="button" onClick={() => unlockAccount(user)}>Unlock Account</button>
+                </div>
+              ) : null}
               <div className="mini-chip-row">
                 {(user.lecturerCourseAccesses || []).map((access) => (
                   <span className="mini-chip" key={access.id}>{access.course?.title}<button type="button" onClick={() => removeAccess(access.id)}>×</button></span>
@@ -5093,7 +5115,7 @@ function applicationDetailRows(details = {}) {
 }
 
 
-function StudentsAdmin() {
+function StudentsAdmin({ currentUser }) {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingStudentId, setEditingStudentId] = useState(null);
@@ -5114,6 +5136,22 @@ function StudentsAdmin() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function unlockStudentAccount(student) {
+    if (!(await showConfirm({
+      title: "Unlock student account?",
+      message: `Reset failed login attempts and unlock ${student.name || student.email}?`,
+      confirmText: "Unlock Account"
+    }))) return;
+
+    try {
+      const result = await api(`/admin/users/${student.id}/unlock`, { method: "POST" });
+      await load();
+      showToast(result.message || "Student account unlocked.", "success");
+    } catch (error) {
+      showToast(error.message || "Could not unlock student account.", "error");
+    }
+  }
 
   function startEditStudent(student) {
     setEditingStudentId(student.id);
@@ -5386,6 +5424,7 @@ function StudentsAdmin() {
                 <div className="lms-record-details">
                   <div className="lms-detail-grid">
                     <div><small>Registration Date & Time</small><strong>{formatAdminDateTime(student.createdAt || enrollment?.createdAt)}</strong></div>
+                    <div><small>Login Security</small><strong>{student.lockedUntil && new Date(student.lockedUntil).getTime() > Date.now() ? `Locked until ${formatAdminDateTime(student.lockedUntil)}` : "Not locked"}</strong></div>
                     <div><small>Admission Granted</small><strong>{enrollment?.approvedAt ? formatAdminDateTime(enrollment.approvedAt) : "Not granted yet"}</strong></div>
                     <div><small>Days Since Admission</small><strong>{enrollment?.approvedAt ? `${Math.max(0, Math.floor((Date.now() - new Date(enrollment.approvedAt).getTime()) / 86400000))} day(s)` : "—"}</strong></div>
                     <div><small>Learning Stream</small><strong>{enrollment?.learningStream || applicationDetails.learningStream || "Not selected"}</strong></div>
@@ -5412,7 +5451,12 @@ function StudentsAdmin() {
                       </div>
                     </form>
                   ) : (
-                    <button className="edit-btn" type="button" onClick={() => startEditStudent(student)}>Edit Student Details</button>
+                    <div className="student-action-row">
+                      <button className="edit-btn" type="button" onClick={() => startEditStudent(student)}>Edit Student Details</button>
+                      {isPowerAdmin(currentUser) && student.lockedUntil && new Date(student.lockedUntil).getTime() > Date.now() ? (
+                        <button className="dark-btn" type="button" onClick={() => unlockStudentAccount(student)}>Unlock Login Account</button>
+                      ) : null}
+                    </div>
                   )}
 
                   {applicationRows.length ? (
