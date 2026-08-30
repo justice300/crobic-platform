@@ -4013,6 +4013,27 @@ function LecturerProgrammesSidebar({ lecturer, courses, selectedCourseId, onSele
           </details>
         ))}
       </div>
+
+      <div className="portal-nav-group-items lecturer-dashboard-tabs" style={{ display: "grid", gap: "6px", marginTop: "14px" }}>
+        {[
+          ["overview", "Overview"],
+          ["gradebook", "Gradebook"],
+          ["attendance records", "Attendance Records"],
+          ["course discussions", "Course Discussions"],
+          ["assignments & quiz", "Assignments & Quiz"],
+          ["live", "Live Class"],
+          ["course builder", "Course Builder"]
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={tab === value ? "side-active" : ""}
+            onClick={() => setTab(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -4170,7 +4191,7 @@ function LecturerDashboard({ reloadPublic, currentUser }) {
         {tab === "assignments & quiz" && <AssessmentsAdmin />}
         {tab === "attendance records" && <AttendanceRecordsAdmin />}
         {tab === "course discussions" && <CourseDiscussionsAdmin />}
-        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}\n        {tab === "gradebook" && <LecturerGradebook courseId={selectedCourseId} course={selectedCourse} />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}
       </div>
     </main>
   );
