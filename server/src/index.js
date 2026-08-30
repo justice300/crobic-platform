@@ -1795,17 +1795,66 @@ async function studentCanSeeLiveCourse(userId, courseId) {
   return canEnrollmentUseCourse(enrollment, course);
 }
 
+async function studentCanSeeLiveProgramme(userId, programmeId) {
+  const id = Number(programmeId || 0);
+  if (!userId || !id) return false;
+  const enrollment = await prisma.enrollment.findFirst({
+    where: {
+      userId,
+      programmeId: id,
+      admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+      accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] }
+    }
+  });
+  return Boolean(enrollment);
+}
+
+async function lecturerCanManageProgramme(userId, programmeId) {
+  const id = Number(programmeId || 0);
+  if (!userId || !id) return false;
+  const count = await prisma.courseLecturerAccess.count({
+    where: {
+      lecturerId: userId,
+      course: { programmeId: id }
+    }
+  });
+  return count > 0;
+}
+
+async function enrolledStudentsForProgramme(programmeId) {
+  const id = Number(programmeId || 0);
+  if (!id) return [];
+  return prisma.user.findMany({
+    where: {
+      role: "STUDENT",
+      enrollments: {
+        some: {
+          programmeId: id,
+          admissionStatus: { in: ["APPROVED", "GRADUATED"] },
+          accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] }
+        }
+      }
+    },
+    select: { id: true, name: true, email: true }
+  });
+}
+
 async function findAllowedLiveSessionForStudent({ userId, activeOnly = true } = {}) {
   const sessions = await prisma.liveSession.findMany({
     where: activeOnly ? { active: true } : {},
-    include: { course: { select: { id: true, title: true } }, startedBy: { select: { id: true, name: true, role: true } } },
+    include: {
+      course: { select: { id: true, title: true } },
+      programme: { select: { id: true, title: true } },
+      startedBy: { select: { id: true, name: true, role: true } }
+    },
     orderBy: { updatedAt: "desc" },
     take: 25
   });
 
   for (const session of sessions) {
-    if (!session.courseId) return session;
-    if (await studentCanSeeLiveCourse(userId, session.courseId)) return session;
+    if (session.programmeId && await studentCanSeeLiveProgramme(userId, session.programmeId)) return session;
+    if (session.courseId && await studentCanSeeLiveCourse(userId, session.courseId)) return session;
+    if (!session.courseId && !session.programmeId) return session;
   }
 
   return null;
@@ -1814,6 +1863,10 @@ async function findAllowedLiveSessionForStudent({ userId, activeOnly = true } = 
 async function staffCanSeeLiveSession(user, session) {
   if (!user || !session || !isAdminRole(user.role)) return false;
   if (session.startedById && Number(session.startedById) === Number(user.id)) return true;
+  if (session.programmeId) {
+    if (staffCanSeeAllCourses(user)) return true;
+    return lecturerCanManageProgramme(user.id, session.programmeId);
+  }
   if (!session.courseId) return true;
   return canManageCourse({ user }, session.courseId);
 }
@@ -1823,6 +1876,7 @@ async function findAllowedLiveSessionForStaff({ user, activeOnly = true } = {}) 
     where: activeOnly ? { active: true } : {},
     include: {
       course: { select: { id: true, title: true } },
+      programme: { select: { id: true, title: true } },
       startedBy: { select: { id: true, name: true, role: true } }
     },
     orderBy: [{ active: "desc" }, { updatedAt: "desc" }],
@@ -1845,11 +1899,11 @@ async function getLiveSessionForClassroom(includeInactiveLatest = false, viewerU
 
   const active = await prisma.liveSession.findFirst({
     where: { active: true },
-    include: { course: { select: { id: true, title: true } }, startedBy: { select: { id: true, name: true, role: true } } },
+    include: { course: { select: { id: true, title: true } }, programme: { select: { id: true, title: true } }, startedBy: { select: { id: true, name: true, role: true } } },
     orderBy: { updatedAt: "desc" }
   });
   if (active || !includeInactiveLatest) return active;
-  return prisma.liveSession.findFirst({ include: { course: { select: { id: true, title: true } }, startedBy: { select: { id: true, name: true, role: true } } }, orderBy: { updatedAt: "desc" } });
+  return prisma.liveSession.findFirst({ include: { course: { select: { id: true, title: true } }, programme: { select: { id: true, title: true } }, startedBy: { select: { id: true, name: true, role: true } } }, orderBy: { updatedAt: "desc" } });
 }
 
 async function buildLiveClassroomPayload(liveSession, viewerUserId = null) {
@@ -2914,9 +2968,15 @@ app.delete("/api/admin/quiz-questions/:id", requireAuth, requireAdmin, async (re
 });
 
 
-app.get("/api/admin/gradebook", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/admin/gradebook", requireAuth, async (req, res) => {
   try {
+    if (!isAdminRole(req.user?.role)) {
+      return res.status(403).json({ message: "Staff access required." });
+    }
+
     const requestedCourseId = req.query.courseId ? Number(req.query.courseId) : null;
+    const requestedProgrammeId = req.query.programmeId ? Number(req.query.programmeId) : null;
+
     if (requestedCourseId && !(await canManageCourse(req, requestedCourseId))) {
       return res.status(403).json({ message: "You do not have access to this course." });
     }
@@ -2925,35 +2985,57 @@ app.get("/api/admin/gradebook", requireAuth, requireAdmin, async (req, res) => {
       where: {
         admissionStatus: { in: ["APPROVED", "GRADUATED"] },
         accessStatus: { notIn: ["BLOCKED", "SUSPENDED"] },
-        ...(requestedCourseId ? { OR: [{ courseId: requestedCourseId }, { programme: { courses: { some: { id: requestedCourseId } } } }] } : {})
+        ...(requestedProgrammeId ? { programmeId: requestedProgrammeId } : {}),
+        ...(isLecturerOnly(req.user) ? {
+          OR: [
+            { course: { lecturerAccesses: { some: { lecturerId: req.user.id } } } },
+            { programme: { courses: { some: { lecturerAccesses: { some: { lecturerId: req.user.id } } } } } }
+          ]
+        } : {})
       },
       include: {
         certificate: true,
-        programme: { include: { courses: { include: adminCourseInclude(), orderBy: { title: "asc" } } } },
+        programme: {
+          include: {
+            courses: { include: adminCourseInclude(), orderBy: { title: "asc" } }
+          }
+        },
         user: { select: { id: true, name: true, email: true, phone: true, country: true, role: true, status: true, createdAt: true } },
         course: { include: adminCourseInclude() }
       },
       orderBy: { updatedAt: "desc" }
     });
 
-    let rows = expandProgrammeCourseEnrollments(enrollments);
-    if (requestedCourseId) rows = rows.filter((row) => Number(row.courseId) === requestedCourseId);
-    if (isLecturerOnly(req.user)) {
-      const accessibleCourses = await prisma.course.findMany({
-        where: { lecturerAccesses: { some: { lecturerId: req.user.id } } },
-        select: { id: true }
-      });
-      const ids = new Set(accessibleCourses.map((item) => item.id));
-      rows = rows.filter((row) => ids.has(Number(row.courseId)));
+    const rows = [];
+    for (const enrollment of enrollments) {
+      const programmeCourses = enrollment.programme?.courses || [];
+      if (enrollment.programmeId && programmeCourses.length) {
+        for (const course of programmeCourses) {
+          if (requestedCourseId && Number(course.id) !== requestedCourseId) continue;
+          if (isLecturerOnly(req.user) && !(await canManageCourse({ user: req.user }, course.id))) continue;
+          rows.push({
+            ...enrollment,
+            courseId: course.id,
+            course,
+            programmeTitle: enrollment.programme.title
+          });
+        }
+      } else if (enrollment.course) {
+        if (requestedCourseId && Number(enrollment.course.id) !== requestedCourseId) continue;
+        if (isLecturerOnly(req.user) && !(await canManageCourse({ user: req.user }, enrollment.course.id))) continue;
+        rows.push({ ...enrollment, programmeTitle: programmeDisplayTitle(enrollment) });
+      }
     }
 
     res.json(rows.map(buildGradebookRow));
   } catch (error) {
+    console.error("Gradebook load failed:", error);
     res.status(500).json({ message: "Could not load gradebook", error: error.message });
   }
 });
 
-app.post("/api/admin/lecturer-assessments", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/lecturer-assessments", requireAuth, async (req, res) => {
+  if (!isAdminRole(req.user?.role)) return res.status(403).json({ message: "Staff access required." });
   try {
     const courseId = Number(req.body?.courseId);
     const studentId = Number(req.body?.studentId);
@@ -4571,13 +4653,13 @@ app.delete("/api/courses/:courseId/daily/room/:roomName", requireAuth, validator
 });
 
 
-app.get("/api/admin/live/classroom", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/admin/live/classroom", requireAuth, async (req, res) => {
   let liveSession = await findAllowedLiveSessionForStaff({ user: req.user, activeOnly: true });
   if (!liveSession) liveSession = await findAllowedLiveSessionForStaff({ user: req.user, activeOnly: false });
   res.json(await buildLiveClassroomPayload(liveSession));
 });
 
-app.patch("/api/admin/live/questions/:id", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/admin/live/questions/:id", requireAuth, async (req, res) => {
   try {
     const { answer, status } = req.body;
     const updated = await prisma.liveQuestion.update({
@@ -4594,7 +4676,7 @@ app.patch("/api/admin/live/questions/:id", requireAuth, requireAdmin, async (req
   }
 });
 
-app.post("/api/admin/live/chat", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/live/chat", requireAuth, async (req, res) => {
   try {
     const liveSession = await findAllowedLiveSessionForStaff({ user: req.user, activeOnly: true });
     if (!liveSession) return res.status(404).json({ message: "No active live class currently." });
@@ -4624,7 +4706,7 @@ app.post("/api/admin/live/chat", requireAuth, requireAdmin, async (req, res) => 
   }
 });
 
-app.delete("/api/admin/live/chat/:id", requireAuth, requireAdmin, async (req, res) => {
+app.delete("/api/admin/live/chat/:id", requireAuth, async (req, res) => {
   try {
     await prisma.liveChatMessage.delete({ where: { id: Number(req.params.id) } });
     res.json({ message: "Chat message deleted" });
@@ -4633,10 +4715,11 @@ app.delete("/api/admin/live/chat/:id", requireAuth, requireAdmin, async (req, re
   }
 });
 
-app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/live/start", requireAuth, async (req, res) => {
   try {
-    const { title, description, liveUrl, scheduledAt, courseId, replayUrl, subtitleUrl, subtitleLanguage, chatEnabled, voiceEnabled } = req.body;
+    const { title, description, liveUrl, scheduledAt, courseId, programmeId, replayUrl, subtitleUrl, subtitleLanguage, chatEnabled, voiceEnabled } = req.body;
     const finalCourseId = courseId ? Number(courseId) : null;
+    const finalProgrammeId = programmeId ? Number(programmeId) : null;
     const safeTitle = String(title || "").trim();
     const safeDescription = description ? String(description).trim() : "";
     const safeLiveUrl = String(liveUrl || "").trim();
@@ -4644,7 +4727,15 @@ app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) =>
     if (!safeTitle || !safeLiveUrl) return res.status(400).json({ message: "Title and Zoom/YouTube live link are required." });
     if (!validateLivePlatformUrl(safeLiveUrl)) return res.status(400).json({ message: "Only valid Zoom or YouTube Live links are allowed." });
 
-    if (finalCourseId) {
+    if (finalCourseId && finalProgrammeId) return res.status(400).json({ message: "Choose either a programme or a course for the live audience, not both." });
+
+    if (finalProgrammeId) {
+      const programme = await prisma.programme.findUnique({ where: { id: finalProgrammeId }, select: { id: true, title: true } });
+      if (!programme) return res.status(404).json({ message: "Selected programme not found." });
+      if (!staffCanSeeAllCourses(req.user) && !(await lecturerCanManageProgramme(req.user.id, finalProgrammeId))) {
+        return res.status(403).json({ message: "You do not have access to this programme." });
+      }
+    } else if (finalCourseId) {
       if (!(await canManageCourse(req, finalCourseId))) return res.status(403).json({ message: "You do not have access to this course." });
     } else if (!canStartGeneralLive(req.user)) {
       return res.status(403).json({ message: "Only Super Admin, Rector, or Admin can start a general live class." });
@@ -4655,6 +4746,7 @@ app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) =>
     const live = await prisma.liveSession.create({
       data: {
         courseId: finalCourseId,
+        programmeId: finalProgrammeId,
         title: safeTitle,
         description: safeDescription,
         liveUrl: safeLiveUrl,
@@ -4670,15 +4762,22 @@ app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) =>
       },
       include: {
         course: { select: { id: true, title: true } },
+        programme: { select: { id: true, title: true } },
         startedBy: { select: { id: true, name: true, role: true } }
       }
     });
 
     await logAdminActivity(req, { action: "STARTED_LIVE_CLASS", entityType: "LiveSession", entityId: live.id, details: { title: live.title, courseId: live.courseId, scope: finalCourseId ? "COURSE" : "GENERAL" } });
 
-    const students = await enrolledStudentsForCourse(finalCourseId);
+    const students = finalProgrammeId
+      ? await enrolledStudentsForProgramme(finalProgrammeId)
+      : await enrolledStudentsForCourse(finalCourseId);
     const studentUrl = finalCourseId ? clientCourseUrl(finalCourseId) : studentLiveUrl();
-    const liveTitle = finalCourseId ? `${live.course?.title || "Your CIBI class"} is live now` : "CIBI general live class is live now";
+    const liveTitle = finalCourseId
+      ? `${live.course?.title || "Your CIBI class"} is live now`
+      : finalProgrammeId
+        ? `${live.programme?.title || "Your CIBI programme"} live class is now on`
+        : "CIBI general live class is live now";
     const liveMessage = `${safeTitle} has started. Join now.`;
 
     await createCourseNotifications({
@@ -4734,13 +4833,20 @@ app.post("/api/admin/live/start", requireAuth, requireAdmin, async (req, res) =>
       }).catch((error) => console.error("Admin live staff push failed:", error.message));
     }
 
-    res.status(201).json({ message: finalCourseId ? "Course live class started and eligible students notified." : "General live class started and all approved students plus staff notified.", live });
+    res.status(201).json({
+      message: finalCourseId
+        ? "Course live class started and eligible students notified."
+        : finalProgrammeId
+          ? "Programme live class started and eligible students notified."
+          : "General live class started and all approved students plus staff notified.",
+      live
+    });
   } catch (error) {
     res.status(500).json({ message: "Could not start live class", error: error.message });
   }
 });
 
-app.post("/api/admin/live/stop", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/live/stop", requireAuth, async (req, res) => {
   await prisma.liveSession.updateMany({ where: { active: true }, data: { active: false, status: "ended", endedAt: new Date() } });
   res.json({ message: "Live session stopped" });
 });

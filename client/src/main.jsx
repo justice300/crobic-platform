@@ -4013,26 +4013,13 @@ function LecturerProgrammesSidebar({ lecturer, courses, selectedCourseId, onSele
           </details>
         ))}
       </div>
-
-      <div className="portal-nav-group-items lecturer-dashboard-tabs" style={{ display: "grid", gap: "6px", marginTop: "14px" }}>
-        {[
-          ["overview", "Overview"],
-          ["gradebook", "Gradebook"],
-          ["attendance records", "Attendance Records"],
-          ["course discussions", "Course Discussions"],
-          ["assignments & quiz", "Assignments & Quiz"],
-          ["live", "Live Class"],
-          ["course builder", "Course Builder"]
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            className={tab === value ? "side-active" : ""}
-            onClick={() => setTab(value)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="lecturer-sidebar-tools">
+        <button type="button" className={tab === "gradebook" ? "side-active" : ""} onClick={() => setTab("gradebook")}>
+          Gradebook
+        </button>
+        <button type="button" className={tab === "live" ? "side-active" : ""} onClick={() => setTab("live")}>
+          Live Classroom
+        </button>
       </div>
     </div>
   );
@@ -4082,6 +4069,11 @@ function LecturerOverview({ lecturer, courses, selectedCourse, setTab }) {
   ];
 
   function openTool(nextTab) {
+    if (nextTab === "live") {
+      setTab(nextTab);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (!selectedCourse) {
       showToast("Select a course from the left first.", "error");
       return;
@@ -4191,7 +4183,7 @@ function LecturerDashboard({ reloadPublic, currentUser }) {
         {tab === "assignments & quiz" && <AssessmentsAdmin />}
         {tab === "attendance records" && <AttendanceRecordsAdmin />}
         {tab === "course discussions" && <CourseDiscussionsAdmin />}
-        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} currentUser={currentUser} />}\n        {tab === "gradebook" && <LecturerGradebook courseId={selectedCourseId} course={selectedCourse} />}
       </div>
     </main>
   );
@@ -4242,7 +4234,7 @@ function AdminDashboard({ reloadPublic, currentUser }) {
         {tab === "slides" && <SlidesAdmin reloadPublic={reloadPublic} />}
         {tab === "gallery" && <CrudAdmin title="Gallery" path="gallery" reloadPublic={reloadPublic} fields={galleryFields} />}
         {tab === "announcements" && <CrudAdmin title="Announcements" path="announcements" reloadPublic={reloadPublic} fields={announcementFields} />}
-        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} />}\n        {tab === "gradebook" && <LecturerGradebook courseId={selectedCourseId} course={selectedCourse} />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} currentUser={currentUser} />}\n        {tab === "gradebook" && <LecturerGradebook courseId={selectedCourseId} course={selectedCourse} />}
         {tab === "appeals & support" && <SupportAdmin />}
         {tab === "website content" && <WebsiteContentAdmin reloadPublic={reloadPublic} />}
         {tab === "currency settings" && <CurrencySettingsAdmin />}
@@ -7248,9 +7240,9 @@ function LessonsAdmin() {
   return <CourseBuilderAdmin />;
 }
 
-function LiveAdmin({ reloadPublic }) {
+function LiveAdmin({ reloadPublic, currentUser }) {
   const [form, setForm] = useState({
-    targetScope: "all",
+    targetScope: currentUser?.role === "LECTURER" ? "programme" : "all",
     programmeId: "",
     levelStage: "",
     courseId: "",
@@ -7294,12 +7286,13 @@ function LiveAdmin({ reloadPublic }) {
   async function start(e) {
     e.preventDefault();
     if (!canStartLive) {
-      showToast("Choose All approved students or select a course. Programme and level live targeting need the backend targeting update before they can safely restrict access.", "error");
+      showToast("Select a programme before starting the live class.", "error");
       return;
     }
     const payload = {
       ...form,
-      courseId: form.targetScope === "course" ? form.courseId : ""
+      courseId: form.targetScope === "course" ? form.courseId : "",
+      programmeId: form.targetScope === "programme" ? form.programmeId : ""
     };
     await api("/admin/live/start", { method: "POST", body: payload });
     setForm((current) => ({ ...current, title: "", description: "", liveUrl: "", replayUrl: "", subtitleUrl: "", subtitleLanguage: "" }));
@@ -7386,7 +7379,9 @@ function LiveAdmin({ reloadPublic }) {
     course: "Only students who have access to the selected course will see this live class."
   };
 
-  const canStartLive = form.targetScope === "all" || (form.targetScope === "course" && form.courseId);
+  const canStartLive = currentUser?.role === "LECTURER"
+    ? form.targetScope === "programme" && form.programmeId
+    : form.targetScope === "all" || (form.targetScope === "programme" && form.programmeId) || (form.targetScope === "course" && form.courseId);
   const liveSession = classroom?.liveSession;
 
   return (
@@ -7411,12 +7406,13 @@ function LiveAdmin({ reloadPublic }) {
               <span>Live audience</span>
               <select
                 value={form.targetScope}
+                disabled={currentUser?.role === "LECTURER"}
                 onChange={(e) => setForm({ ...form, targetScope: e.target.value, courseId: "", programmeId: "", levelStage: "" })}
               >
-                <option value="all">All approved students</option>
+                {currentUser?.role !== "LECTURER" && <option value="all">All approved students</option>}
                 <option value="programme">Specific programme</option>
-                <option value="level">Specific level / stage</option>
-                <option value="course">Specific course</option>
+                {currentUser?.role !== "LECTURER" && <option value="level">Specific level / stage</option>}
+                {currentUser?.role !== "LECTURER" && <option value="course">Specific course</option>}
               </select>
             </label>
 
@@ -7454,9 +7450,9 @@ function LiveAdmin({ reloadPublic }) {
               </label>
             )}
           </div>
-          {!["all", "course"].includes(form.targetScope) && (
-            <div className="live-target-warning">
-              Programme and level targeting are now visible for admin planning, but they need one backend update before they can safely restrict which students see the live class. Use “All approved students” or “Specific course” for live classes today.
+          {form.targetScope === "programme" && (
+            <div className="live-target-note">
+              Students approved for the selected programme will see this live class. Lecturers can start programme-wide classes only for programmes where they have an assigned course.
             </div>
           )}
         </div>
@@ -7486,7 +7482,7 @@ function LiveAdmin({ reloadPublic }) {
             <div>
               <h3>{liveSession.title}</h3>
               <p>{liveSession.description || "No description added."}</p>
-              <p><strong>Audience:</strong> {liveSession.course?.title ? `Course — ${liveSession.course.title}` : "All approved students"}</p>
+              <p><strong>Audience:</strong> {liveSession.programme?.title ? `Programme — ${liveSession.programme.title}` : liveSession.course?.title ? `Course — ${liveSession.course.title}` : "All approved students"}</p>
               <p><strong>Chat:</strong> {liveSession.chatEnabled === false ? "Off" : "On"} · <strong>Voice:</strong> {liveSession.voiceEnabled ? "Flagged Enabled" : "Off"}</p>
               {liveSession.replayUrl && <p><a className="receipt-preview-link" href={liveSession.replayUrl} target="_blank" rel="noreferrer">Open replay link</a></p>}
               {liveSession.subtitleUrl && <p><a className="receipt-preview-link" href={liveSession.subtitleUrl} target="_blank" rel="noreferrer">Open subtitle file ({liveSession.subtitleLanguage || "language"})</a></p>}

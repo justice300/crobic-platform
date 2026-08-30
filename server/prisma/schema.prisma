@@ -113,6 +113,7 @@ model Programme {
 
   courses      Course[]
   enrollments  Enrollment[]
+  liveSessions LiveSession[]
   certificates Certificate[]
 }
 
@@ -455,6 +456,7 @@ model Announcement {
 model LiveSession {
   id               Int       @id @default(autoincrement())
   courseId         Int?
+  programmeId      Int?
   startedById      Int?
   title            String
   description      String?
@@ -475,12 +477,14 @@ model LiveSession {
   updatedAt        DateTime  @updatedAt
 
   course       Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  programme    Programme?         @relation(fields: [programmeId], references: [id], onDelete: SetNull)
   startedBy    User?             @relation("LiveSessionStarter", fields: [startedById], references: [id], onDelete: SetNull)
   chatMessages LiveChatMessage[]
   questions    LiveQuestion[]
   attendances  LiveAttendance[]
 
   @@index([courseId])
+  @@index([programmeId])
   @@index([startedById])
   @@index([status])
 }
