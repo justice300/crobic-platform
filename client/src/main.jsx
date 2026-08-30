@@ -64,7 +64,7 @@ const CIBI_IMAGES = {
   logo: "/crobic-images/cra-logo.png"
 };
 
-const CIBI_PHONE_DISPLAY = "0812 130 0287";
+const CIBI_PHONE_DISPLAY = "+234 812 130 0287";
 const CIBI_SECOND_PHONE_DISPLAY = "+234 706 774 9979";
 const CIBI_PHONE_DISPLAY_BOTH = `${CIBI_PHONE_DISPLAY} · ${CIBI_SECOND_PHONE_DISPLAY}`;
 const CIBI_PHONE_E164 = "2348121300287";
@@ -1609,7 +1609,7 @@ function Admissions({ courses, programmes = [], settings, user, openAuth, goTo, 
       <section className="admission-section container">
         <SectionIntro eyebrow={getSetting(settings, "admission_contact_eyebrow", "Get in Touch")} title={getSetting(settings, "admission_contact_title", "Contact Admissions Office")} text={getSetting(settings, "admission_contact_text", "For help with application, payment confirmation or programme selection.")} />
         <div className="contact-grid admission-contact-grid">
-          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY_BOTH}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "admission_contact_phone_title", "Phone / WhatsApp")}</h3><p><span>{CIBI_PHONE_DISPLAY}</span><br /><span>{CIBI_SECOND_PHONE_DISPLAY}</span></p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
           <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "admission_contact_location_title", "Location")}</h3><p>{CIBI_ADDRESS}</p></div>
           <div className="content-card contact-card"><Clock /><h3>{getSetting(settings, "admission_contact_hours_title", "Office Hours")}</h3><p>{getSetting(settings, "office_hours", "Monday to Saturday, 9 AM to 5 PM")}</p></div>
         </div>
@@ -1862,7 +1862,7 @@ function Contact({ settings = {} }) {
       <PageHero eyebrow={getSetting(settings, "contact_hero_eyebrow", "Contact")} title={getSetting(settings, "contact_hero_title", "Get in Touch with CIBI")} text={getSetting(settings, "contact_hero_text", "Contact the college for admissions, book enquiries, student support and general information.")} image={getSetting(settings, "contact_hero_image_url", CIBI_IMAGES.classroom)} />
       <section className="page container contact-page-section">
         <div className="contact-grid">
-          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone / WhatsApp")}</h3><p>{CIBI_PHONE_DISPLAY_BOTH}</p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
+          <div className="content-card contact-card"><Phone /><h3>{getSetting(settings, "contact_phone_title", "Phone / WhatsApp")}</h3><p><span>{CIBI_PHONE_DISPLAY}</span><br /><span>{CIBI_SECOND_PHONE_DISPLAY}</span></p><a className="contact-card-link" href={CIBI_WHATSAPP_LINK} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
           <div className="content-card contact-card"><MapPin /><h3>{getSetting(settings, "contact_location_title", "Location")}</h3><p>{CIBI_ADDRESS}</p></div>
           <div className="content-card contact-card"><BookOpen /><h3>{getSetting(settings, "contact_enquiry_title", "Enquiries")}</h3><p>{getSetting(settings, "contact_enquiry_text", "Admissions, book support and general CIBI information.")}</p><a className="contact-card-link" href="mailto:info@cibionline.org">{getSetting(settings, "contact_email", "info@cibionline.org")}</a></div>
         </div>
@@ -8918,7 +8918,7 @@ function Footer({ goTo, settings = {} }) {
         <div>
           <h4>Contact</h4>
           <p>{getSetting(settings, "footer_address", CIBI_ADDRESS)}</p>
-          <p>{getSetting(settings, "footer_phone", CIBI_PHONE_DISPLAY_BOTH)}</p>
+          <p><span>{CIBI_PHONE_DISPLAY}</span><br /><span>{CIBI_SECOND_PHONE_DISPLAY}</span></p>
           <p>{getSetting(settings, "footer_email", getSetting(settings, "contact_email", "info@cibionline.org"))}</p>
           <FooterSocialLinks settings={settings} />
         </div>
