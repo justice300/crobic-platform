@@ -4234,7 +4234,7 @@ function AdminDashboard({ reloadPublic, currentUser }) {
         {tab === "slides" && <SlidesAdmin reloadPublic={reloadPublic} />}
         {tab === "gallery" && <CrudAdmin title="Gallery" path="gallery" reloadPublic={reloadPublic} fields={galleryFields} />}
         {tab === "announcements" && <CrudAdmin title="Announcements" path="announcements" reloadPublic={reloadPublic} fields={announcementFields} />}
-        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} currentUser={currentUser} />}\n        {tab === "gradebook" && <LecturerGradebook courseId={selectedCourseId} course={selectedCourse} />}
+        {tab === "live" && <LiveAdmin reloadPublic={reloadPublic} currentUser={currentUser} />}
         {tab === "appeals & support" && <SupportAdmin />}
         {tab === "website content" && <WebsiteContentAdmin reloadPublic={reloadPublic} />}
         {tab === "currency settings" && <CurrencySettingsAdmin />}
