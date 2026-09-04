@@ -355,16 +355,9 @@ function NotificationCenter() {
 }
 
 
-function getRoutePage() {
-  const path = window.location.pathname.replace(/^\//, "").split("/")[0] || "home";
-  const aliases = {
-    admission: "admissions"
-  };
-  return aliases[path] || path || "home";
-}
-
 function App() {
-  const [page, setPage] = useState(getRoutePage());
+  const initialPage = window.location.pathname.replace("/", "") || "home";
+  const [page, setPage] = useState(initialPage === "admission" ? "admissions" : initialPage);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -401,17 +394,6 @@ function App() {
 
   useEffect(() => {
     Promise.all([loadPublicData(), loadMe()]).finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    const handleRouteChange = () => {
-      setPage(getRoutePage());
-      setMobileOpen(false);
-      window.scrollTo(0, 0);
-    };
-
-    window.addEventListener("popstate", handleRouteChange);
-    return () => window.removeEventListener("popstate", handleRouteChange);
   }, []);
 
   function goTo(nextPage) {
@@ -5330,7 +5312,7 @@ function StudentsAdmin({ currentUser }) {
     if (["REJECTED", "SUSPENDED", "GRADUATED"].includes(admission) || ["SUSPENDED", "GRADUATED"].includes(String(row.student.status || ""))) return "closed";
     if (access === "PAYMENT_DUE" || enrollment.studentPaymentNotice) return "due";
     if (admission === "APPROVED" && payment === "PAYMENT_CONFIRMED") return "approved";
-    if (["MANUAL_PAYMENT_PENDING", "PENDING_PAYMENT", "AWAITING_PAYMENT", "AWAITING_ADMIN_APPROVAL"].includes(payment) || enrollment.paymentProofUrl) return "payment";
+    if (["MANUAL_PAYMENT_PENDING", "PENDING_PAYMENT", "AWAITING_PAYMENT"].includes(payment) || enrollment.paymentProofUrl) return "payment";
     return "applications";
   }
 
