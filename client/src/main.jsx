@@ -6961,184 +6961,13 @@ function CertificateVerification() {
 
 
 function GradebookAdmin() {
-  const [rows, setRows] = useState([]);
-  const [programmeId, setProgrammeId] = useState("ALL");
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-
-  async function load() {
-    try {
-      setLoading(true);
-      setRows(await api("/admin/gradebook"));
-    } catch (error) {
-      showToast(error.message || "Could not load gradebook", "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { load(); }, []);
-
-  const programmes = useMemo(() => {
-    const map = new Map();
-    rows.forEach((row) => {
-      const id = row.course?.programmeId;
-      const title = row.course?.programmeTitle;
-      if (id && title && !map.has(String(id))) map.set(String(id), title);
-    });
-    return [...map.entries()].map(([id, title]) => ({ id, title })).sort((a, b) => a.title.localeCompare(b.title));
-  }, [rows]);
-
-  const students = useMemo(() => {
-    const grouped = new Map();
-    rows
-      .filter((row) => programmeId === "ALL" || String(row.course?.programmeId || "") === String(programmeId))
-      .forEach((row) => {
-        const key = `${row.student?.id || row.student?.email}|${row.course?.programmeId || "none"}`;
-        if (!grouped.has(key)) grouped.set(key, { student: row.student, programmeId: row.course?.programmeId || null, programmeTitle: row.course?.programmeTitle || "General", courses: [] });
-        grouped.get(key).courses.push(row);
-      });
-
-    return [...grouped.values()].map((group) => {
-      const scores = group.courses.map((item) => item.overallScore).filter((value) => value !== null && value !== undefined);
-      const avg = scores.length ? Math.round(scores.reduce((a, b) => a + Number(b), 0) / scores.length) : 0;
-      const assignmentScores = group.courses.flatMap((course) => (course.assignments || []).map((item) => item.score === null || item.score === undefined ? null : Math.round((Number(item.score) / Number(item.maxScore || 100)) * 100))).filter((v) => v !== null);
-      const completed = group.courses.reduce((sum, course) => sum + Number(course.passedAssignments || 0) + Number(course.passedQuizzes || 0), 0);
-      const total = group.courses.reduce((sum, course) => sum + Number(course.totalAssignments || 0) + Number(course.totalQuizzes || 0), 0);
-      return { ...group, averageScore: avg, assignmentAverage: assignmentScores.length ? Math.round(assignmentScores.reduce((a, b) => a + b, 0) / assignmentScores.length) : null, completed, total };
-    })
-      .sort((a, b) => b.averageScore - a.averageScore || String(a.student?.name || "").localeCompare(String(b.student?.name || "")));
-  }, [rows, programmeId]);
-
-  const filteredStudents = students.filter((item) => {
-    const haystack = `${item.student?.name || ""} ${item.student?.email || ""} ${item.programmeTitle || ""}`.toLowerCase();
-    return !search.trim() || haystack.includes(search.toLowerCase());
-  });
-
-  const stats = {
-    students: students.length,
-    ready: students.filter((item) => item.courses.some((course) => course.status === "CERTIFICATE_READY")).length,
-    attention: students.filter((item) => item.courses.some((course) => course.status === "NEEDS_ATTENTION")).length,
-    inProgress: students.filter((item) => item.courses.some((course) => ["IN_PROGRESS", "PENDING_REQUIREMENTS"].includes(course.status))).length,
-    issued: students.filter((item) => item.courses.some((course) => course.status === "CERTIFICATE_ISSUED")).length
-  };
-
-  if (selectedStudent) {
-    const courseRows = selectedStudent.courses;
-    return (
-      <section className="admin-section gradebook-admin-panel">
-        <div className="content-editor-header students-admin-header">
-          <div>
-            <span>Student Academic Record</span>
-            <h2>{selectedStudent.student?.name || "Student"}</h2>
-            <p>{selectedStudent.student?.email} · {selectedStudent.programmeTitle}</p>
-          </div>
-          <button className="gold-btn" type="button" onClick={() => setSelectedStudent(null)}>Back to Gradebook</button>
-        </div>
-
-        <div className="gradebook-stats-grid">
-          <div className="support-stat-card active-support-filter"><span>Overall Average</span><strong>{selectedStudent.averageScore}%</strong><small>Across listed courses</small></div>
-          <div className="support-stat-card"><span>Courses</span><strong>{courseRows.length}</strong><small>Courses in programme</small></div>
-          <div className="support-stat-card"><span>Assignments</span><strong>{selectedStudent.completed}/{selectedStudent.total}</strong><small>Passed / total assessments</small></div>
-          <div className="support-stat-card"><span>Assignment Average</span><strong>{selectedStudent.assignmentAverage === null ? "—" : `${selectedStudent.assignmentAverage}%`}</strong><small>Graded submissions</small></div>
-        </div>
-
-        <div className="gradebook-list">
-          {courseRows.map((row) => (
-            <article className="gradebook-card" key={row.enrollmentId}>
-              <div className="gradebook-card-head">
-                <div><span>{row.course?.level || "Course"}</span><h3>{row.course?.title}</h3><p>{row.course?.programmeTitle || selectedStudent.programmeTitle}</p></div>
-                <div className="gradebook-score-box"><strong>{row.overallScore ?? 0}%</strong><ResultStatusPill status={row.status} /></div>
-              </div>
-              <div className="gradebook-metrics">
-                <div><small>Lessons</small><strong>{row.completedLessons}/{row.totalLessons}</strong></div>
-                <div><small>Assignments</small><strong>{row.passedAssignments}/{row.totalAssignments}</strong></div>
-                <div><small>Quizzes</small><strong>{row.passedQuizzes}/{row.totalQuizzes}</strong></div>
-                <div><small>Progress</small><strong>{row.percent}%</strong></div>
-                <div><small>Certificate</small><strong>{row.certificate?.status || "Not issued"}</strong></div>
-              </div>
-              <details className="gradebook-details">
-                <summary>View course assessment record</summary>
-                <div className="result-detail-grid">
-                  <div className="result-detail-panel">
-                    <h4>Assignments</h4>
-                    {(row.assignments || []).map((item) => (
-                      <div className="result-item-row" key={item.id}>
-                        <div><strong>{item.title}</strong><small>{item.studentSubmittedAt ? `Submitted: ${new Date(item.studentSubmittedAt).toLocaleDateString()}` : "Not submitted"}</small></div>
-                        <div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.score, `/${item.maxScore}`)}</small></div>
-                        {item.feedback && <p><b>Lecturer feedback:</b> {item.feedback}</p>}
-                      </div>
-                    ))}
-                    {!row.assignments?.length && <p className="empty-small">No assignments.</p>}
-                  </div>
-                  <div className="result-detail-panel">
-                    <h4>Quizzes & Lecturer Record</h4>
-                    {(row.quizzes || []).map((item) => <div className="result-item-row" key={item.id}><div><strong>{item.title}</strong><small>{item.attemptCount} attempt(s)</small></div><div><ResultStatusPill status={item.status} /><small>{scoreLabel(item.bestScore)}</small></div></div>)}
-                    {(row.lecturerAssessments || []).map((item) => <div className="result-item-row" key={`lecturer-${item.id}`}><div><strong>{item.category}</strong><small>Recorded by {item.lecturer?.name || "Lecturer"}</small></div><div><strong>{scoreLabel(item.score, `/${item.maxScore}`)}</strong></div>{item.comment && <p><b>Lecturer note:</b> {item.comment}</p>}</div>)}
-                    {!row.quizzes?.length && !row.lecturerAssessments?.length && <p className="empty-small">No quiz or lecturer records yet.</p>}
-                  </div>
-                </div>
-              </details>
-            </article>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="admin-section gradebook-admin-panel">
-      <div className="content-editor-header students-admin-header">
-        <div><span>Academic Results</span><h2>Gradebook</h2><p>Select a programme, then review approved students from best performing to lowest performing.</p></div>
-        <button className="gold-btn" type="button" onClick={load}>Refresh</button>
-      </div>
-
-      <div className="admin-form gradebook-programme-selector">
-        <label className="content-field">
-          <span>Programme</span>
-          <select value={programmeId} onChange={(e) => setProgrammeId(e.target.value)}>
-            <option value="ALL">All programmes</option>
-            {programmes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-          </select>
-        </label>
-      </div>
-
-      <div className="gradebook-stats-grid">
-        <div className="support-stat-card active-support-filter"><span>Approved Students</span><strong>{stats.students}</strong><small>Unique students</small></div>
-        <div className="support-stat-card"><span>Ready</span><strong>{stats.ready}</strong><small>Certificate ready</small></div>
-        <div className="support-stat-card"><span>Needs Attention</span><strong>{stats.attention}</strong><small>Requires review</small></div>
-        <div className="support-stat-card"><span>In Progress</span><strong>{stats.inProgress}</strong><small>Still learning</small></div>
-        <div className="support-stat-card"><span>Issued</span><strong>{stats.issued}</strong><small>Certificate issued</small></div>
-      </div>
-
-      <div className="library-tools gradebook-toolbar">
-        <div className="search-box"><Search size={18} /><input placeholder="Search student or email..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-      </div>
-
-      {loading ? <p>Loading gradebook...</p> : (
-        <div className="gradebook-list">
-          {filteredStudents.map((item, index) => (
-            <button type="button" className="gradebook-card gradebook-student-row" key={`${item.student?.id}-${item.programmeId}`} onClick={() => setSelectedStudent(item)}>
-              <div className="gradebook-card-head">
-                <div><span>Rank #{index + 1} · {item.programmeTitle}</span><h3>{item.student?.name}</h3><p>{item.student?.email}</p></div>
-                <div className="gradebook-score-box"><strong>{item.averageScore}%</strong><small>Overall</small></div>
-              </div>
-              <div className="gradebook-metrics">
-                <div><small>Courses</small><strong>{item.courses.length}</strong></div>
-                <div><small>Assignments / Quizzes</small><strong>{item.completed}/{item.total}</strong></div>
-                <div><small>Assignment Avg.</small><strong>{item.assignmentAverage === null ? "—" : `${item.assignmentAverage}%`}</strong></div>
-                <div><small>Top Course</small><strong>{item.courses[0]?.course?.title || "—"}</strong></div>
-              </div>
-            </button>
-          ))}
-          {!filteredStudents.length && <div className="quiet-banner"><strong>No approved students found.</strong><p>Select another programme or search term.</p></div>}
-        </div>
-      )}
-    </section>
-  );
+ const [rows,setRows]=useState([]); const [page,setPage]=useState(1);
+ useEffect(()=>{api("/admin/student-grade-ranking").then(setRows)},[]);
+ const data=rows.slice((page-1)*20,page*20);
+ return <section className="admin-section"><h2>Student Grade Ranking</h2>
+ {data.map(r=><div className="progress-admin-card" key={r.student.id}><strong>{r.rank}. {r.student.name}</strong><p>{r.averageScore}% Average Score | {r.courses.length} Courses</p></div>)}
+ <div>{[...Array(Math.ceil(rows.length/20))].map((_,i)=><button className="ghost-btn" onClick={()=>setPage(i+1)}>{i+1}</button>)}</div></section>
 }
-
 function LecturerGradebook({ courseId, course }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -7232,37 +7061,13 @@ function LecturerGradebook({ courseId, course }) {
 
 
 function ProgressAdmin() {
-  const [rows, setRows] = useState([]);
-  async function load() { setRows(await api("/admin/student-progress")); }
-  useEffect(() => { load(); }, []);
-
-  return (
-    <section className="admin-section">
-      <div className="content-editor-header">
-        <div><span>Learning Analytics</span><h2>Student Progress</h2><p>See who has started, who is stuck, and who has completed required lessons, assignments and quizzes.</p></div>
-        <button className="gold-btn" onClick={load}>Refresh</button>
-      </div>
-      <div className="progress-admin-list">
-        {rows.map((row) => (
-          <div className="progress-admin-card" key={`${row.enrollmentId}-${row.student.id}`}>
-            <div>
-              <strong>{row.student.name}</strong>
-              <p>{row.student.email}</p>
-              <small>{row.course.title}</small>
-              {row.certificate?.status === "ISSUED" && <em className="cert-mini-badge">Certificate Issued</em>}
-            </div>
-            <div className="learning-progress-mini admin-progress-mini">
-              <div><strong>{row.percent}%</strong><small>{row.completedRequired} of {row.totalRequired} required items</small></div>
-              <i><b style={{ width: `${row.percent}%` }} /></i>
-            </div>
-          </div>
-        ))}
-        {rows.length === 0 && <p>No approved student progress yet.</p>}
-      </div>
-    </section>
-  );
+  const [rows,setRows]=useState([]); const [page,setPage]=useState(1);
+  useEffect(()=>{api("/admin/student-progress-ranking").then(setRows)},[]);
+  const pageRows=rows.slice((page-1)*20,page*20);
+  return <section className="admin-section"><h2>Student Progress Ranking</h2>
+  {pageRows.map(r=><div className="progress-admin-card" key={r.student.id}><strong>{r.rank}. {r.student.name}</strong><p>{r.progress}% Progress | {r.courses.length} Courses</p></div>)}
+  <div>{[...Array(Math.ceil(rows.length/20))].map((_,i)=><button className="ghost-btn" onClick={()=>setPage(i+1)}>{i+1}</button>)}</div></section>
 }
-
 function LessonsAdmin() {
   return <CourseBuilderAdmin />;
 }

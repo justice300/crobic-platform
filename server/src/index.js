@@ -4029,6 +4029,38 @@ app.get("/api/admin/student-progress", requireAuth, requireAdmin, async (req, re
   res.json(rows);
 });
 
+
+app.get("/api/admin/student-progress-ranking", requireAuth, requireAdmin, async (req, res) => {
+  const rows = await prisma.enrollment.findMany({
+    where: { admissionStatus: { in: ["APPROVED","GRADUATED"] }, accessStatus: { notIn: ["BLOCKED","SUSPENDED"] } },
+    include: { user: { select:{id:true,name:true,email:true} }, programme:{ include:{ courses:{ include: adminCourseInclude(), orderBy:{title:"asc"} } } }, course:{include:adminCourseInclude()} }
+  });
+  const students = {};
+  for (const enrollment of expandProgrammeCourseEnrollments(rows)) {
+    const summary = calculateCourseCompletionForUser(enrollment.course, enrollment.userId);
+    const id = enrollment.userId;
+    if (!students[id]) students[id] = { student: enrollment.user, total:0, count:0, courses:[] };
+    students[id].total += summary.percent;
+    students[id].count++;
+    students[id].courses.push({course:{id:enrollment.course.id,title:enrollment.course.title}, percent:summary.percent, completedLessons:summary.completedRequired,totalLessons:summary.totalRequired});
+  }
+  res.json(Object.values(students).map((s,i)=>({...s, progress:Math.round(s.total/s.count)})).sort((a,b)=>b.progress-a.progress).map((s,i)=>({...s,rank:i+1})));
+});
+app.get("/api/admin/student-progress-ranking/:id", requireAuth, requireAdmin, async (req,res)=>{
+  const data = await prisma.enrollment.findMany({where:{userId:Number(req.params.id)},include:{user:true,programme:{include:{courses:{include:adminCourseInclude()}}},course:{include:adminCourseInclude()}}});
+  res.json(expandProgrammeCourseEnrollments(data).map(e=>{const s=calculateCourseCompletionForUser(e.course,e.userId);return {course:e.course.title,percent:s.percent,lessons:[s.completedRequired,s.totalRequired],assignments:[s.completedAssignments,s.totalAssignments],quizzes:[s.completedQuizzes,s.totalQuizzes]}}));
+});
+app.get("/api/admin/student-grade-ranking", requireAuth, async (req,res)=>{
+  const enrollments = await prisma.enrollment.findMany({where:{admissionStatus:{in:["APPROVED","GRADUATED"]}},include:{user:true,programme:{include:{courses:{include:adminCourseInclude()}}},course:{include:adminCourseInclude()}}});
+  const map={};
+  for(const e of expandProgrammeCourseEnrollments(enrollments)){const r=buildGradebookRow(e);if(!map[e.userId])map[e.userId]={student:e.user,score:0,count:0,courses:[]};map[e.userId].score+=r.overallScore||0;map[e.userId].count++;map[e.userId].courses.push(r);}
+  res.json(Object.values(map).map(s=>({...s,averageScore:Math.round(s.score/s.count)})).sort((a,b)=>b.averageScore-a.averageScore).map((s,i)=>({...s,rank:i+1})));
+});
+app.get("/api/admin/student-grade-ranking/:id", requireAuth, async(req,res)=>{
+ const rows=await prisma.enrollment.findMany({where:{userId:Number(req.params.id)},include:{user:true,programme:{include:{courses:{include:adminCourseInclude()}}},course:{include:adminCourseInclude()}}});
+ res.json(expandProgrammeCourseEnrollments(rows).map(buildGradebookRow));
+});
+
 app.get("/api/student/certificates", requireAuth, async (req, res) => {
   if (req.user?.role !== "STUDENT") return res.status(403).json({ message: "Student access required" });
 
