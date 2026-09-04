@@ -2683,6 +2683,9 @@ function StudentPortal({ user, setUser, goTo }) {
   function switchStudentTab(nextTab) {
     setStudentTab(nextTab);
     setActiveEnrollmentId(null);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", nextTab);
+    window.history.pushState({}, "", `${window.location.pathname}?${params.toString()}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -4157,6 +4160,9 @@ function LecturerDashboard({ reloadPublic, currentUser }) {
 
   function switchLecturerTab(nextTab) {
     setTab(nextTab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", nextTab);
+    window.history.pushState({}, "", `${window.location.pathname}?${params.toString()}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -4224,6 +4230,9 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 
   function switchAdminTab(nextTab) {
     setTab(nextTab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", nextTab);
+    window.history.pushState({}, "", `${window.location.pathname}?${params.toString()}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
