@@ -355,9 +355,16 @@ function NotificationCenter() {
 }
 
 
+function getRoutePage() {
+  const path = window.location.pathname.replace(/^\//, "").split("/")[0] || "home";
+  const aliases = {
+    admission: "admissions"
+  };
+  return aliases[path] || path || "home";
+}
+
 function App() {
-  const initialPage = window.location.pathname.replace("/", "") || "home";
-  const [page, setPage] = useState(initialPage === "admission" ? "admissions" : initialPage);
+  const [page, setPage] = useState(getRoutePage());
   const [mobileOpen, setMobileOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -394,6 +401,17 @@ function App() {
 
   useEffect(() => {
     Promise.all([loadPublicData(), loadMe()]).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      setPage(getRoutePage());
+      setMobileOpen(false);
+      window.scrollTo(0, 0);
+    };
+
+    window.addEventListener("popstate", handleRouteChange);
+    return () => window.removeEventListener("popstate", handleRouteChange);
   }, []);
 
   function goTo(nextPage) {
