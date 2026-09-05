@@ -50,66 +50,66 @@ enum PaymentMethod {
 }
 
 model User {
-  id        Int        @id @default(autoincrement())
-  name      String
-  email     String     @unique
-  username  String?    @unique
-  phone     String?
-  country   String?
-  password  String
-  role      Role       @default(STUDENT)
-  status    UserStatus @default(PENDING_PAYMENT)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  failedLoginAttempts Int      @default(0)
-  lockedUntil         DateTime?
-  refreshTokenHash    String?
+  id                     Int        @id @default(autoincrement())
+  name                   String
+  email                  String     @unique
+  username               String?    @unique
+  phone                  String?
+  country                String?
+  password               String
+  role                   Role       @default(STUDENT)
+  status                 UserStatus @default(PENDING_PAYMENT)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  failedLoginAttempts    Int        @default(0)
+  lockedUntil            DateTime?
+  refreshTokenHash       String?
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?
 
-  enrollments             Enrollment[]
-  lessonProgresses        LessonProgress[]
-  liveChatMessages        LiveChatMessage[]
-  liveQuestions           LiveQuestion[]
-  liveAttendances         LiveAttendance[]
-  appeals                 Appeal[]
-  supportMessages         SupportMessage[]
-  certificates            Certificate[]
-  assignmentSubmissions   AssignmentSubmission[]
-  quizAttempts            QuizAttempt[]
-  adminActivityLogs       AdminActivityLog[]      @relation("AdminActivityUser")
-  courseDiscussions       CourseDiscussion[]      @relation("DiscussionAuthor")
-  discussionReplies       CourseDiscussionReply[] @relation("DiscussionReplyAuthor")
-  lecturerCourseAccesses  CourseLecturerAccess[]  @relation("LecturerCourseAccess")
-  grantedCourseAccesses   CourseLecturerAccess[]  @relation("CourseAccessGrantedBy")
-  createdStudentGroups    StudentGroup[]          @relation("StudentGroupCreator")
-  studentGroupMemberships StudentGroupMember[]
-  uploadedVideos          CourseVideo[]          @relation("VideoUploader")
-  videoProgresses         CourseVideoProgress[]
-  uploadedDocuments       CourseDocument[]       @relation("DocumentUploader")
-  startedLiveSessions     LiveSession[]          @relation("LiveSessionStarter")
-  notifications           Notification[]
-  lecturerAssessmentsAsStudent LecturerAssessment[] @relation("LecturerAssessmentStudent")
-  lecturerAssessmentsAsLecturer LecturerAssessment[] @relation("LecturerAssessmentAuthor")
+  enrollments                   Enrollment[]
+  lessonProgresses              LessonProgress[]
+  liveChatMessages              LiveChatMessage[]
+  liveQuestions                 LiveQuestion[]
+  liveAttendances               LiveAttendance[]
+  appeals                       Appeal[]
+  supportMessages               SupportMessage[]
+  certificates                  Certificate[]
+  assignmentSubmissions         AssignmentSubmission[]
+  quizAttempts                  QuizAttempt[]
+  adminActivityLogs             AdminActivityLog[]      @relation("AdminActivityUser")
+  courseDiscussions             CourseDiscussion[]      @relation("DiscussionAuthor")
+  discussionReplies             CourseDiscussionReply[] @relation("DiscussionReplyAuthor")
+  lecturerCourseAccesses        CourseLecturerAccess[]  @relation("LecturerCourseAccess")
+  grantedCourseAccesses         CourseLecturerAccess[]  @relation("CourseAccessGrantedBy")
+  createdStudentGroups          StudentGroup[]          @relation("StudentGroupCreator")
+  studentGroupMemberships       StudentGroupMember[]
+  uploadedVideos                CourseVideo[]           @relation("VideoUploader")
+  videoProgresses               CourseVideoProgress[]
+  uploadedDocuments             CourseDocument[]        @relation("DocumentUploader")
+  startedLiveSessions           LiveSession[]           @relation("LiveSessionStarter")
+  notifications                 Notification[]
+  lecturerAssessmentsAsStudent  LecturerAssessment[]    @relation("LecturerAssessmentStudent")
+  lecturerAssessmentsAsLecturer LecturerAssessment[]    @relation("LecturerAssessmentAuthor")
 }
 
 model Programme {
-  id            Int      @id @default(autoincrement())
-  title         String
-  level         String
-  duration      String?
-  description   String
-  imageUrl      String?
-  fee           Int      @default(0)
-  feeUsd        Float    @default(0)
-  currency      String   @default("USD")
-  certification String?
-  paymentPlan   String   @default("ONE_TIME")
+  id                 Int      @id @default(autoincrement())
+  title              String
+  level              String
+  duration           String?
+  description        String
+  imageUrl           String?
+  fee                Int      @default(0)
+  feeUsd             Float    @default(0)
+  currency           String   @default("USD")
+  certification      String?
+  paymentPlan        String   @default("ONE_TIME")
   paymentCycleMonths Int?
-  defaultLevelStage String?
-  published     Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  defaultLevelStage  String?
+  published          Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   courses      Course[]
   enrollments  Enrollment[]
@@ -118,35 +118,36 @@ model Programme {
 }
 
 model Course {
-  id          Int      @id @default(autoincrement())
-  programmeId Int?
-  title       String
-  level       String
-  duration    String?
-  description String
-  imageUrl    String?
-  fee         Int      @default(0)
-  feeUsd      Float    @default(0)
-  currency    String   @default("USD")
-  generalForAllProgrammes Boolean @default(false)
-  levelStage  String?
-  published   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                      Int      @id @default(autoincrement())
+  programmeId             Int?
+  title                   String
+  level                   String
+  duration                String?
+  description             String
+  imageUrl                String?
+  fee                     Int      @default(0)
+  feeUsd                  Float    @default(0)
+  currency                String   @default("USD")
+  generalForAllProgrammes Boolean  @default(false)
+  levelStage              String?
+  semester                String?
+  published               Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
-  modules          CourseModule[]
-  lessons          Lesson[]
-  enrollments      Enrollment[]
-  certificates     Certificate[]
-  assignments      Assignment[]
-  quizzes          Quiz[]
-  discussions      CourseDiscussion[]
-  lecturerAccesses CourseLecturerAccess[]
-  studentGroups    StudentGroup[]
-  liveSessions     LiveSession[]
-  videos           CourseVideo[]
-  documents        CourseDocument[]
-  notifications    Notification[]
+  modules             CourseModule[]
+  lessons             Lesson[]
+  enrollments         Enrollment[]
+  certificates        Certificate[]
+  assignments         Assignment[]
+  quizzes             Quiz[]
+  discussions         CourseDiscussion[]
+  lecturerAccesses    CourseLecturerAccess[]
+  studentGroups       StudentGroup[]
+  liveSessions        LiveSession[]
+  videos              CourseVideo[]
+  documents           CourseDocument[]
+  notifications       Notification[]
   lecturerAssessments LecturerAssessment[]
 
   programme Programme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
@@ -195,37 +196,37 @@ model Lesson {
 }
 
 model Enrollment {
-  id                Int             @id @default(autoincrement())
-  userId            Int
-  courseId          Int?
-  programmeId       Int?
-  amount            Int             @default(0)
-  paymentStatus     PaymentStatus   @default(PENDING_PAYMENT)
-  admissionStatus   AdmissionStatus @default(AWAITING_PAYMENT)
-  paymentMethod     PaymentMethod   @default(NONE)
-  paystackReference String?
-  manualReference   String?
-  paymentProofUrl   String?
-  learningStream    String?
-  currentLevelStage String?
-  accessStatus      String          @default("ACTIVE")
-  paidUntil         DateTime?
-  paymentCycleMonths Int?
-  nextPaymentDueAt DateTime?
-  paymentPlan       String          @default("ONE_TIME")
-  studentPaymentNotice Boolean      @default(false)
+  id                          Int             @id @default(autoincrement())
+  userId                      Int
+  courseId                    Int?
+  programmeId                 Int?
+  amount                      Int             @default(0)
+  paymentStatus               PaymentStatus   @default(PENDING_PAYMENT)
+  admissionStatus             AdmissionStatus @default(AWAITING_PAYMENT)
+  paymentMethod               PaymentMethod   @default(NONE)
+  paystackReference           String?
+  manualReference             String?
+  paymentProofUrl             String?
+  learningStream              String?
+  currentLevelStage           String?
+  accessStatus                String          @default("ACTIVE")
+  paidUntil                   DateTime?
+  paymentCycleMonths          Int?
+  nextPaymentDueAt            DateTime?
+  paymentPlan                 String          @default("ONE_TIME")
+  studentPaymentNotice        Boolean         @default(false)
   studentPaymentNoticeMessage String?
-  studentPaymentNoticeSentAt DateTime?
-  graceUntil        DateTime?
-  applicationJson   String?
-  applicationSubmittedAt DateTime?
-  approvedAt        DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  studentPaymentNoticeSentAt  DateTime?
+  graceUntil                  DateTime?
+  applicationJson             String?
+  applicationSubmittedAt      DateTime?
+  approvedAt                  DateTime?
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   course      Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  programme  Programme?  @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  programme   Programme?   @relation(fields: [programmeId], references: [id], onDelete: SetNull)
   appeals     Appeal[]
   certificate Certificate?
 
@@ -267,7 +268,7 @@ model Certificate {
   id                Int       @id @default(autoincrement())
   userId            Int
   courseId          Int
-  programmeId      Int?
+  programmeId       Int?
   enrollmentId      Int       @unique
   certificateNumber String    @unique
   status            String    @default("ISSUED")
@@ -279,7 +280,7 @@ model Certificate {
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   course     Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  programme Programme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  programme  Programme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -477,7 +478,7 @@ model LiveSession {
   updatedAt        DateTime  @updatedAt
 
   course       Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  programme    Programme?         @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  programme    Programme?        @relation(fields: [programmeId], references: [id], onDelete: SetNull)
   startedBy    User?             @relation("LiveSessionStarter", fields: [startedById], references: [id], onDelete: SetNull)
   chatMessages LiveChatMessage[]
   questions    LiveQuestion[]
@@ -500,8 +501,8 @@ model LiveChatMessage {
   liveSession LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  replyTo     LiveChatMessage? @relation("MessageReplies", fields: [replyToId], references: [id])
-  replies     LiveChatMessage[] @relation("MessageReplies")
+  replyTo LiveChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies LiveChatMessage[] @relation("MessageReplies")
 }
 
 model LiveQuestion {
@@ -692,9 +693,9 @@ model CourseVideo {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  uploadedBy  User     @relation("VideoUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
-  progresses  CourseVideoProgress[]
+  course     Course                @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  uploadedBy User                  @relation("VideoUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  progresses CourseVideoProgress[]
 
   @@index([courseId])
   @@index([uploadedById])
@@ -741,15 +742,15 @@ model CourseDocument {
 }
 
 model Notification {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   userId    Int
   courseId  Int?
   title     String
   message   String
   url       String?
-  type      String   @default("INFO")
+  type      String    @default("INFO")
   readAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   course Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
