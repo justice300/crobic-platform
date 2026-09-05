@@ -387,7 +387,7 @@ async function canAccessCourseContent(user, courseId) {
   if (isPowerAdmin(user)) return true;
   if (await isAssignedLecturer(user, id)) return true;
   if (user.role === "STUDENT") {
-    const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true } });
+    const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true, semester: true } });
     if (!course) return false;
     const enrollment = await prisma.enrollment.findFirst({
       where: {
@@ -429,7 +429,7 @@ async function enrolledStudentsForCourse(courseId) {
     });
   }
 
-  const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true } });
+  const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true, semester: true } });
   if (!course) return [];
 
   const users = await prisma.user.findMany({
@@ -528,6 +528,7 @@ function normaliseCoursePayload(body = {}) {
     currency: String(body.currency || "USD").trim() || "USD",
     generalForAllProgrammes: body.generalForAllProgrammes === true || body.generalForAllProgrammes === "true" || body.generalForAllProgrammes === "on",
     levelStage: body.levelStage ? String(body.levelStage).trim() : null,
+    semester: body.semester ? String(body.semester).trim() : null,
     published: body.published === undefined ? true : body.published === true || body.published === "true" || body.published === "on"
   };
 }
@@ -1111,7 +1112,7 @@ function isLessonUnlocked(course, targetLessonId) {
 
 async function getStudentLearningCourse(userId, courseId) {
   const id = Number(courseId);
-  const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true } });
+  const course = await prisma.course.findUnique({ where: { id }, select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true, semester: true } });
   if (!course) return null;
 
   const enrollment = await prisma.enrollment.findFirst({
@@ -1775,7 +1776,7 @@ async function studentCanSeeLiveCourse(userId, courseId) {
   if (!userId || !id) return false;
   const course = await prisma.course.findUnique({
     where: { id },
-    select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true }
+    select: { id: true, programmeId: true, generalForAllProgrammes: true, levelStage: true, semester: true }
   });
   if (!course) return false;
 
