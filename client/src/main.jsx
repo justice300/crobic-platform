@@ -4411,7 +4411,7 @@ function UsersRolesAdmin() {
               ) : null}
               <div className="mini-chip-row">
                 {(user.lecturerCourseAccesses || []).map((access) => (
-                  <span className="mini-chip" key={access.id}>{access.course?.title}<button type="button" onClick={() => removeAccess(access.id)}>×</button></span>
+                  <span className="mini-chip" key={access.id}>{access.course?.title} {access.course?.levelStage ? " - " + access.course.levelStage : ""} {access.course?.semester ? " - " + access.course.semester : ""} {access.course?.programme?.title ? " - " + access.course.programme.title : ""}<button type="button" onClick={() => removeAccess(access.id)}>X</button></span>
                 ))}
                 {!(user.lecturerCourseAccesses || []).length && <small>No assigned course yet.</small>}
               </div>

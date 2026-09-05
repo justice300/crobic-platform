@@ -3355,7 +3355,7 @@ app.get("/api/admin/users-roles", requireAuth, requireAdmin, async (req, res) =>
     const users = await prisma.user.findMany({
       where: { role: { in: ["SUPER_ADMIN", "RECTOR", "ADMIN", "LECTURER"] } },
       include: {
-        lecturerCourseAccesses: { include: { course: { select: { id: true, title: true, level: true } } } }
+        lecturerCourseAccesses: { include: { course: { select: { id: true, title: true, level: true, levelStage: true, semester: true, programme: { select: { title: true } } } } } }
       },
       orderBy: { createdAt: "desc" }
     });
