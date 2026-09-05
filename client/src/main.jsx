@@ -2676,6 +2676,13 @@ function StudentPortal({ user, setUser, goTo }) {
 
   if (!dashboard) return <div className="loading-screen">Loading student portal...</div>;
 
+  const visibleEnrollments = dashboard.enrollments.filter((enrollment) => {
+    const studentStage = enrollment.currentLevelStage;
+    const courseStage = enrollment.course?.levelStage;
+    if (!studentStage || !courseStage) return true;
+    return studentStage === courseStage;
+  });
+
   const activeEnrollment = dashboard.enrollments.find((item) => (item.virtualEnrollmentId || item.id) === activeEnrollmentId || String(item.id) === String(activeEnrollmentId));
   const totalLessons = dashboard.enrollments.reduce((a, e) => a + getCourseProgressSummary(e.course).lessons.length, 0);
   const completedCourses = dashboard.enrollments.filter((enrollment) => getCourseProgressSummary(enrollment.course).percent >= 100).length;
@@ -2750,7 +2757,7 @@ function StudentPortal({ user, setUser, goTo }) {
                   <div className="student-dashboard-panel">
                     <div className="section-mini-head"><span>Continue</span><h3>My Courses</h3></div>
                     <div className="student-mini-course-list">
-                      {dashboard.enrollments.map((enrollment) => {
+                      {visibleEnrollments.map((enrollment) => {
                         const summary = getCourseProgressSummary(enrollment.course);
                         return (
                           <button type="button" key={enrollment.virtualEnrollmentId || enrollment.id} onClick={() => openCourse(enrollment.virtualEnrollmentId || enrollment.id)}>
@@ -2789,7 +2796,7 @@ function StudentPortal({ user, setUser, goTo }) {
                   <p>Open your approved programme and continue lessons in the correct order.</p>
                 </div>
                 <div className="course-grid student-course-grid">
-                  {dashboard.enrollments.map((enrollment) => (
+                  {visibleEnrollments.map((enrollment) => (
                     <StudentCourse key={enrollment.virtualEnrollmentId || enrollment.id} enrollment={enrollment} openCourse={() => openCourse(enrollment.virtualEnrollmentId || enrollment.id)} />
                   ))}
                   {!dashboard.enrollments.length && <div className="quiet-banner"><strong>No approved courses yet.</strong><p>Your courses will appear here after admission approval.</p></div>}
@@ -9042,3 +9049,4 @@ function Footer({ goTo, settings = {} }) {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
