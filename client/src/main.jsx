@@ -5822,7 +5822,7 @@ function CoursesAdmin({ reloadPublic }) {
         </select>
         <input placeholder="Course title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <input placeholder="Course category e.g Core Course, Elective, Ministry Practical" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} required />
-        <input placeholder="Access level/stage e.g 100 Level, 200 Level, General" value={form.levelStage} onChange={(e) => setForm({ ...form, levelStage: e.target.value })} />
+        <input placeholder="Academic Stage e.g 100 Level - First Semester, 200 Level - Second Semester" value={form.levelStage} onChange={(e) => setForm({ ...form, levelStage: e.target.value })} />
         <label className="admin-checkbox-row">
           <input type="checkbox" checked={Boolean(form.generalForAllProgrammes)} onChange={(e) => setForm({ ...form, generalForAllProgrammes: e.target.checked, programmeId: e.target.checked ? "" : form.programmeId })} />
           <span>General compulsory course for all programmes <small>Every approved student will see this course, no matter their programme.</small></span>
