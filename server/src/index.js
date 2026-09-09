@@ -1,3 +1,4 @@
+import { createBackupArchive, inspectBackupArchive, restoreBackupArchive } from "./backup/backup.js";
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
@@ -21,6 +22,7 @@ import {
   refreshTokenHash
 } from "./middleware.js";
 import { applySecurity, strictCorsOptions, loginLimiter, registerLimiter, otpLimiter, validators, validateRequest, productionErrorHandler, sanitizeRequestBody } from "./security.js";
+import multer from "multer";
 import { documentUpload, makeStorageName, uploadToBunny } from "./storage.js";
 import {
   sendTransactionalEmail as sendIntegrationTransactionalEmail,
@@ -35,12 +37,30 @@ import {
 } from "./integrations.js";
 import { initSentry, sentryErrorHandler } from "./sentry.js";
 
+
+
+
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 // Keep reset links on the public CIBI site even if an older API deployment still has a legacy CLIENT_URL.
 const PASSWORD_RESET_URL_BASE = (process.env.PASSWORD_RESET_URL_BASE || "https://cibionline.org").replace(/\/$/, "");
 const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
+const backupUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 1024 * 1024 * 1024
+  },
+  fileFilter(_req, file, cb) {
+    if (!file.originalname.toLowerCase().endsWith(".zip")) {
+      return cb(new Error("Only ZIP backup files are allowed."));
+    }
+
+    cb(null, true);
+  }
+});
+
 const PAYMENT_PROOF_DIR = path.join(UPLOAD_ROOT, "payment-proofs");
 const CERTIFICATE_ASSET_DIR = path.join(UPLOAD_ROOT, "certificate-assets");
 const ASSIGNMENT_FILE_DIR = path.join(UPLOAD_ROOT, "assignment-files");
@@ -3310,7 +3330,6 @@ app.delete("/api/admin/course-discussions/:id", requireAuth, requireAdmin, async
   }
 });
 
-
 app.post("/api/admin/users/:id/unlock", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const userId = Number(req.params.id);
@@ -4884,6 +4903,102 @@ app.post("/api/admin/live/stop", requireAuth, async (req, res) => {
   res.json({ message: "Live session stopped" });
 });
 
+
+app.post("/api/admin/backup/create", requireAuth, requireSuperAdmin, async (_req, res) => {
+  try {
+    const { stream, manifest } = await createBackupArchive();
+
+    res.setHeader(
+      "Content-Type",
+      "application/zip"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="CIBI-backup-${Date.now()}.zip"`
+    );
+
+    res.setHeader(
+      "X-Backup-Tables",
+      String(manifest.tableCount)
+    );
+
+    stream.pipe(res);
+  } catch (error) {
+    res.status(500).json({
+      message: "Backup creation failed.",
+      error: error.message
+    });
+  }
+});
+
+
+app.post(
+  "/api/admin/backup/inspect",
+  requireAuth,
+  requireSuperAdmin,
+  backupUpload.single("backup"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          message: "Backup ZIP file required."
+        });
+      }
+
+      const result = await inspectBackupArchive(
+        req.file.buffer
+      );
+
+      res.json(result);
+    } catch (error) {
+      res.status(400).json({
+        message: "Invalid backup file.",
+        error: error.message
+      });
+    }
+  }
+);
+
+
+app.post(
+  "/api/admin/backup/restore",
+  requireAuth,
+  requireSuperAdmin,
+  backupUpload.single("backup"),
+  async (req, res) => {
+    try {
+      if (req.body.confirm !== "RESTORE_CIBI_BACKUP") {
+        return res.status(400).json({
+          message: "Restore confirmation required."
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          message: "Backup ZIP file required."
+        });
+      }
+
+      const result = await restoreBackupArchive(
+        req.file.buffer
+      );
+
+      res.json({
+        message: "Backup restored successfully.",
+        result
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        message: "Backup restoration failed.",
+        error: error.message
+      });
+    }
+  }
+);
+
+
 app.use(sentryErrorHandler());
 app.use(productionErrorHandler);
 
@@ -4914,3 +5029,6 @@ async function gracefulShutdown(signal) {
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+
+
