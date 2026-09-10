@@ -1,15 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import archiverModule from "archiver";
+import * as archiverModule from "archiver";
 
-const archiver = archiverModule.default || archiverModule;
 import unzipper from "unzipper";
 import { PassThrough } from "stream";
 import { pgPool } from "../db.js";
 
-const BACKUP_VERSION = 1;
-const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 
 function jsonValue(value) {
   if (value instanceof Date) return value.toISOString();
@@ -216,9 +213,11 @@ export async function createBackupArchive() {
 
   const stream = new PassThrough();
 
-  const archive = archiver("zip", {
-    zlib: { level: 6 }
-  });
+const archive = new archiverModule.ZipArchive({
+  zlib: {
+    level: 9
+  }
+});
 
   archive.on("error", (error) => {
     stream.destroy(error);
