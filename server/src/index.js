@@ -4925,11 +4925,12 @@ app.post("/api/admin/backup/create", requireAuth, requireSuperAdmin, async (_req
 
     stream.pipe(res);
   } catch (error) {
-    res.status(500).json({
-      message: "Backup creation failed.",
-      error: error.message
-    });
-  }
+  console.error("BACKUP ERROR:", error);
+
+  return res.status(500).json({
+    message: error.message || "Backup creation failed.",
+  });
+}
 });
 
 
