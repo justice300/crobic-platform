@@ -4227,7 +4227,7 @@ function AdminDashboard({ reloadPublic, currentUser }) {
     return <LecturerDashboard reloadPublic={reloadPublic} currentUser={currentUser} />;
   }
 
-  const [tab, setTab] = useState(() => getPortalInitialTab("overview", ["overview", "website content", "programmes", "courses", "currency settings", "users & roles", "admissions", "students", "books", "course builder", "progress", "gradebook", "student groups", "activity log", "attendance records", "course discussions", "certificates", "assignments & quiz", "slides", "gallery", "announcements", "live", "appeals & support", "email settings", "settings"]));
+  const [tab, setTab] = useState(() => getPortalInitialTab("overview", ["overview", "website content", "programmes", "courses", "currency settings", "users & roles", "admissions", "students", "books", "course builder", "progress", "gradebook", "student groups", "activity log", "attendance records", "course discussions", "certificates", "assignments & quiz", "slides", "gallery", "announcements", "live", "appeals & support", "Email Settings", "Backup", "Settings"]));
   const [overview, setOverview] = useState(null);
 
   async function loadOverview() {
@@ -4247,7 +4247,7 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 
   return (
     <main className="portal-page">
-      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Website Content", "Programmes", "Courses", "Currency Settings", "Users & Roles", "Admissions", "Books", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Email Settings", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Admissions", "Programmes", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
+      <PortalSidebar title="Admin Dashboard" items={(isPowerAdmin(currentUser) ? ["Overview", "Website Content", "Programmes", "Courses", "Currency Settings", "Users & Roles", "Admissions", "Books", "Course Builder", "Progress", "Gradebook", "Student Groups", "Activity Log", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Slides", "Gallery", "Announcements", "Live", "Appeals & Support", "Email Settings", "Backup", "Settings"] : currentUser?.role === "LECTURER" ? ["Overview", "Course Builder", "Assignments & Quiz", "Student Groups", "Attendance Records", "Course Discussions", "Live"] : ["Overview", "Admissions", "Programmes", "Courses", "Course Builder", "Progress", "Gradebook", "Student Groups", "Attendance Records", "Course Discussions", "Certificates", "Assignments & Quiz", "Live", "Appeals & Support"])} tab={tab} setTab={switchAdminTab} admin />
       <div className="portal-main">
         <div className="portal-header"><div><p className="eyebrow dark">Admin Control</p><h1>CIBI Management</h1></div></div>
         {tab === "overview" && <Overview overview={overview} />}
@@ -4273,6 +4273,7 @@ function AdminDashboard({ reloadPublic, currentUser }) {
         {tab === "website content" && <WebsiteContentAdmin reloadPublic={reloadPublic} />}
         {tab === "currency settings" && <CurrencySettingsAdmin />}
         {tab === "email settings" && <EmailSettingsAdmin />}
+        {tab === 'backup' && <BackupAdmin />}
         {tab === "settings" && <SettingsAdmin reloadPublic={reloadPublic} />}
       </div>
     </main>
@@ -4284,6 +4285,74 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 
 
 
+
+function BackupAdmin() {
+  const [message,setMessage] = useState("");
+  const [loading,setLoading] = useState(false);
+
+  async function createBackup(){
+  try{
+    setLoading(true);
+
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+    const response = await fetch(`${baseUrl}/admin/backup/create`, {
+      method:"POST",
+      credentials:"include"
+    });
+
+    if(!response.ok){
+      const error = await response.json().catch(()=>({}));
+      throw new Error(error.message || "Backup failed");
+    }
+
+    const blob = await response.blob();
+
+    const url = window.URL.createObjectURL(blob);
+
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="cibi-backup.zip";
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+
+    setMessage("Backup downloaded successfully.");
+
+  }catch(error){
+    setMessage(error.message);
+  }
+  finally{
+    setLoading(false);
+  }
+}
+
+  return (
+    <section className="admin-section">
+      <div className="content-editor-header admin-ux-hero">
+        <h2>System Backup</h2>
+        <p>Download your complete CIBI platform backup to your computer.</p>
+      </div>
+
+      <div className="admin-form phase2-card">
+
+        <button
+          className="gold-btn"
+          onClick={createBackup}
+          disabled={loading}
+        >
+          {loading ? "Creating Backup..." : "Download Backup"}
+        </button>
+
+        {message && <p className="quiet-banner">{message}</p>}
+
+      </div>
+    </section>
+  );
+}
 function UsersRolesAdmin() {
   const [data, setData] = useState({ rawUsers: [], courses: [] });
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "LECTURER" });
@@ -9049,4 +9118,6 @@ function Footer({ goTo, settings = {} }) {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
+
 
