@@ -4289,53 +4289,96 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 function BackupAdmin() {
   const [message,setMessage] = useState("");
   const [loading,setLoading] = useState(false);
+  const [file,setFile] = useState(null);
 
   async function createBackup(){
-  try{
-    setLoading(true);
+    try{
+      setLoading(true);
 
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-    const response = await fetch(`${baseUrl}/admin/backup/create`, {
-      method:"POST",
-      credentials:"include"
-    });
+      const response = await fetch(`${baseUrl}/admin/backup/create`, {
+        method:"POST",
+        credentials:"include"
+      });
 
-    if(!response.ok){
-      const error = await response.json().catch(()=>({}));
-      throw new Error(error.message || "Backup failed");
+      if(!response.ok){
+        const error = await response.json().catch(()=>({}));
+        throw new Error(error.message || "Backup failed");
+      }
+
+      const blob = await response.blob();
+
+      const url = window.URL.createObjectURL(blob);
+
+      const a=document.createElement("a");
+      a.href=url;
+      a.download="cibi-backup.zip";
+
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+
+      setMessage("Backup downloaded successfully.");
+
+    }catch(error){
+      setMessage(error.message);
+    }
+    finally{
+      setLoading(false);
+    }
+  }
+
+
+  async function restoreBackup(){
+
+    if(!file){
+      setMessage("Please select a backup ZIP file.");
+      return;
     }
 
-    const blob = await response.blob();
+    try{
 
-    const url = window.URL.createObjectURL(blob);
+      setLoading(true);
 
-    const a=document.createElement("a");
-    a.href=url;
-    a.download="cibi-backup.zip";
+      const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+      const formData = new FormData();
+      formData.append("backup", file);
 
-    window.URL.revokeObjectURL(url);
+      const response = await fetch(`${baseUrl}/admin/backup/restore`,{
+        method:"POST",
+        credentials:"include",
+        body:formData
+      });
 
-    setMessage("Backup downloaded successfully.");
+      const data = await response.json().catch(()=>({}));
 
-  }catch(error){
-    setMessage(error.message);
+      if(!response.ok){
+        throw new Error(data.message || "Restore failed");
+      }
+
+      setMessage("Backup restored successfully.");
+
+    }catch(error){
+      setMessage(error.message);
+    }
+    finally{
+      setLoading(false);
+    }
   }
-  finally{
-    setLoading(false);
-  }
-}
+
 
   return (
     <section className="admin-section">
+
       <div className="content-editor-header admin-ux-hero">
         <h2>System Backup</h2>
-        <p>Download your complete CIBI platform backup to your computer.</p>
+        <p>Download or restore your complete CIBI platform backup.</p>
       </div>
+
 
       <div className="admin-form phase2-card">
 
@@ -4347,9 +4390,32 @@ function BackupAdmin() {
           {loading ? "Creating Backup..." : "Download Backup"}
         </button>
 
+
+        <hr />
+
+
+        <h3>Restore Backup</h3>
+
+        <input
+          type="file"
+          accept=".zip"
+          onChange={(e)=>setFile(e.target.files[0])}
+        />
+
+
+        <button
+          className="gold-btn"
+          onClick={restoreBackup}
+          disabled={loading}
+        >
+          {loading ? "Restoring..." : "Upload & Restore Backup"}
+        </button>
+
+
         {message && <p className="quiet-banner">{message}</p>}
 
       </div>
+
     </section>
   );
 }
@@ -9118,6 +9184,7 @@ function Footer({ goTo, settings = {} }) {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
 
 
 
