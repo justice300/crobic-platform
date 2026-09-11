@@ -2553,7 +2553,7 @@ function StudentSupportCenter({ defaultCategory = "GENERAL_SUPPORT", defaultSubj
       return;
     }
     try {
-      setLoading(true);
+      setBackupLoading(true);
       const created = await api("/student/support/cases", { method: "POST", body: form });
       showToast("Your appeal/support case has been submitted.", "success");
       setForm((current) => ({ ...current, message: "" }));
@@ -2562,7 +2562,7 @@ function StudentSupportCenter({ defaultCategory = "GENERAL_SUPPORT", defaultSubj
     } catch (error) {
       showToast(error.message || "Could not submit support case", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -2602,7 +2602,7 @@ function StudentSupportCenter({ defaultCategory = "GENERAL_SUPPORT", defaultSubj
           </select>
           <input placeholder="Subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
           <textarea placeholder="Explain what happened and what you want admin to review..." value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
-          <button className="gold-btn full" type="submit" disabled={loading}>{loading ? "Submitting..." : "Submit Appeal / Support"}</button>
+          <button className="gold-btn full" type="submit" disabled={backupLoading}>{loading ? "Submitting..." : "Submit Appeal / Support"}</button>
         </form>
 
         <div className="support-thread-card">
@@ -3283,7 +3283,7 @@ function CourseLiveManager({ course, onReload }) {
 
   async function startLive(e) {
     e.preventDefault();
-    setLoading(true);
+    setBackupLoading(true);
     try {
       const result = await api(`/courses/${course.id}/live/start`, { method: "POST", body: form });
       showToast("Live class started. Students have been notified.", "success");
@@ -3293,7 +3293,7 @@ function CourseLiveManager({ course, onReload }) {
     } catch (error) {
       showToast(error.message, "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -3342,7 +3342,7 @@ function CourseLiveManager({ course, onReload }) {
           <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <input placeholder="Zoom or YouTube Live link" value={form.liveUrl} onChange={(e) => setForm({ ...form, liveUrl: e.target.value })} required />
           <input type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} />
-          <button className="gold-btn" type="submit" disabled={loading}>{loading ? "Starting..." : "Go Live"}</button>
+          <button className="gold-btn" type="submit" disabled={backupLoading}>{loading ? "Starting..." : "Go Live"}</button>
         </form>
       )}
 
@@ -3538,7 +3538,7 @@ function SecureCourseVideoPlayer({ courseId, video, close }) {
   const saveTimer = useRef(null);
 
   useEffect(() => {
-    setLoading(true);
+    setBackupLoading(true);
     api(`/courses/${courseId}/videos/${video.id}/stream-url`)
       .then((result) => setPlayerData(result))
       .catch((error) => showToast(error.message, "error"))
@@ -4288,12 +4288,13 @@ function AdminDashboard({ reloadPublic, currentUser }) {
 
 function BackupAdmin() {
   const [message,setMessage] = useState("");
-  const [loading,setLoading] = useState(false);
+  const [backupLoading,setBackupLoading] = useState(false);
+  const [restoreLoading,setRestoreLoading] = useState(false);
   const [file,setFile] = useState(null);
 
   async function createBackup(){
     try{
-      setLoading(true);
+      setBackupLoading(true);
 
       const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -4327,7 +4328,7 @@ function BackupAdmin() {
       setMessage(error.message);
     }
     finally{
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -4341,7 +4342,7 @@ function BackupAdmin() {
 
     try{
 
-      setLoading(true);
+      setBackupLoading(true);
 
       const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -4366,7 +4367,7 @@ function BackupAdmin() {
       setMessage(error.message);
     }
     finally{
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -4385,9 +4386,9 @@ function BackupAdmin() {
         <button
           className="gold-btn"
           onClick={createBackup}
-          disabled={loading}
+          disabled={backupLoading}
         >
-          {loading ? "Creating Backup..." : "Download Backup"}
+          {backupLoading ? "Creating Backup..." : "Download Backup"}
         </button>
 
 
@@ -4406,9 +4407,9 @@ function BackupAdmin() {
         <button
           className="gold-btn"
           onClick={restoreBackup}
-          disabled={loading}
+          disabled={restoreLoading}
         >
-          {loading ? "Restoring..." : "Upload & Restore Backup"}
+          {restoreLoading ? "Restoring..." : "Upload & Restore Backup"}
         </button>
 
 
@@ -5029,14 +5030,14 @@ function SupportAdmin() {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       const result = await api("/admin/support/cases");
       setCases(result);
       if (!activeId && result[0]?.id) setActiveId(result[0].id);
     } catch (error) {
       showToast(error.message || "Could not load support cases", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -5314,12 +5315,12 @@ function StudentsAdmin({ currentUser }) {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       setStudents(await api("/admin/students"));
     } catch (error) {
       showToast(error.message || "Could not load students", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -6535,12 +6536,12 @@ function StudentAttendancePanel() {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       setRecords(await api("/student/attendance-history"));
     } catch (error) {
       showToast(error.message || "Could not load attendance history", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -6596,7 +6597,7 @@ function CourseDiscussionPanel({ courseId }) {
       return;
     }
     try {
-      setLoading(true);
+      setBackupLoading(true);
       await api(`/student/courses/${courseId}/discussions`, { method: "POST", body: form });
       setForm({ title: "", message: "" });
       await load();
@@ -6604,7 +6605,7 @@ function CourseDiscussionPanel({ courseId }) {
     } catch (error) {
       showToast(error.message || "Could not post discussion", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -6632,7 +6633,7 @@ function CourseDiscussionPanel({ courseId }) {
       <form className="discussion-new-form" onSubmit={createDiscussion}>
         <input placeholder="Discussion title, e.g. Question about lesson 2" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
         <textarea placeholder="Type your course question or comment..." value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
-        <button className="gold-btn" type="submit" disabled={loading}>{loading ? "Posting..." : "Post Discussion"}</button>
+        <button className="gold-btn" type="submit" disabled={backupLoading}>{loading ? "Posting..." : "Post Discussion"}</button>
       </form>
       <div className="discussion-thread-list">
         {discussions.map((discussion) => (
@@ -6668,12 +6669,12 @@ function StudentResultsPanel() {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       setRows(await api("/student/results"));
     } catch (error) {
       showToast(error.message || "Could not load your results", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -6768,7 +6769,7 @@ function StudentCertificatesPanel() {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       const [certificateRows, settingsResult] = await Promise.all([
         api("/student/certificates"),
         api("/certificates/settings").catch(() => DEFAULT_CERTIFICATE_SETTINGS)
@@ -6778,7 +6779,7 @@ function StudentCertificatesPanel() {
     } catch (error) {
       showToast(error.message || "Could not load certificates", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -6854,7 +6855,7 @@ function CertificatesAdmin() {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       const [certificateRows, settingsResult] = await Promise.all([
         api("/admin/certificates"),
         api("/admin/settings").catch(() => DEFAULT_CERTIFICATE_SETTINGS)
@@ -6864,7 +6865,7 @@ function CertificatesAdmin() {
     } catch (error) {
       showToast(error.message || "Could not load certificate records", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -7118,13 +7119,13 @@ function LecturerGradebook({ courseId, course }) {
   async function load() {
     if (!courseId) return;
     try {
-      setLoading(true);
+      setBackupLoading(true);
       const result = await api(`/admin/gradebook?courseId=${encodeURIComponent(courseId)}`);
       setRows((result || []).sort((a, b) => Number(b.overallScore || 0) - Number(a.overallScore || 0)));
     } catch (error) {
       showToast(error.message || "Could not load course gradebook", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -7906,12 +7907,12 @@ function ActivityLogAdmin() {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       setLogs(await api("/admin/activity-logs"));
     } catch (error) {
       showToast(error.message || "Could not load activity log", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -7960,12 +7961,12 @@ function AttendanceRecordsAdmin() {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       setPayload(await api("/admin/attendance-records"));
     } catch (error) {
       showToast(error.message || "Could not load attendance records", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -8015,12 +8016,12 @@ function CourseDiscussionsAdmin() {
 
   async function load() {
     try {
-      setLoading(true);
+      setBackupLoading(true);
       setDiscussions(await api("/admin/course-discussions"));
     } catch (error) {
       showToast(error.message || "Could not load course discussions", "error");
     } finally {
-      setLoading(false);
+      setBackupLoading(false);
     }
   }
 
@@ -9184,6 +9185,11 @@ function Footer({ goTo, settings = {} }) {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
+
+
+
+
 
 
 
