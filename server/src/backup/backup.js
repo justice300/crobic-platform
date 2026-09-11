@@ -262,7 +262,7 @@ console.log("UPLOADS ADDED");
 
 console.log("FINALIZING ZIP");
 
-  await archive.finalize();
+archive.finalize();
 console.log("ZIP FINALIZED");
   return {
     stream,
