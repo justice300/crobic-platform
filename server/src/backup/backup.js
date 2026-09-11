@@ -11,8 +11,13 @@ import unzipper from "unzipper";
 import { PassThrough } from "stream";
 import { pgPool } from "../db.js";
 
-
 const BACKUP_VERSION = 1;
+
+const UPLOAD_ROOT = path.resolve(
+  process.cwd(),
+  "uploads"
+);
+
 
 
 function jsonValue(value) {
