@@ -197,7 +197,12 @@ async function addDirectoryToArchive(archive, directory, archiveRoot) {
 }
 
 export async function createBackupArchive() {
+
+  console.log("BACKUP STARTED");
+
   const database = await collectDatabase();
+
+  console.log("DATABASE COLLECTED");
 
   const manifest = {
     backupVersion: BACKUP_VERSION,
@@ -245,14 +250,20 @@ const archive = new archiverModule.ZipArchive({
     name: "database.json"
   });
 
-  await addDirectoryToArchive(
-    archive,
-    UPLOAD_ROOT,
-    "uploads"
-  );
+console.log("ADDING UPLOADS", UPLOAD_ROOT);
+
+await addDirectoryToArchive(
+  archive,
+  UPLOAD_ROOT,
+  "uploads"
+);
+
+console.log("UPLOADS ADDED");
+
+console.log("FINALIZING ZIP");
 
   await archive.finalize();
-
+console.log("ZIP FINALIZED");
   return {
     stream,
     manifest
